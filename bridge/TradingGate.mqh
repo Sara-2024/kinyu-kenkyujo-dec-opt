@@ -10,9 +10,30 @@ input string InpGateVariable = "AI_TRADING_ALLOWED";
 //--- 変数が無い場合の既定値。true なら「変数が無ければ売買してよい」
 input bool   InpAllowWhenMissing = false;
 
+void SyncGateFileToGlobals()
+  {
+   int handle = FileOpen("trelab_gate.ini", FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
+   if(handle == INVALID_HANDLE)
+      return;
+   while(!FileIsEnding(handle))
+     {
+      string line = FileReadString(handle);
+      StringTrimLeft(line);
+      StringTrimRight(line);
+      if(StringLen(line) == 0)
+         continue;
+      int eq = StringFind(line, "=");
+      if(eq <= 0)
+         continue;
+      GlobalVariableSet(StringSubstr(line, 0, eq), StringToDouble(StringSubstr(line, eq + 1)));
+     }
+   FileClose(handle);
+  }
+
 bool IsTradingAllowed()
   {
    double value = 0.0;
+   SyncGateFileToGlobals();
 
    // 変数が存在しない＝ブリッジがまだ書いていない、または消えた
    if(!GlobalVariableCheck(InpGateVariable))

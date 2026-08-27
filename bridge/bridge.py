@@ -34,6 +34,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import Any, Callable
 
 # .env があれば読む（無くても動く）
@@ -226,15 +227,71 @@ class MT5Controller:
         self.ready = False
         self._pool.shutdown(wait=False)
 
-    # ---------- グローバル変数 ----------
+    # ---------- 指令ファイル（Python API に global_variable_set が無いため） ----------
+    GATE_FILE = "trelab_gate.ini"
+
+    def _gate_path(self) -> Path:
+        term = mt5.terminal_info() if mt5 is not None else None
+        common = getattr(term, "commondata_path", None) if term is not None else None
+        if not common:
+            common = os.path.join(os.environ.get("APPDATA", ""), "MetaQuotes", "Terminal", "Common")
+        folder = Path(str(common)) / "Files"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder / self.GATE_FILE
+
+    def _load_gate(self) -> dict[str, float]:
+        path = self._gate_path()
+        values: dict[str, float] = {}
+        if not path.exists():
+            return values
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, raw = line.split("=", 1)
+                try:
+                    values[key.strip()] = float(raw.strip())
+                except ValueError:
+                    continue
+        except OSError as exc:
+            log.warning("指令ファイルを読めません: %s", exc)
+        return values
+
+    def _save_gate(self, values: dict[str, float]) -> Path:
+        path = self._gate_path()
+        body = "".join(f"{k}={v}\n" for k, v in sorted(values.items()))
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(body, encoding="utf-8")
+        tmp.replace(path)
+        return path
+
     def _set_gv_blocking(self, name: str, value: float) -> tuple[bool, float | None]:
-        ok = bool(mt5.global_variable_set(name, value))
-        if not ok:
-            log.error("グローバル変数の書き込みに失敗 %s=%s: %s", name, value, mt5.last_error())
-            return False, None
-        # 書けたつもりで書けていない事故を防ぐため読み戻して確認する
-        readback = mt5.global_variable_get(name)
-        return True, readback
+        # 公式 Python API には GlobalVariableSet が無い。Common/Files に書いて EA が読む。
+        setter = getattr(mt5, "global_variable_set", None) if mt5 is not None else None
+        if callable(setter):
+            ok = bool(setter(name, float(value)))
+            if not ok:
+                log.error("グローバル変数の書き込みに失敗 %s=%s: %s", name, value, mt5.last_error())
+                return False, None
+            getter = getattr(mt5, "global_variable_get", None)
+            readback = getter(name) if callable(getter) else float(value)
+            return True, readback
+
+        values = self._load_gate()
+        values[name] = float(value)
+        path = self._save_gate(values)
+        log.info("指令ファイルに書き込み: %s=%s  (%s)", name, value, path)
+        return True, values[name]
+
+    def _get_gv_blocking(self, name: str) -> float | None:
+        getter = getattr(mt5, "global_variable_get", None) if mt5 is not None else None
+        if callable(getter):
+            try:
+                return getter(name)
+            except Exception:  # noqa: BLE001
+                pass
+        return self._load_gate().get(name)
 
     async def set_variable(self, name: str, value: float) -> tuple[bool, float | None]:
         if not self.ready:
@@ -247,7 +304,7 @@ class MT5Controller:
         if not self.ready:
             return None
         async with self._lock:
-            return await self._call(mt5.global_variable_get, name)
+            return await self._call(self._get_gv_blocking, name)
 
     async def set_trading(self, allowed: bool) -> tuple[bool, float | None]:
         value = 1.0 if allowed else 0.0
@@ -532,7 +589,10 @@ class Bridge:
         if self.stop.is_set():
             return
         # 起動直後の状態を確定させておく（EAが不定値を読まないように）
-        await self.mt.set_variable(self.cfg.gv_name, self.mt.desired_value)
+        try:
+            await self.mt.set_variable(self.cfg.gv_name, self.mt.desired_value)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("起動時の指令書き込みに失敗しました（中継への接続は続けます）: %s", exc)
 
         watchdog = asyncio.create_task(self.watchdog(), name="watchdog")
         try:

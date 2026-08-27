@@ -1,18 +1,20 @@
 @echo off
 cd /d "%~dp0bridge"
 
-if not exist venv (
-  echo Run setup-windows.bat first.
-  pause
-  exit /b 1
+if exist venv\Scripts\activate.bat (
+  call venv\Scripts\activate.bat
 )
-
-call venv\Scripts\activate.bat
 
 echo.
 echo Starting bridge - MT5 must be logged in.
 echo Waiting for relay on port 8080...
 echo Do NOT close this window.
 echo.
-python bridge.py
+
+where py >nul 2>&1
+if %errorlevel%==0 (
+  py -3 bridge.py
+) else (
+  python bridge.py
+)
 pause
