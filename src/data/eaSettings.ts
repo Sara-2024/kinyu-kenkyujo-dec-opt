@@ -66,3 +66,16 @@ export function formatValue(setting: EaSetting, value: number): string {
 export function defaultSettings(): Record<string, number> {
   return Object.fromEntries(EA_SETTINGS.map((s) => [s.key, s.defaultValue]))
 }
+
+/** 指令ファイル（ゲート）に書いてある値だけを画面の設定キーへ写す */
+export function settingsFromGate(gate?: Record<string, number> | null): Record<string, number> {
+  if (!gate) return {}
+  const out: Record<string, number> = {}
+  for (const setting of EA_SETTINGS) {
+    const raw = gate[setting.gv]
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      out[setting.key] = Number(raw.toFixed(setting.decimals))
+    }
+  }
+  return out
+}

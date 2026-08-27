@@ -64,16 +64,22 @@ export function ControlPanel({
     setSavedAt(Date.now())
   }
 
-  const running = conn.running
-  const elapsed = (() => {
-    const ms = Date.now() - new Date(conn.connectedAt).getTime()
-    const days = Math.floor(ms / 86_400_000)
-    const hours = Math.floor((ms % 86_400_000) / 3_600_000)
-    const mins = Math.floor((ms % 3_600_000) / 60_000)
-    if (days > 0) return `${days}日 ${hours}時間`
-    if (hours > 0) return `${hours}時間 ${mins}分`
-    return `${mins}分`
+  const running =
+    bridge.live && typeof bridge.status?.value === 'number' ? Number(bridge.status.value) !== 0 : conn.running
+
+  const health = (() => {
+    if (!bridge.live) return 'MT5との接続を確認できません'
+    if (bridge.status?.terminal_connected === false) return 'ターミナルが相場サーバーとつながっていません'
+    if (bridge.status?.terminal_trade_allowed === false) return 'MT5の自動売買ボタンがオフです'
+    return running ? 'MT5は取引可能な状態です' : '停止中です。再開はボタンから行えます'
   })()
+
+  const engineLabel =
+    bridge.live && bridge.status?.build != null
+      ? `build ${bridge.status.build}`
+      : bridge.status?.terminal_name
+        ? String(bridge.status.terminal_name)
+        : '—'
 
   return (
     <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
@@ -93,13 +99,7 @@ export function ControlPanel({
         <div className="min-w-0">
           <p className="text-[17px] font-bold text-white">自動売買 {running ? '稼働中' : '停止中'}</p>
           <p className="text-[12px] text-slate-400">
-            {running
-              ? `連続 ${elapsed} 稼働／異常なし${
-                  bridge.live && typeof bridge.status?.value === 'number'
-                    ? `（MT5側の値 ${bridge.status.value}）`
-                    : ''
-                }`
-              : 'ボタンひとつでいつでも再開できます'}
+            {health}
           </p>
         </div>
         <button
@@ -118,7 +118,8 @@ export function ControlPanel({
               return
             }
             setFailed(null)
-            onChange({ ...conn, running: next })
+            const confirmed = typeof ack.value === 'number' ? Number(ack.value) !== 0 : next
+            onChange({ ...conn, running: confirmed })
           }}
           className="ml-auto whitespace-nowrap rounded-[5px] border px-6 py-3 text-[15px] font-bold transition hover:brightness-110 active:translate-y-px"
           style={
@@ -146,7 +147,8 @@ export function ControlPanel({
           </span>
         </span>
         <span className="text-slate-400">
-          エンジン <span className="font-mono ml-1 font-bold text-slate-200">システム v1.2</span>
+          エンジン{' '}
+          <span className="font-mono ml-1 font-bold text-slate-200">{engineLabel}</span>
         </span>
       </div>
 

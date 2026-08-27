@@ -33,6 +33,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable
@@ -319,9 +320,83 @@ class MT5Controller:
             )
         return ok, readback
 
+    def _ea_probe_blocking(self) -> dict[str, Any]:
+        term = mt5.terminal_info() if mt5 is not None else None
+        data_path = getattr(term, "data_path", "") if term is not None else ""
+        experts = Path(str(data_path)) / "MQL5" / "Experts"
+        found: list[str] = []
+        compiled: list[str] = []
+        for name in ("SiteTestEA", "TrelabEA"):
+            if (experts / f"{name}.mq5").is_file():
+                found.append(name)
+            if (experts / f"{name}.ex5").is_file():
+                compiled.append(name)
+                if name not in found:
+                    found.append(name)
+        return {
+            "ea_folder": str(experts),
+            "ea_found": found,
+            "ea_compiled": compiled,
+            "ea_installed": len(found) > 0,
+        }
+
+    def _today_stats_blocking(self) -> dict[str, Any]:
+        empty = {
+            "today_closed": 0,
+            "today_profit": 0.0,
+            "today_wins": 0,
+            "today_losses": 0,
+            "open_positions": 0,
+            "open_profit": 0.0,
+        }
+        try:
+            now = datetime.now()
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            deals = mt5.history_deals_get(start, now) or ()
+            entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
+            entry_out_by = getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)
+            type_buy = getattr(mt5, "DEAL_TYPE_BUY", 0)
+            type_sell = getattr(mt5, "DEAL_TYPE_SELL", 1)
+            closed = 0
+            profit = 0.0
+            wins = 0
+            losses = 0
+            for deal in deals:
+                if getattr(deal, "type", None) not in (type_buy, type_sell):
+                    continue
+                if getattr(deal, "entry", None) not in (entry_out, entry_out_by):
+                    continue
+                p = (
+                    float(getattr(deal, "profit", 0) or 0)
+                    + float(getattr(deal, "swap", 0) or 0)
+                    + float(getattr(deal, "commission", 0) or 0)
+                )
+                closed += 1
+                profit += p
+                if p > 0:
+                    wins += 1
+                elif p < 0:
+                    losses += 1
+            positions = mt5.positions_get() or ()
+            floating = sum(float(getattr(pos, "profit", 0) or 0) for pos in positions)
+            return {
+                "today_closed": closed,
+                "today_profit": round(profit, 2),
+                "today_wins": wins,
+                "today_losses": losses,
+                "open_positions": len(positions),
+                "open_profit": round(floating, 2),
+            }
+        except Exception as exc:  # noqa: BLE001
+            log.warning("本日の実績を読めません: %s", exc)
+            return empty
+
     async def status(self) -> dict[str, Any]:
         info = await self._call(mt5.account_info) if self.ready else None
         term = await self._call(mt5.terminal_info) if self.ready else None
+        probe = await self._call(self._ea_probe_blocking) if self.ready else {}
+        gate = await self._call(self._load_gate) if self.ready else {}
+        today = await self._call(self._today_stats_blocking) if self.ready else {}
         return {
             "mt5_ready": self.ready,
             "variable": self.cfg.gv_name,
@@ -331,8 +406,14 @@ class MT5Controller:
             "server": getattr(info, "server", None),
             "balance": getattr(info, "balance", None),
             "equity": getattr(info, "equity", None),
+            "currency": getattr(info, "currency", None),
             "terminal_connected": getattr(term, "connected", None),
             "terminal_trade_allowed": getattr(term, "trade_allowed", None),
+            "build": getattr(term, "build", None),
+            "terminal_name": getattr(term, "name", None),
+            "gate": gate,
+            "today": today,
+            **probe,
         }
 
 

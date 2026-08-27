@@ -47,7 +47,7 @@ const NEWS_POOL: NewsItem[] = [
   { charId: 'jin', tone: 'warn', label: '指標接近', text: '⏰ まもなく米・雇用統計の発表です（21:30）。値が飛びやすい時間帯ですよ。' },
   { charId: 'jin', tone: 'alert', label: '速報', text: '📢 速報：トランプ大統領の発言が伝わりました。ドル円が振れやすくなっています。' },
   { charId: 'rin', tone: 'info', label: '注目', text: '👀 USD/JPYが直近高値に接近中。ここを抜けるかどうかが今日のポイントです。' },
-  { charId: 'algo', tone: 'info', label: '稼働報告', text: '🤖 EA稼働レポート：本日ここまで +12.4pips。システムは正常に稼働中です。' },
+  { charId: 'algo', tone: 'info', label: '稼働報告', text: '🤖 システムの状態は、チャート上の稼働表示で確認できます。' },
   { charId: 'gantz', tone: 'info', label: '開発中', text: '🔧 新しいインジケーターのテストがもうすぐ終わる。近々ここで公開する。' },
   { charId: 'jin', tone: 'warn', label: '指標接近', text: '⏰ 30分後に日銀総裁の会見があります。円絡みは値動きに注意です。' },
 ]

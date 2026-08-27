@@ -2,6 +2,7 @@
 // 接続に失敗した場合は黙ってモックに落とさず、エラーコードを返す。
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BridgeError, BridgeErrorCode } from '../data/bridgeErrors'
+import type { TodayStats } from '../data/setupFlow'
 
 export interface BridgeStatus {
   bridgeId: string
@@ -9,10 +10,19 @@ export interface BridgeStatus {
   server?: string
   balance?: number
   equity?: number
+  currency?: string
   value?: number
   variable?: string
   mt5_ready?: boolean
   terminal_connected?: boolean
+  terminal_trade_allowed?: boolean
+  build?: number
+  terminal_name?: string
+  ea_installed?: boolean
+  ea_found?: string[]
+  ea_compiled?: string[]
+  gate?: Record<string, number>
+  today?: TodayStats
 }
 
 type Ack = {
@@ -22,12 +32,53 @@ type Ack = {
   ok: boolean
   value?: number
   error?: string
-}
+} & Partial<BridgeStatus>
 
 export type BridgePhase = 'connecting' | 'live' | 'no_bridge' | 'error'
 
 /** 接続先。未設定ならローカルの中継サーバー */
 export const WS_URL = import.meta.env.VITE_RELAY_URL || 'ws://localhost:8080/app'
+
+const STATUS_KEYS: (keyof BridgeStatus)[] = [
+  'bridgeId',
+  'account',
+  'server',
+  'balance',
+  'equity',
+  'currency',
+  'value',
+  'variable',
+  'mt5_ready',
+  'terminal_connected',
+  'terminal_trade_allowed',
+  'build',
+  'terminal_name',
+  'ea_installed',
+  'ea_found',
+  'ea_compiled',
+  'gate',
+  'today',
+]
+
+function definedFields(extra: Partial<BridgeStatus> & Record<string, unknown>): Partial<BridgeStatus> {
+  const out: Partial<BridgeStatus> = {}
+  for (const key of STATUS_KEYS) {
+    if (extra[key] !== undefined) {
+      ;(out as Record<string, unknown>)[key] = extra[key]
+    }
+  }
+  return out
+}
+
+function mergeStatus(prev: BridgeStatus | null, extra: Partial<BridgeStatus> & { bridgeId?: string }): BridgeStatus {
+  const patch = definedFields(extra)
+  const bridgeId = String(extra.bridgeId ?? prev?.bridgeId ?? patch.bridgeId ?? '')
+  return {
+    ...(prev ?? { bridgeId }),
+    ...patch,
+    bridgeId,
+  }
+}
 
 export function useBridge() {
   const [phase, setPhase] = useState<BridgePhase>('connecting')
@@ -111,7 +162,9 @@ export function useBridge() {
             waiting.current.get(ack.id)?.(ack)
             waiting.current.delete(ack.id)
           }
-          if (typeof ack.value === 'number') {
+          if (ack.ok) {
+            setStatus((s) => mergeStatus(s, ack))
+          } else if (typeof ack.value === 'number') {
             setStatus((s) => (s ? { ...s, value: ack.value } : s))
           }
         }
@@ -158,7 +211,7 @@ export function useBridge() {
             waiting.current.delete(id)
             resolve({ type: 'ack', ok: false, error: 'E006: timeout' })
           }
-        }, 8000)
+        }, 12000)
       }),
     [phase],
   )

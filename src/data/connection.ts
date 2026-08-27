@@ -18,6 +18,8 @@ export function loadConnection(): Connection | null {
     const raw = localStorage.getItem(KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as Connection
+    // 以前の画面が埋め込んでいたダミー口座は、実接続とみなさない
+    if (parsed.account === '70418552') return null
     // 設定項目が増えた場合に備えて既定値で埋める
     parsed.settings = { ...defaultSettings(), ...(parsed.settings ?? {}) }
     return parsed
@@ -42,13 +44,18 @@ export function clearConnection(): void {
   }
 }
 
-export function newConnection(email: string): Connection {
+export function newConnection(
+  email: string,
+  account: string,
+  server: string,
+  extra?: { settings?: Record<string, number>; running?: boolean },
+): Connection {
   return {
     email,
-    account: '70418552',
-    server: 'XMTrading-Real 3',
+    account,
+    server,
     connectedAt: new Date().toISOString(),
-    running: true,
-    settings: defaultSettings(),
+    running: extra?.running ?? true,
+    settings: { ...defaultSettings(), ...(extra?.settings ?? {}) },
   }
 }

@@ -7,12 +7,20 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Character } from '../data/characters'
 import { clearConnection, loadConnection, newConnection, saveConnection, type Connection } from '../data/connection'
+import { settingsFromGate } from '../data/eaSettings'
 import { BridgeStatusBar } from './BridgeStatusBar'
 import { ControlPanel } from './ControlPanel'
 import type { useBridge } from '../hooks/useBridge'
 import { saveLead } from '../data/leads'
 import { formatBridgeError } from '../data/bridgeErrors'
-import { CONNECT_STEPS, CONNECT_TALK, USER_STEPS, validateEmail } from '../data/setupFlow'
+import {
+  CONNECT_WAIT,
+  USER_STEPS,
+  connectChecksFromStatus,
+  formatTodayAnswer,
+  validateEmail,
+  type ConnectCheck,
+} from '../data/setupFlow'
 import { PixelPerson } from './PixelPerson'
 
 type Phase = 'talk' | 'email' | 'sent' | 'connecting' | 'done' | 'control'
@@ -33,7 +41,8 @@ export function DialogueWindow({
 
   // ── おまかせ接続 ──
   const [phase, setPhase] = useState<Phase>('talk')
-  const [stepIndex, setStepIndex] = useState(0) // いま作業中の工程
+  const [stepIndex, setStepIndex] = useState(0)
+  const [checks, setChecks] = useState<ConnectCheck[]>([])
   const [error, setError] = useState<string | null>(null)
   const [conn, setConn] = useState<Connection | null>(() => loadConnection())
 
@@ -55,13 +64,14 @@ export function DialogueWindow({
     setInput('')
     setBusy(false)
     setStepIndex(0)
+    setChecks([])
     setError(null)
 
     if (saved && character.id === 'algo') {
       setPhase('control')
       setAiText(
         saved.running
-          ? 'おかえりなさい。エンジンは順調に動いています。設定を変えるか、私に相談するか、上のボタンでお選びください。'
+          ? 'おかえりなさい。設定を変えるか、私に相談するか、上のボタンでお選びください。'
           : 'おかえりなさい。いまは停止中です。再開もこの画面からどうぞ。',
       )
       return
@@ -106,6 +116,35 @@ export function DialogueWindow({
     const question = q.trim()
     setBusy(true)
     setAiText('…')
+
+    if (question === '今日の成績は？') {
+      void (async () => {
+        if (!bridge.live) {
+          setAiText(character.answers[question] ?? character.fallback)
+          setBusy(false)
+          return
+        }
+        const ack = await bridge.send('get_status')
+        setAiText(ack.ok ? formatTodayAnswer(ack) : '口座の実績を読み取れませんでした。接続ツールが起動しているか見てください。')
+        setBusy(false)
+      })()
+      return
+    }
+
+    if (question === '調子はどう？') {
+      if (bridge.live && bridge.status?.mt5_ready) {
+        setAiText(
+          Number(bridge.status.value) !== 0
+            ? 'MT5との接続は生きています。チャート上の「システム」の表示も合わせてご確認ください。'
+            : 'MT5とはつながっています。いまは停止中です。再開は管理画面からできます。',
+        )
+      } else {
+        setAiText(character.answers[question] ?? character.fallback)
+      }
+      setBusy(false)
+      return
+    }
+
     timers.current.push(
       setTimeout(() => {
         setAiText(character.answers[question] ?? character.fallback)
@@ -125,67 +164,120 @@ export function DialogueWindow({
     emailRef.current = input.trim()
     void saveLead(input.trim())
     setPhase('sent')
+    setChecks([])
+    setStepIndex(0)
     setAiText(
       `${input.trim()} 宛に接続ツールをお送りしました。ダウンロードして開いていただければ、あとは私が引き継ぎます。`,
     )
-    // ツールが起動されたら自動で接続がはじまる
-    timers.current.push(setTimeout(() => startConnecting(), 4200))
   }
 
-  // ── 接続開始（ツール起動後。ここから先はお客様の操作なし） ──
-  const startConnecting = () => {
+  // 接続ツール（ブリッジ）が生きたら、タイマーではなく実応答で接続を進める
+  useEffect(() => {
+    if (phase !== 'sent') return
+    if (!bridge.live) return
+    setError(null)
     setPhase('connecting')
     setStepIndex(0)
-    setAiText(CONNECT_TALK[0])
+    setChecks([])
+    setAiText(CONNECT_WAIT)
+  }, [phase, bridge.live])
 
-    // 各工程を順番に片づけていく
-    let elapsed = 0
-    CONNECT_STEPS.forEach((step, i) => {
-      elapsed += step.ms
-      timers.current.push(
-        setTimeout(() => {
-          const next = i + 1
-          setStepIndex(next)
-          const talk = CONNECT_TALK[Math.min(next, CONNECT_TALK.length - 1)]
-          if (next < CONNECT_STEPS.length) {
-            setAiText(talk)
-          } else {
-            if (!bridge.live || !bridge.status) {
-              setError(
-                bridge.error
-                  ? formatBridgeError(bridge.error)
-                  : 'E008: MT5 連携なしでは接続を完了できません',
-              )
-              setPhase('connecting')
-              setAiText(
-                '接続ツールからの応答がありません。中継サーバーとブリッジが起動しているか確認してください。',
-              )
-              return
-            }
-            const created = newConnection(emailRef.current)
-            if (bridge.status.account) created.account = String(bridge.status.account)
-            if (bridge.status.server) created.server = String(bridge.status.server)
-            saveConnection(created)
-            setConn(created)
-            setPhase('done')
-            setAiText(
-              '接続が完了しました。もう設定は終わっています。次からはこの画面を開くだけで、止めたり設定を変えたりできます。',
-            )
-          }
-        }, elapsed),
+  useEffect(() => {
+    if (phase !== 'sent') return
+    if (bridge.live) return
+    const id = setTimeout(() => {
+      setError(
+        bridge.error
+          ? formatBridgeError(bridge.error)
+          : 'E008: MT5 連携なしでは接続を完了できません',
       )
-    })
-  }
+      setAiText('接続ツールからの応答がありません。中継サーバーとブリッジが起動しているか確認してください。')
+    }, 90_000)
+    return () => clearTimeout(id)
+  }, [phase, bridge.live, bridge.error])
 
-
-  /** 実機がつながっていれば、工程の結果を本物の値に差し替える */
-  const liveDone = (index: number, fallbackText: string) => {
-    if (!bridge.live || !bridge.status) return fallbackText
-    if (index === 1 && bridge.status.account) {
-      return `口座 ${bridge.status.account} ／ ${bridge.status.server ?? ''}`
+  useEffect(() => {
+    if (phase !== 'connecting') return
+    if (!bridge.live) {
+      setError(
+        bridge.error
+          ? formatBridgeError(bridge.error)
+          : 'E008: MT5 連携なしでは接続を完了できません',
+      )
+      setAiText('接続ツールからの応答がありません。中継サーバーとブリッジが起動しているか確認してください。')
+      return
     }
-    return fallbackText
-  }
+    let cancelled = false
+    ;(async () => {
+      const ack = await bridge.send('get_status')
+      if (cancelled) return
+      const account = ack.account != null && String(ack.account) !== '' ? String(ack.account) : ''
+      if (!ack.ok || !ack.mt5_ready || !account) {
+        setChecks(connectChecksFromStatus(ack))
+        setStepIndex(4)
+        setError(
+          ack.error
+            ? ack.error
+            : bridge.error
+              ? formatBridgeError(bridge.error)
+              : 'E008: MT5 連携なしでは接続を完了できません',
+        )
+        setAiText('MT5の口座情報を読み取れませんでした。接続ツールとMT5が起動しているか確認してください。')
+        return
+      }
+      const lines = connectChecksFromStatus(ack)
+      setChecks(lines)
+      setStepIndex(lines.length)
+      const created = newConnection(emailRef.current, account, String(ack.server ?? ''), {
+        settings: settingsFromGate(ack.gate),
+        running: Number(ack.value) !== 0,
+      })
+      saveConnection(created)
+      setConn(created)
+      setError(null)
+      setPhase('done')
+      setAiText(
+        '接続が完了しました。もう設定は終わっています。次からはこの画面を開くだけで、止めたり設定を変えたりできます。',
+      )
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [phase, bridge.live, bridge.send, bridge.error])
+
+  // 管理画面を開いているあいだ、表示口座はMT5の実値に合わせる
+  useEffect(() => {
+    if (!conn || !bridge.live || bridge.status?.account == null) return
+    const account = String(bridge.status.account)
+    const server = String(bridge.status.server ?? conn.server)
+    const fromGate = settingsFromGate(bridge.status.gate)
+    const running = typeof bridge.status.value === 'number' ? Number(bridge.status.value) !== 0 : conn.running
+    if (
+      conn.account === account &&
+      conn.server === server &&
+      conn.running === running &&
+      Object.keys(fromGate).length === 0
+    ) {
+      return
+    }
+    const next: Connection = {
+      ...conn,
+      account,
+      server,
+      running,
+      settings: { ...conn.settings, ...fromGate },
+    }
+    if (
+      next.account === conn.account &&
+      next.server === conn.server &&
+      next.running === conn.running &&
+      JSON.stringify(next.settings) === JSON.stringify(conn.settings)
+    ) {
+      return
+    }
+    saveConnection(next)
+    setConn(next)
+  }, [conn, bridge.live, bridge.status])
 
   const showBridgeBar =
     character.id === 'algo' &&
@@ -486,32 +578,33 @@ export function DialogueWindow({
               お客様のパソコンで、接続ツールが作業しています。
             </p>
             <ol className="space-y-2">
-              {CONNECT_STEPS.map((step, i) => {
-                const finished = i < stepIndex
-                const current = i === stepIndex && phase === 'connecting'
-                if (!finished && !current) return null
-                return (
-                  <li key={step.working} className="step-in flex items-center gap-3">
-                    {finished ? (
-                      <span className="check-pop flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
-                            style={{ background: 'rgba(53,245,138,0.15)', color: '#35f58a', border: '1px solid rgba(53,245,138,0.5)' }}>
-                        ✓
-                      </span>
-                    ) : (
-                      <span
-                        className="spin h-5 w-5 shrink-0 rounded-full"
-                        style={{
-                          border: '2px solid rgba(94,204,255,0.2)',
-                          borderTopColor: 'var(--accent)',
-                        }}
-                      />
-                    )}
-                    <span className={`text-[15px] font-bold ${finished ? 'text-slate-300' : 'text-white'}`}>
-                      {finished ? liveDone(i, step.done) : `${step.working}…`}
-                    </span>
-                  </li>
-                )
-              })}
+              {checks.length === 0 && phase === 'connecting' && (
+                <li className="step-in flex items-center gap-3">
+                  <span
+                    className="spin h-5 w-5 shrink-0 rounded-full"
+                    style={{
+                      border: '2px solid rgba(94,204,255,0.2)',
+                      borderTopColor: 'var(--accent)',
+                    }}
+                  />
+                  <span className="text-[15px] font-bold text-white">{CONNECT_WAIT}…</span>
+                </li>
+              )}
+              {checks.map((step) => (
+                <li key={step.working} className="step-in flex items-center gap-3">
+                  <span
+                    className="check-pop flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
+                    style={
+                      step.ok
+                        ? { background: 'rgba(53,245,138,0.15)', color: '#35f58a', border: '1px solid rgba(53,245,138,0.5)' }
+                        : { background: 'rgba(250,204,21,0.12)', color: '#ffd23e', border: '1px solid rgba(250,204,21,0.5)' }
+                    }
+                  >
+                    {step.ok ? '✓' : '!'}
+                  </span>
+                  <span className="text-[15px] font-bold text-slate-300">{step.done}</span>
+                </li>
+              ))}
             </ol>
 
             {/* 進捗バー */}
@@ -519,7 +612,7 @@ export function DialogueWindow({
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{
-                  width: `${(stepIndex / CONNECT_STEPS.length) * 100}%`,
+                  width: `${checks.length === 0 ? 12 : (stepIndex / Math.max(checks.length, 1)) * 100}%`,
                   background: 'var(--accent)',
                   boxShadow: '0 0 10px var(--accent)',
                 }}
