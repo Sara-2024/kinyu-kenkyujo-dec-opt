@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  /* ラボ全体のデザイントークン */
+  --accent: #5eccff;
+  --panel-bg: rgba(9, 17, 31, 0.78);
+  --panel-border: rgba(94, 204, 255, 0.32);
+  --panel-glow: 0 0 20px rgba(94, 204, 255, 0.07), inset 0 0 30px rgba(0, 0, 0, 0.35);
+  --line-soft: rgba(148, 180, 220, 0.14);
+}
+
+body {
+  margin: 0;
+  font-family: "BIZ UDPGothic", system-ui, sans-serif;
+  background: #0a1120;
+  color: #e8edf5;
+  overflow: hidden;
+}
+
+.font-dot {
+  font-family: "DotGothic16", "BIZ UDPGothic", monospace;
+}
+
+/* ───── キャラの待機モーション（2コマ） ───── */
+@keyframes idle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+.pix-idle { animation: idle 1.4s steps(2, jump-none) infinite; }
+
+/* ───── ホバー：浮き上がり + 発光 ───── */
+.chara {
+  cursor: pointer;
+  transition: transform 0.18s ease-out, filter 0.25s ease-out;
+  will-change: transform, filter;
+}
+.chara:hover {
+  transform: translateY(-5px);
+  filter: drop-shadow(0 0 9px rgba(94, 204, 255, 0.75))
+    drop-shadow(0 8px 6px rgba(0, 0, 0, 0.5));
+}
+.chara:hover .plate { border-color: var(--accent); }
+
+/* チュートリアル中の減光 */
+.chara-dim { filter: brightness(0.4) saturate(0.5); }
+.chara-dim:hover { filter: brightness(0.4) saturate(0.5); transform: none; }
+
+/* ───── 頭上の常時ミニ吹き出し ───── */
+@keyframes mini-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.85; }
+  50% { transform: translateY(-4px); opacity: 1; }
+}
+.mini-bubble { animation: mini-bob 1.8s ease-in-out infinite; }
+@keyframes dots {
+  0%, 20% { opacity: 0.15; }
+  30%, 60% { opacity: 1; }
+  70%, 100% { opacity: 0.15; }
+}
+.dot1 { animation: dots 1.6s infinite; }
+.dot2 { animation: dots 1.6s infinite 0.25s; }
+.dot3 { animation: dots 1.6s infinite 0.5s; }
+
+/* ユイの「！」フワフワ */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-9px); }
+}
+.animate-bob { animation: bob 1.5s ease-in-out infinite; }
+
+/* ───── ランプ ───── */
+@keyframes lamp-blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px 1px rgba(74, 222, 128, 0.8); }
+  50% { opacity: 0.3; box-shadow: none; }
+}
+.lamp { animation: lamp-blink 1.3s steps(2, jump-none) infinite; }
+@keyframes lamp-red {
+  0%, 100% { opacity: 1; box-shadow: 0 0 7px 2px rgba(224, 75, 75, 0.9); }
+  50% { opacity: 0.3; box-shadow: none; }
+}
+.lamp-red { animation: lamp-red 0.4s steps(2, jump-none) infinite; }
+
+/* ───── 急変動アラート ───── */
+@keyframes alarm {
+  0%, 100% { background: rgba(63, 10, 10, 0.9); }
+  50% { background: rgba(122, 20, 20, 0.9); }
+}
+.anim-alarm { animation: alarm 0.5s steps(2, jump-none) infinite; }
+
+@keyframes alarm-border {
+  0%, 100% { border-color: var(--panel-border); box-shadow: var(--panel-glow); }
+  50% { border-color: rgba(224, 75, 75, 0.7); box-shadow: 0 0 24px rgba(224, 75, 75, 0.3); }
+}
+.anim-alarm-border { animation: alarm-border 0.6s steps(2, jump-none) infinite; }
+
+@keyframes neon-red {
+  0%, 100% { background: #e04b4b; box-shadow: 0 0 10px rgba(224, 75, 75, 0.8); }
+  50% { background: rgba(95, 17, 17, 0.6); box-shadow: none; }
+}
+.neon-red { animation: neon-red 0.5s steps(2, jump-none) infinite; }
+
+/* 画面全体のシェイク */
+@keyframes shake {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(2px, -1px); }
+  50% { transform: translate(-2px, 1px); }
+  75% { transform: translate(1px, 2px); }
+}
+.anim-shake { animation: shake 0.28s steps(2, jump-none) infinite; }
+
+/* 赤いビネット */
+@keyframes vignette {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.15; }
+}
+.anim-vignette { animation: vignette 0.9s ease-in-out infinite; }
+
+/* コードモニターのカーソル */
+@keyframes cursor {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.cursor-blink { animation: cursor 1s steps(1) infinite; }
+
+/* パネル上端のアクセントライン */
+.accent-line {
+  background: linear-gradient(90deg, transparent, var(--accent) 18%, var(--accent) 82%, transparent);
+  box-shadow: 0 0 8px rgba(94, 204, 255, 0.6);
+}
+@keyframes neon {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0.5; }
+}
+.anim-neon { animation: neon 2.6s ease-in-out infinite; }
+
+/* チュートリアル */
+@keyframes ring {
+  0% { transform: scale(0.85); opacity: 0.9; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.tutorial-ring { animation: ring 1.4s ease-out infinite; }
+@keyframes pop-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+.tutorial-pop { animation: pop-bounce 1.2s ease-in-out infinite; }
+
+/* ───── HUDティッカー ───── */
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}
+.anim-marquee { animation: marquee 26s linear infinite; }
+
+/* ───── ステージのパン・ズーム ───── */
+.stage-anim { transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.25, 1); }
+.view-grab { cursor: grab; }
+.view-grab.dragging { cursor: grabbing; }
+
+/* AI通知吹き出しの登場 */
+@keyframes news-in {
+  0% { opacity: 0; transform: translate(-50%, 6px); }
+  100% { opacity: 1; transform: translate(-50%, 0); }
+}
+.news-in { animation: news-in 0.25s ease-out; }
+
+/* ───── おまかせ接続の進行表示 ───── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+
+@keyframes step-in {
+  0% { opacity: 0; transform: translateX(-6px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.step-in { animation: step-in 0.3s ease-out; }
+
+@keyframes check-pop {
+  0% { transform: scale(0.4); }
+  70% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.check-pop { animation: check-pop 0.28s ease-out; }
+
+@keyframes live-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px 2px rgba(53,245,138,0.8); }
+  50% { opacity: 0.35; box-shadow: none; }
+}
+.live-dot { animation: live-dot 1.6s ease-in-out infinite; }

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dec-opt",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd '/Users/mao/金融研究所｜12月オプト' && npm run dev"],
+      "port": 5181,
+      "autoPort": true
+    }
+  ]
+}

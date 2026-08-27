@@ -1,0 +1,19 @@
+# 依存とビルド成果物
+node_modules/
+dist/
+*.tsbuildinfo
+
+# エディタ・OS
+.DS_Store
+.vscode/
+.idea/
+
+# Python（bridge）
+bridge/venv/
+bridge/__pycache__/
+bridge/.env
+bridge/bridge.log*
+
+# 秘密情報は一切コミットしない
+.env
+.env.local
