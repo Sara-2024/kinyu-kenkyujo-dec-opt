@@ -100,5 +100,47 @@ WebSocketで指令を待ち受け、MT5のグローバル変数を書き換え�
 
 1. **WebSocketサーバー** — 画面とブリッジをつなぐ中継。未着手
 2. **AIの実接続** — 定型文を実際のLLM応答に置き換える
-3. **メール配信** — 接続ツールの送付とオプトイン管理
+3. **メール配信** — 接続ツールの送付とオプトイン管理（リード保存は Supabase 対応済み）
 4. **接続ツールの配布形態** — インストーラー化（EA配置とMT5設定を自動化）
+
+---
+
+## GitHub 連携
+
+```bash
+# 1. GitHub CLI でログイン（ブラウザが開きます）
+gh auth login
+
+# 2. リポジトリ作成して push（プライベート）
+gh repo create kinyu-kenkyujo-dec-opt --private --source=. --remote=origin --push
+```
+
+Cursor からはそのまま clone / push できます。Cloud Agent を使う場合も、GitHub 連携後に
+リポジトリを指定すれば動きます。
+
+---
+
+## Supabase 連携
+
+接続フローで入力されたメールアドレスを `leads` テーブルに保存します。
+環境変数が未設定のときは従来どおり localStorage のみで動作します（画面の挙動は変わりません）。
+
+### セットアップ
+
+1. [Supabase](https://supabase.com) でプロジェクトを作成
+2. **SQL Editor** で [supabase/schema.sql](supabase/schema.sql) を実行
+3. **Project Settings → API** から URL と `anon` key をコピー
+4. ルートに `.env` を作成（`.env.example` を参考）
+
+```bash
+cp .env.example .env
+# VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY を記入
+npm run dev
+```
+
+5. アルゴ → メール入力 → Supabase の **Table Editor → leads** に行が増えることを確認
+
+### デプロイ時
+
+Vite のビルド時に `VITE_*` が埋め込まれるため、ホスティング先（Vercel / Netlify 等）の
+環境変数にも同じキーを設定してください。

@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Character } from '../data/characters'
 import { clearConnection, loadConnection, newConnection, saveConnection, type Connection } from '../data/connection'
 import { ControlPanel } from './ControlPanel'
+import { saveLead } from '../data/leads'
 import { CONNECT_STEPS, CONNECT_TALK, USER_STEPS, validateEmail } from '../data/setupFlow'
 import { PixelPerson } from './PixelPerson'
 
@@ -111,6 +112,7 @@ export function DialogueWindow({ character, onClose }: { character: Character; o
     }
     setError(null)
     emailRef.current = input.trim()
+    void saveLead(input.trim())
     setPhase('sent')
     setAiText(
       `${input.trim()} 宛に接続ツールをお送りしました。ダウンロードして開いていただければ、あとは私が引き継ぎます。`,
