@@ -7,9 +7,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Character } from '../data/characters'
 import { clearConnection, loadConnection, newConnection, saveConnection, type Connection } from '../data/connection'
+import { BridgeStatusBar } from './BridgeStatusBar'
 import { ControlPanel } from './ControlPanel'
 import type { useBridge } from '../hooks/useBridge'
 import { saveLead } from '../data/leads'
+import { formatBridgeError } from '../data/bridgeErrors'
 import { CONNECT_STEPS, CONNECT_TALK, USER_STEPS, validateEmail } from '../data/setupFlow'
 import { PixelPerson } from './PixelPerson'
 
@@ -148,12 +150,21 @@ export function DialogueWindow({
           if (next < CONNECT_STEPS.length) {
             setAiText(talk)
           } else {
-            const created = newConnection(emailRef.current)
-            // 実機がつながっていれば、本物の口座情報で上書きする
-            if (bridge.live && bridge.status) {
-              if (bridge.status.account) created.account = String(bridge.status.account)
-              if (bridge.status.server) created.server = String(bridge.status.server)
+            if (!bridge.live || !bridge.status) {
+              setError(
+                bridge.error
+                  ? formatBridgeError(bridge.error)
+                  : 'E008: MT5 連携なしでは接続を完了できません',
+              )
+              setPhase('connecting')
+              setAiText(
+                '接続ツールからの応答がありません。中継サーバーとブリッジが起動しているか確認してください。',
+              )
+              return
             }
+            const created = newConnection(emailRef.current)
+            if (bridge.status.account) created.account = String(bridge.status.account)
+            if (bridge.status.server) created.server = String(bridge.status.server)
             saveConnection(created)
             setConn(created)
             setPhase('done')
@@ -175,6 +186,10 @@ export function DialogueWindow({
     }
     return fallbackText
   }
+
+  const showBridgeBar =
+    character.id === 'algo' &&
+    (phase === 'sent' || phase === 'connecting' || phase === 'done' || phase === 'control')
 
   /** 連携後だけ出す「設定 / 相談」の切り替え */
   const canSwitch = !!conn && character.id === 'algo' && (phase === 'control' || phase === 'talk')
@@ -288,6 +303,7 @@ export function DialogueWindow({
 
         {/* ヘッダー以外はスクロールさせ、画面が短くてもはみ出さないようにする */}
         <div className="min-h-0 flex-1 overflow-y-auto">
+        {showBridgeBar && <div className="px-6 pt-3"><BridgeStatusBar bridge={bridge} /></div>}
         {/* ── メインテキスト ── */}
         <div className="min-h-[72px] cursor-pointer px-6 pb-3 pt-4" onClick={() => setShown(aiText.length)}>
           <p className="text-[16px] font-bold leading-relaxed text-slate-100">
@@ -412,7 +428,7 @@ export function DialogueWindow({
             </div>
 
             <div className="mt-2.5 flex items-center gap-4">
-              {error && <p className="text-[13px] font-bold text-[#ff8484]">⚠ {error}</p>}
+              {error && <p className="text-[13px] font-bold leading-relaxed text-[#ff8484]">⚠ {error}</p>}
               <button
                 type="button"
                 onClick={() => setPhase('talk')}
@@ -509,6 +525,10 @@ export function DialogueWindow({
                 }}
               />
             </div>
+
+            {error && phase === 'connecting' && (
+              <p className="mt-3 text-[13px] font-bold leading-relaxed text-[#ff8484]">⚠ {error}</p>
+            )}
 
             {/* 完了後：そのまま管理画面へ進める */}
             {phase === 'done' && (

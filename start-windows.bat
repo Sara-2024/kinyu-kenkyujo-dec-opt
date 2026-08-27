@@ -20,10 +20,10 @@ echo.
 timeout /t 4 /nobreak >nul
 
 start "Relay" cmd /k "cd /d %~dp0server && npm start"
-timeout /t 2 /nobreak >nul
+timeout /t 5 /nobreak >nul
 
-start "Bridge" cmd /k "cd /d %~dp0bridge && call venv\Scripts\activate.bat && python bridge.py"
-timeout /t 3 /nobreak >nul
+start "Bridge" cmd /k "cd /d %~dp0bridge && call venv\Scripts\activate.bat && echo Waiting for relay on port 8080... && python bridge.py"
+timeout /t 4 /nobreak >nul
 
 start "WebUI" cmd /k "cd /d %~dp0 && npm run dev"
 timeout /t 4 /nobreak >nul

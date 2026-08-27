@@ -4,7 +4,9 @@
 // 設定の変更は「MT5のグローバル変数を書き換える」だけなので、
 // EAを載せ直す必要も、MT5を触っていただく必要もない。
 import { useState } from 'react'
+import { BridgeStatusBar } from './BridgeStatusBar'
 import type { Connection } from '../data/connection'
+import { formatBridgeError } from '../data/bridgeErrors'
 import { EA_SETTINGS, formatValue } from '../data/eaSettings'
 import type { useBridge } from '../hooks/useBridge'
 
@@ -42,29 +44,24 @@ export function ControlPanel({
     setSending(true)
     setFailed(null)
 
-    // 実機がつながっていれば、ブリッジ経由でMT5のグローバル変数を書き換える
-    if (bridge.live) {
-      const changed = EA_SETTINGS.filter((s) => draft[s.key] !== conn.settings[s.key])
-      for (const setting of changed) {
-        const ack = await bridge.send('set_variable', { name: setting.gv, value: draft[setting.key] })
-        if (!ack.ok) {
-          setSending(false)
-          setFailed(ack.error ?? `${setting.label}の反映に失敗しました`)
-          return
-        }
-      }
-      onChange({ ...conn, settings: draft })
+    if (!bridge.live) {
       setSending(false)
-      setSavedAt(Date.now())
+      setFailed(bridge.error ? formatBridgeError(bridge.error) : 'E008: MT5 未接続')
       return
     }
 
-    // つながっていないときは、画面上だけで完結させる
-    setTimeout(() => {
-      onChange({ ...conn, settings: draft })
-      setSending(false)
-      setSavedAt(Date.now())
-    }, 900)
+    const changed = EA_SETTINGS.filter((s) => draft[s.key] !== conn.settings[s.key])
+    for (const setting of changed) {
+      const ack = await bridge.send('set_variable', { name: setting.gv, value: draft[setting.key] })
+      if (!ack.ok) {
+        setSending(false)
+        setFailed(ack.error ?? `E007: ${setting.label}の反映に失敗しました`)
+        return
+      }
+    }
+    onChange({ ...conn, settings: draft })
+    setSending(false)
+    setSavedAt(Date.now())
   }
 
   const running = conn.running
@@ -80,6 +77,7 @@ export function ControlPanel({
 
   return (
     <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+      <BridgeStatusBar bridge={bridge} />
       {/* ── 稼働状態 ── */}
       <div
         className="mb-4 flex flex-wrap items-center gap-4 rounded-[6px] border px-5 py-4"
@@ -108,14 +106,16 @@ export function ControlPanel({
           type="button"
           onClick={async () => {
             const next = !running
-            if (bridge.live) {
-              const ack = await bridge.send(next ? 'start_trading' : 'stop_trading', {
-                reason: next ? '' : '画面から停止',
-              })
-              if (!ack.ok) {
-                setFailed(ack.error ?? '切り替えに失敗しました')
-                return
-              }
+            if (!bridge.live) {
+              setFailed(bridge.error ? formatBridgeError(bridge.error) : 'E008: MT5 未接続')
+              return
+            }
+            const ack = await bridge.send(next ? 'start_trading' : 'stop_trading', {
+              reason: next ? '' : '画面から停止',
+            })
+            if (!ack.ok) {
+              setFailed(ack.error ?? 'E007: 切り替えに失敗しました')
+              return
             }
             setFailed(null)
             onChange({ ...conn, running: next })
@@ -133,19 +133,17 @@ export function ControlPanel({
 
       {/* ── 口座 ── */}
       <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-[13px]">
-        {bridge.live && (
-          <span
-            className="rounded-[3px] border px-2 py-0.5 text-[11px] font-bold"
-            style={{ borderColor: 'rgba(53,245,138,0.5)', background: 'rgba(53,245,138,0.1)', color: '#35f58a' }}
-          >
-            ● MT5と接続中
-          </span>
-        )}
         <span className="text-slate-400">
-          口座 <span className="font-mono ml-1 font-bold text-slate-200">{conn.account}</span>
+          口座{' '}
+          <span className="font-mono ml-1 font-bold text-slate-200">
+            {bridge.live && bridge.status?.account != null ? bridge.status.account : conn.account}
+          </span>
         </span>
         <span className="text-slate-400">
-          サーバー <span className="font-mono ml-1 font-bold text-slate-200">{conn.server}</span>
+          サーバー{' '}
+          <span className="font-mono ml-1 font-bold text-slate-200">
+            {bridge.live && bridge.status?.server ? bridge.status.server : conn.server}
+          </span>
         </span>
         <span className="text-slate-400">
           エンジン <span className="font-mono ml-1 font-bold text-slate-200">TRELAB-EA v1.2</span>

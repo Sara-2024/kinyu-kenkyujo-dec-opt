@@ -1,8 +1,7 @@
 // 中継サーバー経由で、MT5のそばにいるブリッジとやり取りする。
-//
-// サーバーが動いていなければ黙って諦める（そのまま営業用の見せ方で動く）。
-// つながっているときだけ live=true になり、画面は本物の口座情報を映す。
+// 接続に失敗した場合は黙ってモックに落とさず、エラーコードを返す。
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { BridgeError, BridgeErrorCode } from '../data/bridgeErrors'
 
 export interface BridgeStatus {
   bridgeId: string
@@ -25,15 +24,26 @@ type Ack = {
   error?: string
 }
 
+export type BridgePhase = 'connecting' | 'live' | 'no_bridge' | 'error'
+
 /** 接続先。未設定ならローカルの中継サーバー */
-const WS_URL = import.meta.env.VITE_RELAY_URL || 'ws://localhost:8080/app'
+export const WS_URL = import.meta.env.VITE_RELAY_URL || 'ws://localhost:8080/app'
 
 export function useBridge() {
-  const [live, setLive] = useState(false)
+  const [phase, setPhase] = useState<BridgePhase>('connecting')
+  const [error, setError] = useState<BridgeError | null>(null)
   const [status, setStatus] = useState<BridgeStatus | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const waiting = useRef(new Map<string, (ack: Ack) => void>())
   const seq = useRef(0)
+  const hadLive = useRef(false)
+
+  const live = phase === 'live'
+
+  const setErr = (code: BridgeErrorCode, detail?: string) => {
+    setError({ code, detail })
+    setPhase(code === 'E003' || code === 'E004' ? 'no_bridge' : 'error')
+  }
 
   useEffect(() => {
     let closed = false
@@ -41,14 +51,23 @@ export function useBridge() {
 
     const connect = () => {
       if (closed) return
+      setPhase('connecting')
+      setError(null)
+
       let ws: WebSocket
       try {
         ws = new WebSocket(WS_URL)
-      } catch {
+      } catch (e) {
+        setErr('E001', `${WS_URL} — ${e instanceof Error ? e.message : 'open failed'}`)
         retry = setTimeout(connect, 5000)
         return
       }
       wsRef.current = ws
+
+      ws.onopen = () => {
+        if (closed) return
+        // welcome メッセージ待ち。ブリッジ無しなら E003 は onmessage で判定
+      }
 
       ws.onmessage = (event) => {
         let payload: Record<string, unknown>
@@ -58,24 +77,31 @@ export function useBridge() {
           return
         }
 
-        // 接続直後：いまつながっているブリッジ
         if (payload.type === 'welcome') {
           const list = (payload.bridges as BridgeStatus[]) ?? []
           if (list.length > 0) {
             setStatus(list[0])
-            setLive(true)
+            setPhase('live')
+            setError(null)
+            hadLive.current = true
+          } else {
+            setStatus(null)
+            setErr('E003', `relay=${WS_URL}`)
           }
           return
         }
 
         if (payload.type === 'bridge_online') {
           setStatus({ ...(payload.status as BridgeStatus), bridgeId: String(payload.bridgeId) })
-          setLive(true)
+          setPhase('live')
+          setError(null)
+          hadLive.current = true
           return
         }
 
         if (payload.type === 'bridge_offline') {
-          setLive(false)
+          setStatus(null)
+          setErr('E004', String(payload.bridgeId ?? ''))
           return
         }
 
@@ -91,15 +117,17 @@ export function useBridge() {
         }
       }
 
-      ws.onclose = () => {
-        // 自分より新しい接続ができている場合、それを巻き添えにしない。
-        // （開発モードの二重マウントや再接続時に、有効な接続を消してしまうため）
+      ws.onclose = (ev) => {
         if (wsRef.current !== ws) return
-        setLive(false)
+        setPhase(hadLive.current ? 'error' : 'connecting')
+        setErr('E002', `code=${ev.code} relay=${WS_URL}`)
         wsRef.current = null
         if (!closed) retry = setTimeout(connect, 5000)
       }
-      ws.onerror = () => ws.close()
+
+      ws.onerror = () => {
+        setErr('E001', WS_URL)
+      }
     }
 
     connect()
@@ -110,28 +138,30 @@ export function useBridge() {
     }
   }, [])
 
-  /** 指令を送り、ブリッジからの応答を待つ */
   const send = useCallback(
     (command: string, extra: Record<string, unknown> = {}): Promise<Ack> =>
       new Promise((resolve) => {
         const ws = wsRef.current
         if (!ws || ws.readyState !== WebSocket.OPEN) {
-          resolve({ type: 'ack', ok: false, error: 'サーバーにつながっていません' })
+          resolve({ type: 'ack', ok: false, error: 'E005: WebSocket not open' })
+          return
+        }
+        if (phase !== 'live') {
+          resolve({ type: 'ack', ok: false, error: 'E003: bridge not live' })
           return
         }
         const id = `app-${++seq.current}`
         waiting.current.set(id, resolve)
         ws.send(JSON.stringify({ id, command, ...extra }))
-        // 応答が来ない場合の保険
         setTimeout(() => {
           if (waiting.current.has(id)) {
             waiting.current.delete(id)
-            resolve({ type: 'ack', ok: false, error: '応答がありません' })
+            resolve({ type: 'ack', ok: false, error: 'E006: timeout' })
           }
         }, 8000)
       }),
-    [],
+    [phase],
   )
 
-  return { live, status, send }
+  return { live, phase, status, error, wsUrl: WS_URL, send }
 }

@@ -455,7 +455,8 @@ class Bridge:
             except asyncio.CancelledError:
                 raise
             except (WebSocketException, OSError) as exc:
-                log.warning("接続できません/切れました (%s): %s", type(exc).__name__, exc)
+                log.warning("中継サーバーに接続できません (%s): %s", type(exc).__name__, exc)
+                log.warning("→ server フォルダで npm start が動いているか確認（ポート 8080）")
             except Exception as exc:  # noqa: BLE001
                 log.exception("想定外の例外: %s", exc)
 
