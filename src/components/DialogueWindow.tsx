@@ -8,13 +8,22 @@ import { useEffect, useRef, useState } from 'react'
 import type { Character } from '../data/characters'
 import { clearConnection, loadConnection, newConnection, saveConnection, type Connection } from '../data/connection'
 import { ControlPanel } from './ControlPanel'
+import type { useBridge } from '../hooks/useBridge'
 import { saveLead } from '../data/leads'
 import { CONNECT_STEPS, CONNECT_TALK, USER_STEPS, validateEmail } from '../data/setupFlow'
 import { PixelPerson } from './PixelPerson'
 
 type Phase = 'talk' | 'email' | 'sent' | 'connecting' | 'done' | 'control'
 
-export function DialogueWindow({ character, onClose }: { character: Character; onClose: () => void }) {
+export function DialogueWindow({
+  character,
+  onClose,
+  bridge,
+}: {
+  character: Character
+  onClose: () => void
+  bridge: ReturnType<typeof useBridge>
+}) {
   const [aiText, setAiText] = useState(character.greeting)
   const [shown, setShown] = useState(0)
   const [input, setInput] = useState('')
@@ -140,6 +149,11 @@ export function DialogueWindow({ character, onClose }: { character: Character; o
             setAiText(talk)
           } else {
             const created = newConnection(emailRef.current)
+            // 実機がつながっていれば、本物の口座情報で上書きする
+            if (bridge.live && bridge.status) {
+              if (bridge.status.account) created.account = String(bridge.status.account)
+              if (bridge.status.server) created.server = String(bridge.status.server)
+            }
             saveConnection(created)
             setConn(created)
             setPhase('done')
@@ -152,6 +166,15 @@ export function DialogueWindow({ character, onClose }: { character: Character; o
     })
   }
 
+
+  /** 実機がつながっていれば、工程の結果を本物の値に差し替える */
+  const liveDone = (index: number, fallbackText: string) => {
+    if (!bridge.live || !bridge.status) return fallbackText
+    if (index === 1 && bridge.status.account) {
+      return `口座 ${bridge.status.account} ／ ${bridge.status.server ?? ''}`
+    }
+    return fallbackText
+  }
 
   /** 連携後だけ出す「設定 / 相談」の切り替え */
   const canSwitch = !!conn && character.id === 'algo' && (phase === 'control' || phase === 'talk')
@@ -468,7 +491,7 @@ export function DialogueWindow({ character, onClose }: { character: Character; o
                       />
                     )}
                     <span className={`text-[15px] font-bold ${finished ? 'text-slate-300' : 'text-white'}`}>
-                      {finished ? step.done : `${step.working}…`}
+                      {finished ? liveDone(i, step.done) : `${step.working}…`}
                     </span>
                   </li>
                 )
@@ -525,6 +548,7 @@ export function DialogueWindow({ character, onClose }: { character: Character; o
         {/* ══════ 管理画面（接続ずみのお客様が次に開くのはここ） ══════ */}
         {phase === 'control' && conn && (
           <ControlPanel
+            bridge={bridge}
             conn={conn}
             onChange={(next) => {
               saveConnection(next)

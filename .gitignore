@@ -17,3 +17,7 @@ bridge/bridge.log*
 # 秘密情報は一切コミットしない
 .env
 .env.local
+.vercel
+
+# 中継サーバー
+server/node_modules/

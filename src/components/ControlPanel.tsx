@@ -6,19 +6,23 @@
 import { useState } from 'react'
 import type { Connection } from '../data/connection'
 import { EA_SETTINGS, formatValue } from '../data/eaSettings'
+import type { useBridge } from '../hooks/useBridge'
 
 export function ControlPanel({
   conn,
   onChange,
   onReset,
+  bridge,
 }: {
   conn: Connection
   onChange: (next: Connection) => void
   onReset: () => void
+  bridge: ReturnType<typeof useBridge>
 }) {
   const [draft, setDraft] = useState<Record<string, number>>(conn.settings)
   const [sending, setSending] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [failed, setFailed] = useState<string | null>(null)
 
   const dirty = EA_SETTINGS.some((s) => draft[s.key] !== conn.settings[s.key])
 
@@ -34,9 +38,28 @@ export function ControlPanel({
     })
   }
 
-  const apply = () => {
+  const apply = async () => {
     setSending(true)
-    // 実際にはブリッジ経由で MT5 のグローバル変数を書き換える
+    setFailed(null)
+
+    // 実機がつながっていれば、ブリッジ経由でMT5のグローバル変数を書き換える
+    if (bridge.live) {
+      const changed = EA_SETTINGS.filter((s) => draft[s.key] !== conn.settings[s.key])
+      for (const setting of changed) {
+        const ack = await bridge.send('set_variable', { name: setting.gv, value: draft[setting.key] })
+        if (!ack.ok) {
+          setSending(false)
+          setFailed(ack.error ?? `${setting.label}の反映に失敗しました`)
+          return
+        }
+      }
+      onChange({ ...conn, settings: draft })
+      setSending(false)
+      setSavedAt(Date.now())
+      return
+    }
+
+    // つながっていないときは、画面上だけで完結させる
     setTimeout(() => {
       onChange({ ...conn, settings: draft })
       setSending(false)
@@ -72,12 +95,31 @@ export function ControlPanel({
         <div className="min-w-0">
           <p className="text-[17px] font-bold text-white">自動売買 {running ? '稼働中' : '停止中'}</p>
           <p className="text-[12px] text-slate-400">
-            {running ? `連続 ${elapsed} 稼働／異常なし` : 'ボタンひとつでいつでも再開できます'}
+            {running
+              ? `連続 ${elapsed} 稼働／異常なし${
+                  bridge.live && typeof bridge.status?.value === 'number'
+                    ? `（MT5側の値 ${bridge.status.value}）`
+                    : ''
+                }`
+              : 'ボタンひとつでいつでも再開できます'}
           </p>
         </div>
         <button
           type="button"
-          onClick={() => onChange({ ...conn, running: !running })}
+          onClick={async () => {
+            const next = !running
+            if (bridge.live) {
+              const ack = await bridge.send(next ? 'start_trading' : 'stop_trading', {
+                reason: next ? '' : '画面から停止',
+              })
+              if (!ack.ok) {
+                setFailed(ack.error ?? '切り替えに失敗しました')
+                return
+              }
+            }
+            setFailed(null)
+            onChange({ ...conn, running: next })
+          }}
           className="ml-auto whitespace-nowrap rounded-[5px] border px-6 py-3 text-[15px] font-bold transition hover:brightness-110 active:translate-y-px"
           style={
             running
@@ -90,7 +132,15 @@ export function ControlPanel({
       </div>
 
       {/* ── 口座 ── */}
-      <div className="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
+      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-[13px]">
+        {bridge.live && (
+          <span
+            className="rounded-[3px] border px-2 py-0.5 text-[11px] font-bold"
+            style={{ borderColor: 'rgba(53,245,138,0.5)', background: 'rgba(53,245,138,0.1)', color: '#35f58a' }}
+          >
+            ● MT5と接続中
+          </span>
+        )}
         <span className="text-slate-400">
           口座 <span className="font-mono ml-1 font-bold text-slate-200">{conn.account}</span>
         </span>
@@ -179,7 +229,8 @@ export function ControlPanel({
         {!sending && savedAt && !dirty && (
           <span className="check-pop text-[14px] font-bold text-[#35f58a]">✓ MT5に反映しました</span>
         )}
-        {!sending && dirty && <span className="text-[13px] text-slate-400">変更された項目があります</span>}
+        {!sending && dirty && !failed && <span className="text-[13px] text-slate-400">変更された項目があります</span>}
+        {failed && <span className="text-[13px] font-bold text-[#ff8484]">⚠ {failed}</span>}
 
         <button
           type="button"

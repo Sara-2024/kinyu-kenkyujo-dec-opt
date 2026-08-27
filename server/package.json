@@ -1,0 +1,13 @@
+{
+  "name": "trelab-relay",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "トレラボ ⇔ MT5ブリッジ の中継サーバー",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

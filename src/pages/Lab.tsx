@@ -11,6 +11,7 @@ import { DialogueWindow } from '../components/DialogueWindow'
 import { PixelPerson } from '../components/PixelPerson'
 import { BigChart, CodePanel, Desk, DeskMonitor, ServerRack, StatusMonitor, ToolBox } from '../components/Panels'
 import { CHARACTERS, type Character } from '../data/characters'
+import { useBridge } from '../hooks/useBridge'
 import { useMarket } from '../hooks/useMarket'
 
 const STAGE_W = 1440
@@ -187,6 +188,7 @@ export function Lab() {
   // チュートリアルは初回訪問時のみ
   const [tutorial, setTutorial] = useState(() => !localStorage.getItem('lab-tutorial-done'))
   const { candles, price, dir, shocked, triggerShock } = useMarket()
+  const bridge = useBridge()
   const [news, setNews] = useState<NewsItem | null>(null)
   const [dialogueId, setDialogueId] = useState<string | null>(null)
 
@@ -642,7 +644,7 @@ export function Lab() {
 
       {/* ================= 会話ウィンドウ（オーバーレイ） ================= */}
       {dialogueId && CHARACTERS[dialogueId] && (
-        <DialogueWindow character={CHARACTERS[dialogueId]} onClose={closeDialogue} />
+        <DialogueWindow character={CHARACTERS[dialogueId]} onClose={closeDialogue} bridge={bridge} />
       )}
 
       {/* ===== 急変動中の赤ビネット ===== */}
