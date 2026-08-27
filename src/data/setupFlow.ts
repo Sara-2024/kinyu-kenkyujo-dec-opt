@@ -33,7 +33,7 @@ export interface ConnectStep {
 export const CONNECT_STEPS: ConnectStep[] = [
   { working: 'お使いのMT5を探しています', done: 'MetaTrader 5 (build 4260) を検出しました', ms: 1200 },
   { working: 'ログイン中の口座を読み取っています', done: '口座 70418552 ／ XMTrading-Real 3', ms: 1300 },
-  { working: '売買エンジンを組み込んでいます', done: 'TRELAB-EA v1.2 を配置しました', ms: 1500 },
+  { working: '売買エンジンを組み込んでいます', done: 'システムを配置しました', ms: 1500 },
   { working: '緊急停止スイッチを取り付けています', done: 'この画面から止められる状態になりました', ms: 1200 },
   { working: '研究所とつないでいます', done: '接続 良好（応答 12ms）', ms: 1000 },
 ]

@@ -19,6 +19,7 @@ int OnInit()
 void OnDeinit(const int reason)
   {
    EventKillTimer();
+   RemoveGateStatus();
   }
 
 void OnTimer()

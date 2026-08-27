@@ -146,7 +146,7 @@ export function ControlPanel({
           </span>
         </span>
         <span className="text-slate-400">
-          エンジン <span className="font-mono ml-1 font-bold text-slate-200">TRELAB-EA v1.2</span>
+          エンジン <span className="font-mono ml-1 font-bold text-slate-200">システム v1.2</span>
         </span>
       </div>
 

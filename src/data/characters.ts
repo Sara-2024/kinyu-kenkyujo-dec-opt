@@ -162,7 +162,7 @@ export const CHARACTERS: Record<string, Character> = {
     startsSetup: '初期設定をはじめる',
     name: 'ユイ',
     role: '受付案内',
-    greeting: 'ようこそ、金融研究所へ。受付のユイと申します。どのフロアへご案内しましょうか。',
+    greeting: 'ようこそ、トレード研究所へ。受付のユイと申します。どのフロアへご案内しましょうか。',
     color: '#ff8fb0',
     look: {
       skin: '#f7cda6',

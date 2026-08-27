@@ -354,7 +354,7 @@ export function Lab() {
         <h1 className="font-mono ml-3 whitespace-nowrap text-[14px] font-bold tracking-[0.3em] text-slate-100">
           MARKET RESEARCH LAB
         </h1>
-        <span className="ml-3 hidden whitespace-nowrap text-[13px] font-bold text-slate-400 md:inline">金融研究所</span>
+        <span className="ml-3 hidden whitespace-nowrap text-[13px] font-bold text-slate-400 md:inline">トレード研究所</span>
         <Ticker price={price} dir={dir} />
         <button
           type="button"
@@ -598,7 +598,7 @@ export function Lab() {
                 >
                   <p className="font-mono mb-2 text-[12px] tracking-[0.35em] text-yellow-300">TUTORIAL</p>
                   <p className="text-[18px] font-bold leading-relaxed text-white">
-                    ようこそ、金融研究所へ！
+                    ようこそ、トレード研究所へ！
                     <br />
                     まずは受付の<span className="text-yellow-300">ユイ</span>をクリックして
                     <br />

@@ -127,8 +127,9 @@ def copy_ea_files(data_path: str, mt5_exe: Path) -> None:
     shutil.copy2(BRIDGE_DIR / "TradingGate.mqh", include / "TradingGate.mqh")
     shutil.copy2(BRIDGE_DIR / "TrelabEA.mq5", experts / "TrelabEA.mq5")
     shutil.copy2(BRIDGE_DIR / "TrelabGate.mq5", experts / "TrelabGate.mq5")
+    shutil.copy2(BRIDGE_DIR / "SiteTestEA.mq5", experts / "SiteTestEA.mq5")
     log(f"Copied TradingGate.mqh -> {include}")
-    log(f"Copied TrelabEA.mq5 -> {experts}")
+    log(f"Copied TrelabEA.mq5 / SiteTestEA.mq5 -> {experts}")
 
     editor = mt5_exe.parent / "metaeditor64.exe"
     if editor.is_file():

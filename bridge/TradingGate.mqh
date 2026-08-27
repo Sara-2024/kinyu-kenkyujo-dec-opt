@@ -14,7 +14,10 @@ void SyncGateFileToGlobals()
   {
    int handle = FileOpen("trelab_gate.ini", FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
    if(handle == INVALID_HANDLE)
+     {
+      DrawGateStatus();
       return;
+     }
    while(!FileIsEnding(handle))
      {
       string line = FileReadString(handle);
@@ -28,33 +31,68 @@ void SyncGateFileToGlobals()
       GlobalVariableSet(StringSubstr(line, 0, eq), StringToDouble(StringSubstr(line, eq + 1)));
      }
    FileClose(handle);
+   DrawGateStatus();
+  }
+
+double GateNumber(const string name, const double fallback)
+  {
+   if(GlobalVariableCheck(name))
+      return GlobalVariableGet(name);
+   return fallback;
+  }
+
+void DrawGateStatus()
+  {
+   const bool allowed = IsTradingAllowedRaw();
+   const double lot = GateNumber("AI_LOT", 0);
+   const double maxp = GateNumber("AI_MAX_POSITIONS", 0);
+   const double dayl = GateNumber("AI_DAY_LOSS_LIMIT", 0);
+
+   string line1 = allowed ? "システム  稼働中" : "システム  停止中（サイトから停止）";
+   string line2 = StringFormat("ロット %.2f    同時 %.0f    1日上限 %.0f", lot, maxp, dayl);
+
+   PutLabel("TrelabGate_1", 12, 18, 16, allowed ? clrLime : clrOrangeRed, line1);
+   PutLabel("TrelabGate_2", 12, 42, 12, clrSilver, line2);
+  }
+
+bool IsTradingAllowedRaw()
+  {
+   if(!GlobalVariableCheck(InpGateVariable))
+      return InpAllowWhenMissing;
+   if(!MQLInfoInteger(MQL_TRADE_ALLOWED) || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+      return false;
+   return(GlobalVariableGet(InpGateVariable) >= 0.5);
+  }
+
+void PutLabel(const string id, const int x, const int y, const int size, const color clr, const string text)
+  {
+   if(ObjectFind(0, id) < 0)
+     {
+      ObjectCreate(0, id, OBJ_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, id, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+      ObjectSetInteger(0, id, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
+      ObjectSetInteger(0, id, OBJPROP_BACK, false);
+      ObjectSetInteger(0, id, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, id, OBJPROP_HIDDEN, true);
+     }
+   ObjectSetInteger(0, id, OBJPROP_XDISTANCE, x);
+   ObjectSetInteger(0, id, OBJPROP_YDISTANCE, y);
+   ObjectSetInteger(0, id, OBJPROP_FONTSIZE, size);
+   ObjectSetInteger(0, id, OBJPROP_COLOR, clr);
+   ObjectSetString(0, id, OBJPROP_FONT, "Meiryo UI");
+   ObjectSetString(0, id, OBJPROP_TEXT, text);
+  }
+
+void RemoveGateStatus()
+  {
+   ObjectDelete(0, "TrelabGate_1");
+   ObjectDelete(0, "TrelabGate_2");
   }
 
 bool IsTradingAllowed()
   {
-   double value = 0.0;
    SyncGateFileToGlobals();
-
-   // 変数が存在しない＝ブリッジがまだ書いていない、または消えた
-   if(!GlobalVariableCheck(InpGateVariable))
-     {
-      static datetime lastWarn = 0;
-      if(TimeCurrent() - lastWarn > 60)
-        {
-         PrintFormat("[Gate] グローバル変数 %s がありません。売買=%s",
-                     InpGateVariable, InpAllowWhenMissing ? "許可" : "停止");
-         lastWarn = TimeCurrent();
-        }
-      return(InpAllowWhenMissing);
-     }
-
-   value = GlobalVariableGet(InpGateVariable);
-
-   // ターミナル側の自動売買スイッチも併せて確認する
-   if(!MQLInfoInteger(MQL_TRADE_ALLOWED) || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
-      return(false);
-
-   return(value >= 0.5);
+   return IsTradingAllowedRaw();
   }
 
 //--- 使い方 -------------------------------------------------------
