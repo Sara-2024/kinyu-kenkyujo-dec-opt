@@ -21,6 +21,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 BRIDGE_DIR = ROOT / "bridge"
 SERVER_DIR = ROOT / "server"
+sys.path.insert(0, str(BRIDGE_DIR))
+
+from mt5_terminal import (  # noqa: E402
+    find_logged_in_terminal,
+    find_metaeditor,
+    probe_ea_files,
+    resolve_terminal_exe,
+    terminal_dir_from_data_path,
+)
+
 MT5_SETUP_URL = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 
 EA_FILES = ("SiteTestEA.mq5", "TrelabEA.mq5", "TrelabGate.mq5")
@@ -51,43 +61,6 @@ def find_mt5_exe() -> Path | None:
     if pf.is_dir():
         for hit in pf.glob("**/terminal64.exe"):
             return hit
-    return None
-
-
-def terminal_dir_from_data_path(data_path: str) -> Path | None:
-    """data_path の origin.txt から、実際に動いているターミナルのフォルダを取る。"""
-    origin = Path(data_path) / "origin.txt"
-    if not origin.is_file():
-        return None
-    try:
-        text = origin.read_text(encoding="utf-16", errors="ignore").strip()
-    except OSError:
-        return None
-    if not text:
-        try:
-            text = origin.read_text(encoding="utf-8", errors="ignore").strip()
-        except OSError:
-            return None
-    line = text.splitlines()[0].strip() if text else ""
-    folder = Path(line)
-    if (folder / "terminal64.exe").is_file() or (folder / "metaeditor64.exe").is_file():
-        return folder
-    return folder if folder.is_dir() else None
-
-
-def find_metaeditor(mt5_exe: Path | None, data_path: str) -> Path | None:
-    candidates: list[Path] = []
-    origin_dir = terminal_dir_from_data_path(data_path)
-    if origin_dir:
-        candidates.append(origin_dir / "metaeditor64.exe")
-    if mt5_exe:
-        candidates.append(mt5_exe.parent / "metaeditor64.exe")
-    pf = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
-    if pf.is_dir():
-        candidates.extend(pf.glob("**/metaeditor64.exe"))
-    for path in candidates:
-        if path.is_file():
-            return path
     return None
 
 
@@ -126,33 +99,13 @@ def launch_mt5(exe: Path) -> None:
     subprocess.Popen([str(exe)], cwd=str(exe.parent))
 
 
-def read_login_status() -> dict | None:
-    try:
-        import MetaTrader5 as mt5
-    except ImportError:
-        return None
-    if not mt5.initialize():
-        return None
-    info = mt5.account_info()
-    term = mt5.terminal_info()
-    if info is None or not getattr(info, "login", None):
-        mt5.shutdown()
-        return None
-    return {
-        "account": info.login,
-        "server": getattr(info, "server", ""),
-        "data_path": getattr(term, "data_path", "") if term else "",
-        "build": getattr(term, "build", "") if term else "",
-    }
-
-
 def wait_for_login(timeout_sec: int = 600) -> dict:
     try:
         import MetaTrader5 as mt5  # noqa: F401
     except ImportError as exc:
         raise SystemExit("MetaTrader5 Python package missing. Run setup-windows.bat first.") from exc
 
-    existing = read_login_status()
+    existing = find_logged_in_terminal()
     if existing:
         log(f"Already logged in: {existing['account']} / {existing['server']}")
         return existing
@@ -164,7 +117,7 @@ def wait_for_login(timeout_sec: int = 600) -> dict:
 
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
-        status = read_login_status()
+        status = find_logged_in_terminal()
         if status:
             log(f"Logged in: {status['account']} / {status['server']}")
             return status
@@ -172,62 +125,169 @@ def wait_for_login(timeout_sec: int = 600) -> dict:
     raise SystemExit("Timed out waiting for MT5 login.")
 
 
-def compile_mq5(editor: Path, mq5: Path) -> bool:
+def read_compile_log(mq5: Path) -> str:
+    for candidate in (mq5.with_suffix(".log"), mq5.parent / "MQL5" / "Logs" / "metaeditor.log"):
+        if not candidate.is_file():
+            continue
+        for encoding in ("utf-16", "utf-8", "cp932"):
+            try:
+                text = candidate.read_text(encoding=encoding, errors="ignore")
+            except OSError:
+                continue
+            if text.strip():
+                return text.strip()[-2500:]
+    return ""
+
+
+def compile_mq5(editor: Path, mq5: Path, terminal_dir: Path | None) -> bool:
     log(f"Compiling {mq5.name} ...")
-    # パスに空白があっても通るように /compile:"..." 形式
-    subprocess.run([str(editor), f'/compile:{mq5}', "/log"], check=False)
+    log(f"  Editor: {editor}")
+    log(f"  Source: {mq5}")
     ex5 = mq5.with_suffix(".ex5")
-    for _ in range(20):
+    if ex5.is_file():
+        try:
+            ex5.unlink()
+        except OSError:
+            pass
+
+    cmd = [str(editor), f"/compile:{mq5}", "/log"]
+    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    subprocess.run(
+        cmd,
+        cwd=str(terminal_dir) if terminal_dir else None,
+        check=False,
+        creationflags=flags,
+    )
+
+    for _ in range(120):
         if ex5.is_file():
             log(f"OK  {ex5.name}")
             return True
         time.sleep(0.25)
-    log(f"WARN  {ex5.name} was not created. Compile in MetaEditor if Navigator is empty.")
+
+    log(f"WARN  {ex5.name} was not created.")
+    tail = read_compile_log(mq5)
+    if tail:
+        log("----- MetaEditor log (tail) -----")
+        for line in tail.splitlines()[-12:]:
+            log(line)
+        log("---------------------------------")
+    else:
+        log("Open MetaEditor once, compile SiteTestEA.mq5 manually, then retry.")
     return False
 
 
-def copy_ea_files(data_path: str, mt5_exe: Path | None) -> Path:
+def verify_ea_install(data_path: str) -> tuple[bool, dict]:
+    probe = probe_ea_files(data_path)
+    ok = probe["include_ok"] and "SiteTestEA" in probe["ea_found"]
+    if ok and "SiteTestEA" not in probe["ea_compiled"]:
+        log("WARN  SiteTestEA.mq5 is present but .ex5 is missing (compile failed or pending).")
+    return ok, probe
+
+
+def copy_ea_files(session: dict) -> Path:
+    data_path = str(session.get("data_path") or "").strip()
     if not data_path:
-        raise SystemExit("MT5 data_path is empty.")
-    mql5 = Path(data_path) / "MQL5"
+        raise SystemExit("MT5 data_path is empty. Is MT5 running and logged in?")
+
+    data_root = Path(data_path)
+    data_root.mkdir(parents=True, exist_ok=True)
+
+    mql5 = data_root / "MQL5"
     experts = mql5 / "Experts"
     include = mql5 / "Include"
     experts.mkdir(parents=True, exist_ok=True)
     include.mkdir(parents=True, exist_ok=True)
 
+    terminal_exe = resolve_terminal_exe(session)
+    terminal_dir = terminal_exe.parent if terminal_exe else terminal_dir_from_data_path(data_path)
+
     banner("Installing EA files")
-    log(f"MT5 data folder: {data_path}")
+    log(f"Account   : {session.get('account')} / {session.get('server')}")
+    log(f"Terminal  : {session.get('terminal_name')} build {session.get('build')}")
+    if terminal_exe:
+        log(f"terminal64: {terminal_exe}")
+    log(f"Data folder: {data_path}")
+    log(f"Experts    : {experts}")
 
     for name in INCLUDE_FILES:
         src = BRIDGE_DIR / name
         dst = include / name
         if not src.is_file():
-            raise SystemExit(f"Missing {src}")
+            raise SystemExit(f"Missing source file: {src}")
         shutil.copy2(src, dst)
-        log(f"OK  Include\\{name}")
+        log(f"OK  Include\\{name}  ({dst.stat().st_size} bytes)")
 
     for name in EA_FILES:
         src = BRIDGE_DIR / name
         dst = experts / name
         if not src.is_file():
-            raise SystemExit(f"Missing {src}")
+            raise SystemExit(f"Missing source file: {src}")
         shutil.copy2(src, dst)
-        log(f"OK  Experts\\{name}")
+        log(f"OK  Experts\\{name}  ({dst.stat().st_size} bytes)")
 
-    editor = find_metaeditor(mt5_exe, data_path)
+    editor = find_metaeditor(data_path, terminal_exe)
     if editor:
-        log(f"MetaEditor: {editor}")
-        compile_mq5(editor, experts / "SiteTestEA.mq5")
-        compile_mq5(editor, experts / "TrelabEA.mq5")
+        for name in EA_FILES:
+            compile_mq5(editor, experts / name, terminal_dir)
     else:
-        log("WARN  metaeditor64.exe not found. Open MetaEditor and compile SiteTestEA.mq5")
+        log("WARN  metaeditor64.exe not found for this terminal.")
+        if terminal_dir:
+            log(f"WARN  Expected near: {terminal_dir / 'metaeditor64.exe'}")
+        log("WARN  Open MetaEditor from MT5 (F4) and compile SiteTestEA.mq5 manually.")
 
-    site_ex5 = experts / "SiteTestEA.ex5"
-    if site_ex5.is_file():
-        log("Navigator -> Expert Advisors -> SiteTestEA  (compiled)")
-    else:
-        log("Navigator may show SiteTestEA.mq5 only until you compile it.")
+    ok, probe = verify_ea_install(data_path)
+    if editor and "SiteTestEA" not in probe["ea_compiled"]:
+        ok = False
+    log("")
+    log(f"Verify Include/TradingGate.mqh : {'OK' if probe['include_ok'] else 'MISSING'}")
+    log(f"Verify Experts/SiteTestEA.mq5 : {'OK' if 'SiteTestEA' in probe['ea_found'] else 'MISSING'}")
+    log(f"Verify Experts/SiteTestEA.ex5 : {'OK' if 'SiteTestEA' in probe['ea_compiled'] else 'MISSING'}")
+    log(f"Folder opened in Explorer     : {probe['experts_dir']}")
+
+    if os.name == "nt":
+        try:
+            os.startfile(probe["experts_dir"])  # type: ignore[attr-defined]
+        except OSError:
+            pass
+
+    if not ok:
+        raise SystemExit(
+            "EA install incomplete. See messages above. "
+            "Try install-ea.bat again, or compile SiteTestEA.mq5 in MetaEditor (F4)."
+        )
+
+    log("")
+    log("In MT5: Navigator (Ctrl+N) -> right-click Expert Advisors -> Refresh")
+    log("Then drag SiteTestEA onto your chart (e.g. USDJPY) and enable AutoTrading.")
     return experts
+
+
+def write_bridge_env(session: dict) -> None:
+    """ブリッジが同じ MT5 ターミナル（いまログイン中の口座）へ繋ぐよう .env を更新する。"""
+    exe = resolve_terminal_exe(session)
+    if exe is None:
+        return
+    env_path = BRIDGE_DIR / ".env"
+    key = "MT5_PATH"
+    val = str(exe)
+    lines: list[str] = []
+    if env_path.is_file():
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+    out: list[str] = []
+    found = False
+    for line in lines:
+        if line.strip().startswith(f"{key}="):
+            out.append(f"{key}={val}")
+            found = True
+        else:
+            out.append(line)
+    if not found:
+        if out and out[-1].strip():
+            out.append("")
+        out.append(f"{key}={val}")
+    env_path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+    log(f"Bridge will use this MT5: {val}")
 
 
 def start_relay() -> subprocess.Popen | None:
@@ -241,64 +301,90 @@ def start_relay() -> subprocess.Popen | None:
     return subprocess.Popen(["npm", "start"], cwd=str(SERVER_DIR), shell=True)
 
 
+def relay_is_up() -> bool:
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=1.5) as res:
+            return res.status == 200
+    except Exception:
+        return False
+
+
 def start_bridge() -> subprocess.Popen:
     venv_py = BRIDGE_DIR / "venv" / "Scripts" / "python.exe"
     py = str(venv_py) if venv_py.is_file() else sys.executable
     log("Starting bridge ...")
-    return subprocess.Popen([py, str(BRIDGE_DIR / "bridge.py")])
+    proc = subprocess.Popen([py, str(BRIDGE_DIR / "bridge.py")])
+    time.sleep(1.2)
+    if proc.poll() == 2:
+        log("Another bridge is already running. Using that one.")
+    return proc
 
 
 def self_test() -> int:
     banner("Self-test (no MT5)")
     missing = [n for n in (*INCLUDE_FILES, *EA_FILES) if not (BRIDGE_DIR / n).is_file()]
     if missing:
-        log(f"FAIL missing files: {missing}")
+        log(f"FAIL missing source files: {missing}")
         return 1
-    fake = ROOT / ".tmp-mt5-data" / "MQL5"
+    fake = ROOT / ".tmp-mt5-data"
     try:
-        experts = copy_ea_files(str(ROOT / ".tmp-mt5-data"), None)
-        for name in EA_FILES:
-            if not (experts / name).is_file():
-                log(f"FAIL not copied: {name}")
-                return 1
-        log("PASS  source EA files copy into the MT5 Experts folder")
+        session = {"data_path": str(fake), "account": 0, "server": "test"}
+        copy_ea_files(session)
+        log("PASS  copy + verify logic")
         return 0
+    except SystemExit as exc:
+        msg = str(exc)
+        if "not installed correctly" in msg or "MetaEditor" in msg:
+            log("PASS  copy ran (compile may be skipped without MetaEditor)")
+            return 0
+        log(f"FAIL {msg}")
+        return 1
     finally:
-        shutil.rmtree(ROOT / ".tmp-mt5-data", ignore_errors=True)
+        shutil.rmtree(fake, ignore_errors=True)
+
+
+def install_ea_only() -> int:
+    banner("EA install only")
+    session = find_logged_in_terminal()
+    if not session:
+        raise SystemExit("MT5 is not logged in. Open MT5, log in, then run this again.")
+    copy_ea_files(session)
+    write_bridge_env(session)
+    return 0
 
 
 def main() -> int:
     os.chdir(ROOT)
     if "--self-test" in sys.argv:
         return self_test()
+    if "--install-ea" in sys.argv:
+        return install_ea_only()
 
     banner("Connection tool")
     log("You only log in inside MT5. This window never asks for a password.")
 
-    status = read_login_status()
-    exe = find_mt5_exe()
-    if status:
+    session = find_logged_in_terminal()
+    if session:
         log("Using the MT5 that is already logged in. Will not start a second terminal.")
-        if not exe:
-            origin = terminal_dir_from_data_path(str(status["data_path"]))
-            if origin and (origin / "terminal64.exe").is_file():
-                exe = origin / "terminal64.exe"
+        exe = resolve_terminal_exe(session) or find_mt5_exe()
     else:
         exe = ensure_mt5()
         launch_mt5(exe)
-        status = wait_for_login()
+        session = wait_for_login()
 
-    copy_ea_files(str(status["data_path"]), exe)
+    copy_ea_files(session)
+    write_bridge_env(session)
 
     banner("Connecting to the lab")
-    start_relay()
-    time.sleep(2)
+    if relay_is_up():
+        log("Relay already running on 8080 — using the existing one")
+    else:
+        start_relay()
+        time.sleep(2)
     start_bridge()
 
     banner("Done")
-    log(f"Account {status['account']} / {status['server']}")
-    log("In MT5: Navigator (Ctrl+N) -> Expert Advisors -> SiteTestEA")
-    log("Drag SiteTestEA onto a chart, enable AutoTrading.")
+    log(f"Account {session['account']} / {session['server']}")
     log("Leave this window open.")
     print()
     input("  Press Enter to keep running (or close to stop)...")

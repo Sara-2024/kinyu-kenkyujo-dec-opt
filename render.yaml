@@ -1,0 +1,23 @@
+# Render Blueprint — 中継サーバー（WebSocket）
+# Dashboard → New → Blueprint → このリポジトリを選択
+#
+# 本番 URL 例: https://kinyu-relay.onrender.com
+#   画面: wss://kinyu-relay.onrender.com/app
+#   ブリッジ: wss://kinyu-relay.onrender.com/bridge
+
+services:
+  - type: web
+    name: kinyu-relay
+    runtime: node
+    region: singapore
+    plan: starter
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # 任意: トークンを設定すると bridge / app 双方で認証が有効になる
+      # - key: TRELAB_TOKEN
+      #   sync: false

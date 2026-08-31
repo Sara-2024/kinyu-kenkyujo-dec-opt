@@ -64,8 +64,44 @@ try:
 except ImportError:  # pragma: no cover - Windows以外では import できない
     mt5 = None  # type: ignore[assignment]
 
+try:
+    from mt5_terminal import find_logged_in_terminal, resolve_terminal_exe
+except ImportError:
+    find_logged_in_terminal = None  # type: ignore[assignment,misc]
+    resolve_terminal_exe = None  # type: ignore[assignment,misc]
+
 
 log = logging.getLogger("bridge")
+_LOCK_FH = None
+
+
+def acquire_instance_lock() -> None:
+    """同じPCで bridge.py を二重起動すると、中継が切断と再接続を繰り返す。"""
+    global _LOCK_FH
+    path = Path(os.environ.get("TEMP", ".")) / "trelab-bridge.lock"
+    _LOCK_FH = open(path, "a+b")
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            _LOCK_FH.seek(0)
+            if _LOCK_FH.read(1) == b"":
+                _LOCK_FH.write(b"0")
+                _LOCK_FH.flush()
+            _LOCK_FH.seek(0)
+            msvcrt.locking(_LOCK_FH.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(_LOCK_FH.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log.error("別のブリッジがすでに動いています。")
+        log.error("start-connect.bat と start-windows.bat を同時に開いていないか、黒い窓が複数ないか確認してください。")
+        raise SystemExit(2)
+    _LOCK_FH.seek(0)
+    _LOCK_FH.truncate()
+    _LOCK_FH.write(str(os.getpid()).encode("ascii", "replace"))
+    _LOCK_FH.flush()
 
 
 # ============================================================
@@ -178,9 +214,24 @@ class MT5Controller:
         if mt5 is None:
             raise RuntimeError("MetaTrader5 パッケージが見つかりません（Windows + 64bit Python が必要です）")
 
+        # いまログインしている MT5 を優先（複数ターミナル・古い MT5_PATH より信頼できる）
+        if find_logged_in_terminal is not None:
+            session = find_logged_in_terminal()
+            if session:
+                info = mt5.account_info()
+                term = mt5.terminal_info()
+                log.info(
+                    "MT5 接続成功（ログイン中ターミナル）  口座=%s  サーバー=%s  ターミナル=%s",
+                    getattr(info, "login", session.get("account")),
+                    getattr(info, "server", session.get("server")),
+                    getattr(term, "name", session.get("terminal_name")),
+                )
+                return True
+
         kwargs: dict[str, Any] = {"timeout": self.cfg.mt5_timeout}
-        if self.cfg.mt5_path:
-            kwargs["path"] = self.cfg.mt5_path
+        terminal_path = self.cfg.mt5_path
+        if terminal_path:
+            kwargs["path"] = terminal_path
         if self.cfg.mt5_login:
             kwargs["login"] = self.cfg.mt5_login
             kwargs["password"] = self.cfg.mt5_password
@@ -391,12 +442,12 @@ class MT5Controller:
             log.warning("本日の実績を読めません: %s", exc)
             return empty
 
-    async def status(self) -> dict[str, Any]:
+    async def status(self, *, include_today: bool = False) -> dict[str, Any]:
         info = await self._call(mt5.account_info) if self.ready else None
         term = await self._call(mt5.terminal_info) if self.ready else None
         probe = await self._call(self._ea_probe_blocking) if self.ready else {}
         gate = await self._call(self._load_gate) if self.ready else {}
-        today = await self._call(self._today_stats_blocking) if self.ready else {}
+        today = await self._call(self._today_stats_blocking) if (self.ready and include_today) else {}
         return {
             "mt5_ready": self.ready,
             "variable": self.cfg.gv_name,
@@ -482,7 +533,7 @@ class CommandRouter:
             return self._ack(command, request_id, ok, value=readback, name=name)
 
         if command in ("get_status", "status"):
-            status = await self.mt.status()
+            status = await self.mt.status(include_today=True)
             log.debug("指令: 状態要求 -> %s", status)
             return self._ack(command, request_id, True, **status)
 
@@ -518,6 +569,8 @@ class Bridge:
         self.connected_since: float | None = None
         self.disconnected_since: float = time.time()
         self._failsafe_fired = False
+        self._active_ws: Any | None = None
+        self._status_key: str = ""
 
     # ---------- WebSocket ----------
     def _connect_kwargs(self) -> dict[str, Any]:
@@ -535,12 +588,14 @@ class Bridge:
         return kwargs
 
     async def _send(self, ws: Any, message: dict[str, Any]) -> None:
-        await ws.send(json.dumps(message, ensure_ascii=False))
+        await ws.send(json.dumps(message, ensure_ascii=False, allow_nan=False, default=str))
 
     async def _on_connected(self, ws: Any) -> None:
         self.connected_since = time.time()
         self._failsafe_fired = False
+        self._active_ws = ws
         status = await self.mt.status()
+        self._status_key = f"{status.get('account')}:{status.get('server')}"
         await self._send(
             ws,
             {
@@ -553,34 +608,58 @@ class Bridge:
         )
         log.info("トレラボに接続しました: %s", self.cfg.ws_url)
 
+    async def _push_status_if_changed(self) -> None:
+        ws = self._active_ws
+        if ws is None or not self.mt.ready:
+            return
+        status = await self.mt.status()
+        key = f"{status.get('account')}:{status.get('server')}"
+        if key == self._status_key:
+            return
+        self._status_key = key
+        log.info("MT5 口座が切り替わりました: %s", key)
+        await self._send(
+            ws,
+            {
+                "type": "status_update",
+                "bridge_id": self.cfg.bridge_id,
+                "ts": time.time(),
+                **status,
+            },
+        )
+
     async def _serve_connection(self, ws: Any) -> None:
         """このコネクションが切れるまで指令を待ち続ける。await中はCPUを使わない。"""
         await self._on_connected(ws)
-        async for raw in ws:
-            if isinstance(raw, bytes):
-                raw = raw.decode("utf-8", errors="replace")
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                log.warning("JSONとして読めない受信データを無視します: %.120s", raw)
-                continue
-            if not isinstance(payload, dict):
-                log.warning("辞書ではない受信データを無視します: %.120s", raw)
-                continue
+        try:
+            async for raw in ws:
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8", errors="replace")
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError:
+                    log.warning("JSONとして読めない受信データを無視します: %.120s", raw)
+                    continue
+                if not isinstance(payload, dict):
+                    log.warning("辞書ではない受信データを無視します: %.120s", raw)
+                    continue
 
-            try:
-                ack = await self.router.handle(payload)
-            except Exception as exc:  # noqa: BLE001 - 1件の失敗で常駐を止めない
-                log.exception("指令の処理中に例外が発生しました: %s", exc)
-                ack = {
-                    "type": "ack",
-                    "bridge_id": self.cfg.bridge_id,
-                    "command": payload.get("command"),
-                    "ok": False,
-                    "error": str(exc),
-                    "ts": time.time(),
-                }
-            await self._send(ws, ack)
+                try:
+                    ack = await self.router.handle(payload)
+                except Exception as exc:  # noqa: BLE001 - 1件の失敗で常駐を止めない
+                    log.exception("指令の処理中に例外が発生しました: %s", exc)
+                    ack = {
+                        "type": "ack",
+                        "bridge_id": self.cfg.bridge_id,
+                        "command": payload.get("command"),
+                        "ok": False,
+                        "error": str(exc),
+                        "ts": time.time(),
+                    }
+                await self._send(ws, ack)
+        finally:
+            if self._active_ws is ws:
+                self._active_ws = None
 
     async def ws_loop(self) -> None:
         backoff = Backoff(self.cfg.reconnect_min, self.cfg.reconnect_max)
@@ -589,10 +668,21 @@ class Bridge:
                 async with ws_connect(self.cfg.ws_url, **self._connect_kwargs()) as ws:
                     backoff.reset()
                     await self._serve_connection(ws)
+                    if getattr(ws, "close_code", None) == 4001:
+                        log.warning("別の接続ツールが接続したため、このブリッジは終了します")
+                        self.request_stop()
+                        break
                 log.warning("サーバーから切断されました")
             except asyncio.CancelledError:
                 raise
             except (WebSocketException, OSError) as exc:
+                code = getattr(exc, "code", None)
+                if code is None:
+                    code = getattr(getattr(exc, "rcvd", None), "code", None)
+                if code == 4001:
+                    log.warning("別の接続ツールが接続したため、このブリッジは終了します")
+                    self.request_stop()
+                    break
                 log.warning("中継サーバーに接続できません (%s): %s", type(exc).__name__, exc)
                 log.warning("→ server フォルダで npm start が動いているか確認（ポート 8080）")
             except Exception as exc:  # noqa: BLE001
@@ -641,6 +731,8 @@ class Bridge:
                             self.mt.desired_value,
                         )
                         await self.mt.set_variable(self.cfg.gv_name, self.mt.desired_value)
+
+                await self._push_status_if_changed()
 
                 if self.cfg.failsafe_sec > 0 and self.connected_since is None and not self._failsafe_fired:
                     offline = time.time() - self.disconnected_since
@@ -720,7 +812,7 @@ async def _acheck(cfg: Config) -> int:
     if not await mt.connect():
         log.error("MT5 に接続できませんでした")
         return 1
-    status = await mt.status()
+    status = await mt.status(include_today=True)
     log.info("現在の状態: %s", json.dumps(status, ensure_ascii=False, indent=2, default=str))
     await mt.shutdown()
     return 0
@@ -737,6 +829,9 @@ def main() -> int:
     if mt5 is None:
         log.error("MetaTrader5 パッケージを読み込めません。Windows + 64bit Python で実行してください")
         return 1
+
+    if not args.check:
+        acquire_instance_lock()
 
     runner = _acheck(cfg) if args.check else _amain(cfg)
     try:

@@ -95,10 +95,14 @@ function handleBridge(ws, bridgeId) {
   const previous = bridges.get(bridgeId)
   if (previous && previous !== ws) {
     log(`ブリッジ ${bridgeId} が再接続したため、古い接続を閉じます`)
-    previous.close()
+    previous.close(4001, 'replaced')
   }
   bridges.set(bridgeId, ws)
   log(`ブリッジ接続: ${bridgeId}（現在 ${bridges.size} 台）`)
+
+  const ping = setInterval(() => {
+    if (ws.readyState === ws.OPEN) ws.ping()
+  }, 30000)
 
   ws.on('message', (raw) => {
     let payload
@@ -117,6 +121,14 @@ function handleBridge(ws, bridgeId) {
       return
     }
 
+    if (payload.type === 'status_update') {
+      const merged = { ...(lastStatus.get(bridgeId) ?? {}), ...payload }
+      lastStatus.set(bridgeId, merged)
+      log(`ブリッジ ${bridgeId} 口座更新: 口座=${payload.account} ${payload.server ?? ''}`)
+      broadcastToApps({ type: 'bridge_status', bridgeId, status: merged })
+      return
+    }
+
     // 指令への応答。状態も更新しておく
     if (payload.type === 'ack') {
       const merged = { ...(lastStatus.get(bridgeId) ?? {}), ...payload }
@@ -126,15 +138,16 @@ function handleBridge(ws, bridgeId) {
     broadcastToApps({ ...payload, bridgeId })
   })
 
-  const drop = () => {
+  const drop = (code) => {
+    clearInterval(ping)
     if (bridges.get(bridgeId) === ws) {
       bridges.delete(bridgeId)
-      log(`ブリッジ切断: ${bridgeId}`)
+      log(`ブリッジ切断: ${bridgeId} code=${code ?? ''}`)
       broadcastToApps({ type: 'bridge_offline', bridgeId })
     }
   }
-  ws.on('close', drop)
-  ws.on('error', drop)
+  ws.on('close', (code) => drop(code))
+  ws.on('error', (err) => log(`ブリッジ ${bridgeId} エラー: ${err.message}`))
 }
 
 // ────────────────────────────────

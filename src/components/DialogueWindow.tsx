@@ -6,7 +6,7 @@
 // お客様に入力していただくのは連絡先だけ。残りはAIが順に片づける様子を見せる。
 import { useEffect, useRef, useState } from 'react'
 import type { Character } from '../data/characters'
-import { clearConnection, loadConnection, newConnection, saveConnection, type Connection } from '../data/connection'
+import { clearConnection, loadConnection, newConnection, saveConnection, applyBridgeToConnection, connectionMatchesBridge, connectionAccountKey, type Connection } from '../data/connection'
 import { settingsFromGate } from '../data/eaSettings'
 import { BridgeStatusBar } from './BridgeStatusBar'
 import { ControlPanel } from './ControlPanel'
@@ -245,39 +245,23 @@ export function DialogueWindow({
     }
   }, [phase, bridge.live, bridge.send, bridge.error])
 
-  // 管理画面を開いているあいだ、表示口座はMT5の実値に合わせる
+  // MT5 が返した口座を常に正とする（保存済み口座よりブリッジを優先）
   useEffect(() => {
     if (!conn || !bridge.live || bridge.status?.account == null) return
-    const account = String(bridge.status.account)
-    const server = String(bridge.status.server ?? conn.server)
-    const fromGate = settingsFromGate(bridge.status.gate)
-    const running = typeof bridge.status.value === 'number' ? Number(bridge.status.value) !== 0 : conn.running
-    if (
-      conn.account === account &&
-      conn.server === server &&
-      conn.running === running &&
-      Object.keys(fromGate).length === 0
-    ) {
-      return
-    }
-    const next: Connection = {
-      ...conn,
-      account,
-      server,
-      running,
-      settings: { ...conn.settings, ...fromGate },
-    }
-    if (
-      next.account === conn.account &&
-      next.server === conn.server &&
+    const next = applyBridgeToConnection(conn, bridge.status)
+    const unchanged =
+      connectionAccountKey(next) === connectionAccountKey(conn) &&
       next.running === conn.running &&
       JSON.stringify(next.settings) === JSON.stringify(conn.settings)
-    ) {
-      return
-    }
+    if (unchanged) return
+
+    const accountChanged = !connectionMatchesBridge(conn, bridge.status)
     saveConnection(next)
     setConn(next)
-  }, [conn, bridge.live, bridge.status])
+    if (accountChanged && character.id === 'algo' && (phase === 'control' || phase === 'talk')) {
+      setAiText(`MT5の口座（${next.account}／${next.server}）に合わせて接続を更新しました。`)
+    }
+  }, [conn, bridge.live, bridge.status, character.id, phase])
 
   const showBridgeBar =
     character.id === 'algo' &&

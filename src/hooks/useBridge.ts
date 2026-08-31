@@ -88,6 +88,7 @@ export function useBridge() {
   const waiting = useRef(new Map<string, (ack: Ack) => void>())
   const seq = useRef(0)
   const hadLive = useRef(false)
+  const offlineTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const live = phase === 'live'
 
@@ -143,6 +144,22 @@ export function useBridge() {
         }
 
         if (payload.type === 'bridge_online') {
+          if (offlineTimer.current) {
+            clearTimeout(offlineTimer.current)
+            offlineTimer.current = null
+          }
+          setStatus({ ...(payload.status as BridgeStatus), bridgeId: String(payload.bridgeId) })
+          setPhase('live')
+          setError(null)
+          hadLive.current = true
+          return
+        }
+
+        if (payload.type === 'bridge_status') {
+          if (offlineTimer.current) {
+            clearTimeout(offlineTimer.current)
+            offlineTimer.current = null
+          }
           setStatus({ ...(payload.status as BridgeStatus), bridgeId: String(payload.bridgeId) })
           setPhase('live')
           setError(null)
@@ -151,8 +168,12 @@ export function useBridge() {
         }
 
         if (payload.type === 'bridge_offline') {
-          setStatus(null)
-          setErr('E004', String(payload.bridgeId ?? ''))
+          // 二重起動の交代では一瞬切断になるので、すぐにはエラーにしない
+          if (offlineTimer.current) clearTimeout(offlineTimer.current)
+          offlineTimer.current = setTimeout(() => {
+            setStatus(null)
+            setErr('E004', String(payload.bridgeId ?? ''))
+          }, 1500)
           return
         }
 
@@ -187,6 +208,7 @@ export function useBridge() {
     return () => {
       closed = true
       if (retry) clearTimeout(retry)
+      if (offlineTimer.current) clearTimeout(offlineTimer.current)
       wsRef.current?.close()
     }
   }, [])

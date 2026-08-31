@@ -11,6 +11,7 @@ dist/
 # Python（bridge）
 bridge/venv/
 bridge/__pycache__/
+__pycache__/
 bridge/.env
 bridge/bridge.log*
 
