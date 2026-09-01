@@ -17,13 +17,26 @@ import {
   CONNECT_WAIT,
   USER_STEPS,
   connectChecksFromStatus,
+  formatHistoryAnswer,
+  formatPositionsAnswer,
   formatTodayAnswer,
   validateEmail,
   type ConnectCheck,
 } from '../data/setupFlow'
+import { LiveReportView, type LiveReport } from './LiveReport'
 import { PixelPerson } from './PixelPerson'
 
 type Phase = 'talk' | 'email' | 'sent' | 'connecting' | 'done' | 'control'
+
+/** この選択肢は、答えを作らずに MT5 から取ってきた数字をそのまま出す */
+const LIVE_QUESTIONS: Record<string, LiveReport['kind']> = {
+  '今日の成績は？': 'today',
+  '過去の成績は？': 'history',
+  'いまのポジションは？': 'positions',
+}
+
+/** 過去の成績はこの日数ぶんを口座履歴から集計する */
+const HISTORY_DAYS = 30
 
 export function DialogueWindow({
   character,
@@ -45,6 +58,7 @@ export function DialogueWindow({
   const [checks, setChecks] = useState<ConnectCheck[]>([])
   const [error, setError] = useState<string | null>(null)
   const [conn, setConn] = useState<Connection | null>(() => loadConnection())
+  const [report, setReport] = useState<LiveReport | null>(null)
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
@@ -66,6 +80,7 @@ export function DialogueWindow({
     setStepIndex(0)
     setChecks([])
     setError(null)
+    setReport(null)
 
     if (saved && character.id === 'algo') {
       setPhase('control')
@@ -116,16 +131,44 @@ export function DialogueWindow({
     const question = q.trim()
     setBusy(true)
     setAiText('…')
+    setReport(null)
 
-    if (question === '今日の成績は？') {
+    const liveKind = LIVE_QUESTIONS[question]
+    if (liveKind) {
       void (async () => {
         if (!bridge.live) {
           setAiText(character.answers[question] ?? character.fallback)
           setBusy(false)
           return
         }
-        const ack = await bridge.send('get_status')
-        setAiText(ack.ok ? formatTodayAnswer(ack) : '口座の実績を読み取れませんでした。接続ツールが起動しているか見てください。')
+        const failed = '口座の数字を読み取れませんでした。接続ツールが起動しているか見てください。'
+
+        if (liveKind === 'today') {
+          const ack = await bridge.send('get_status')
+          if (ack.ok) {
+            setAiText(formatTodayAnswer(ack))
+            if (ack.today) setReport({ kind: 'today', today: ack.today, currency: ack.currency })
+          } else {
+            setAiText(failed)
+          }
+        } else if (liveKind === 'history') {
+          const ack = await bridge.send('get_history', { days: HISTORY_DAYS })
+          if (ack.ok && ack.history) {
+            setAiText(formatHistoryAnswer(ack.history, ack.currency))
+            setReport({ kind: 'history', history: ack.history, currency: ack.currency })
+          } else {
+            setAiText(failed)
+          }
+        } else {
+          const ack = await bridge.send('get_positions')
+          if (ack.ok) {
+            const rows = ack.positions ?? []
+            setAiText(formatPositionsAnswer(rows, ack.currency))
+            setReport({ kind: 'positions', positions: rows, currency: ack.currency })
+          } else {
+            setAiText(failed)
+          }
+        }
         setBusy(false)
       })()
       return
@@ -275,6 +318,7 @@ export function DialogueWindow({
     clearTimers()
     setBusy(false)
     setInput('')
+    setReport(null)
     setPhase(next)
     setAiText(
       next === 'control'
@@ -394,6 +438,11 @@ export function DialogueWindow({
         {/* ══════ 通常会話 ══════ */}
         {phase === 'talk' && (
           <>
+            {report && !typing && (
+              <div className="px-6 pb-3">
+                <LiveReportView report={report} />
+              </div>
+            )}
             <div className="flex flex-wrap gap-2.5 px-6 pb-3">
               {(conn && character.connectedChoices ? character.connectedChoices : character.choices).map((c) => {
                 const isSetup = character.startsSetup === c

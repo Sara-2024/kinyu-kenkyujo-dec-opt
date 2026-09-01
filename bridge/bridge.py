@@ -33,7 +33,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable
@@ -391,6 +391,134 @@ class MT5Controller:
             "ea_installed": len(found) > 0,
         }
 
+    def _digits_blocking(self, symbol: str, cache: dict[str, int]) -> int:
+        """小数点以下の桁数。銘柄ごとに一度だけ問い合わせる。"""
+        if symbol in cache:
+            return cache[symbol]
+        digits = 5
+        try:
+            info = mt5.symbol_info(symbol)
+            if info is not None:
+                digits = int(getattr(info, "digits", 5) or 5)
+        except Exception:  # noqa: BLE001
+            pass
+        cache[symbol] = digits
+        return digits
+
+    def _positions_blocking(self) -> list[dict[str, Any]]:
+        """いま持っている建玉。価格は MT5 が返す現在値をそのまま渡す。"""
+        try:
+            positions = mt5.positions_get() or ()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("建玉を読めません: %s", exc)
+            return []
+        type_buy = getattr(mt5, "POSITION_TYPE_BUY", 0)
+        cache: dict[str, int] = {}
+        rows: list[dict[str, Any]] = []
+        for pos in positions:
+            symbol = str(getattr(pos, "symbol", "") or "")
+            opened = int(getattr(pos, "time", 0) or 0)
+            rows.append(
+                {
+                    "ticket": int(getattr(pos, "ticket", 0) or 0),
+                    "symbol": symbol,
+                    "side": "buy" if getattr(pos, "type", type_buy) == type_buy else "sell",
+                    "volume": float(getattr(pos, "volume", 0) or 0),
+                    "price_open": float(getattr(pos, "price_open", 0) or 0),
+                    "price_current": float(getattr(pos, "price_current", 0) or 0),
+                    "sl": float(getattr(pos, "sl", 0) or 0),
+                    "tp": float(getattr(pos, "tp", 0) or 0),
+                    "profit": round(float(getattr(pos, "profit", 0) or 0), 2),
+                    "swap": round(float(getattr(pos, "swap", 0) or 0), 2),
+                    "digits": self._digits_blocking(symbol, cache),
+                    "opened_at": datetime.fromtimestamp(opened).isoformat(timespec="minutes") if opened else "",
+                }
+            )
+        rows.sort(key=lambda r: r["opened_at"], reverse=True)
+        return rows
+
+    def _history_stats_blocking(self, days: int = 30) -> dict[str, Any]:
+        """過去 N 日の決済実績。口座の履歴をそのまま集計する。"""
+        try:
+            span = max(1, min(int(days), 365))
+        except (TypeError, ValueError):
+            span = 30
+        empty: dict[str, Any] = {
+            "days": span,
+            "closed": 0,
+            "profit": 0.0,
+            "wins": 0,
+            "losses": 0,
+            "best": 0.0,
+            "worst": 0.0,
+            "gross_win": 0.0,
+            "gross_loss": 0.0,
+            "daily": [],
+        }
+        try:
+            now = datetime.now()
+            start = (now - timedelta(days=span - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            deals = mt5.history_deals_get(start, now) or ()
+            entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
+            entry_out_by = getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)
+            type_buy = getattr(mt5, "DEAL_TYPE_BUY", 0)
+            type_sell = getattr(mt5, "DEAL_TYPE_SELL", 1)
+            closed = 0
+            profit = 0.0
+            wins = 0
+            losses = 0
+            gross_win = 0.0
+            gross_loss = 0.0
+            best = 0.0
+            worst = 0.0
+            per_day: dict[str, dict[str, Any]] = {}
+            for deal in deals:
+                if getattr(deal, "type", None) not in (type_buy, type_sell):
+                    continue
+                if getattr(deal, "entry", None) not in (entry_out, entry_out_by):
+                    continue
+                p = (
+                    float(getattr(deal, "profit", 0) or 0)
+                    + float(getattr(deal, "swap", 0) or 0)
+                    + float(getattr(deal, "commission", 0) or 0)
+                )
+                closed += 1
+                profit += p
+                if p > 0:
+                    wins += 1
+                    gross_win += p
+                elif p < 0:
+                    losses += 1
+                    gross_loss += -p
+                best = max(best, p)
+                worst = min(worst, p)
+                stamp = int(getattr(deal, "time", 0) or 0)
+                key = datetime.fromtimestamp(stamp).strftime("%Y-%m-%d") if stamp else start.strftime("%Y-%m-%d")
+                row = per_day.setdefault(key, {"date": key, "closed": 0, "profit": 0.0})
+                row["closed"] += 1
+                row["profit"] += p
+            daily = [
+                {"date": row["date"], "closed": row["closed"], "profit": round(row["profit"], 2)}
+                for row in sorted(per_day.values(), key=lambda r: r["date"])
+            ]
+            return {
+                "days": span,
+                "from": start.strftime("%Y-%m-%d"),
+                "to": now.strftime("%Y-%m-%d"),
+                "closed": closed,
+                "profit": round(profit, 2),
+                "wins": wins,
+                "losses": losses,
+                "best": round(best, 2),
+                "worst": round(worst, 2),
+                "gross_win": round(gross_win, 2),
+                "gross_loss": round(gross_loss, 2),
+                "daily": daily,
+            }
+        except Exception as exc:  # noqa: BLE001
+            log.warning("過去の実績を読めません: %s", exc)
+            return empty
+
     def _today_stats_blocking(self) -> dict[str, Any]:
         empty = {
             "today_closed": 0,
@@ -441,6 +569,20 @@ class MT5Controller:
         except Exception as exc:  # noqa: BLE001
             log.warning("本日の実績を読めません: %s", exc)
             return empty
+
+    async def positions(self) -> list[dict[str, Any]]:
+        if not self.ready:
+            return []
+        return await self._call(self._positions_blocking)
+
+    async def history(self, days: int = 30) -> dict[str, Any]:
+        if not self.ready:
+            return {}
+        return await self._call(self._history_stats_blocking, days)
+
+    async def currency(self) -> str | None:
+        info = await self._call(mt5.account_info) if self.ready else None
+        return getattr(info, "currency", None)
 
     async def status(self, *, include_today: bool = False) -> dict[str, Any]:
         info = await self._call(mt5.account_info) if self.ready else None
@@ -531,6 +673,30 @@ class CommandRouter:
             if ok and name == self.cfg.gv_name:
                 self.mt.desired_value = value
             return self._ack(command, request_id, ok, value=readback, name=name)
+
+        if command in ("get_positions", "positions"):
+            if not self.mt.ready:
+                return self._ack(command, request_id, False, error="MT5に接続していません", positions=[])
+            rows = await self.mt.positions()
+            floating = round(sum(float(r.get("profit", 0) or 0) for r in rows), 2)
+            log.debug("指令: 建玉要求 -> %d件", len(rows))
+            return self._ack(
+                command,
+                request_id,
+                True,
+                positions=rows,
+                open_positions=len(rows),
+                open_profit=floating,
+                currency=await self.mt.currency(),
+            )
+
+        if command in ("get_history", "history"):
+            if not self.mt.ready:
+                return self._ack(command, request_id, False, error="MT5に接続していません")
+            days = payload.get("days", 30)
+            stats = await self.mt.history(days)
+            log.debug("指令: 過去実績要求 days=%s -> %s件", days, stats.get("closed"))
+            return self._ack(command, request_id, True, history=stats, currency=await self.mt.currency())
 
         if command in ("get_status", "status"):
             status = await self.mt.status(include_today=True)

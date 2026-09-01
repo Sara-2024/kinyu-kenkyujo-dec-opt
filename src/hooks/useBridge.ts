@@ -2,7 +2,7 @@
 // 接続に失敗した場合は黙ってモックに落とさず、エラーコードを返す。
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BridgeError, BridgeErrorCode } from '../data/bridgeErrors'
-import type { TodayStats } from '../data/setupFlow'
+import type { HistoryStats, PositionRow, TodayStats } from '../data/setupFlow'
 
 export interface BridgeStatus {
   bridgeId: string
@@ -32,7 +32,13 @@ type Ack = {
   ok: boolean
   value?: number
   error?: string
+  /** get_positions の応答 */
+  positions?: PositionRow[]
+  /** get_history の応答 */
+  history?: HistoryStats
 } & Partial<BridgeStatus>
+
+export type BridgeAck = Ack
 
 export type BridgePhase = 'connecting' | 'live' | 'no_bridge' | 'error'
 

@@ -29,6 +29,44 @@ export interface TodayStats {
   open_profit?: number
 }
 
+/** 過去 N 日ぶんの決済実績（1日ごとの内訳つき） */
+export interface HistoryDay {
+  date: string
+  closed: number
+  profit: number
+}
+
+export interface HistoryStats {
+  days: number
+  from?: string
+  to?: string
+  closed: number
+  profit: number
+  wins: number
+  losses: number
+  best?: number
+  worst?: number
+  gross_win?: number
+  gross_loss?: number
+  daily?: HistoryDay[]
+}
+
+/** いま持っている建玉。price_current は MT5 の現在値そのまま */
+export interface PositionRow {
+  ticket: number
+  symbol: string
+  side: 'buy' | 'sell'
+  volume: number
+  price_open: number
+  price_current: number
+  sl?: number
+  tp?: number
+  profit: number
+  swap?: number
+  digits?: number
+  opened_at?: string
+}
+
 /** 接続工程に必要な、ブリッジが返す実フィールド */
 export interface ConnectStatus {
   mt5_ready?: boolean
@@ -88,7 +126,7 @@ export function connectChecksFromStatus(s: ConnectStatus): ConnectCheck[] {
   ]
 }
 
-function formatSigned(n: number, currency?: string): string {
+export function formatSigned(n: number, currency?: string): string {
   const body = n.toLocaleString('ja-JP', { maximumFractionDigits: 2, minimumFractionDigits: 0 })
   const signed = n > 0 ? `+${body}` : body
   return currency ? `${signed} ${currency}` : signed
@@ -116,4 +154,58 @@ export function validateEmail(value: string): string | null {
   if (!s) return 'メールアドレスを入力してください'
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return 'メールアドレスの形式を確認してください'
   return null
+}
+
+/** 価格。銘柄の桁数（MT5 の digits）に合わせる */
+export function formatPrice(n: number, digits?: number): string {
+  const d = typeof digits === 'number' && digits >= 0 && digits <= 8 ? digits : 3
+  return n.toLocaleString('ja-JP', { minimumFractionDigits: d, maximumFractionDigits: d })
+}
+
+/** 勝率（％）。決済がなければ null */
+export function winRate(wins: number, closed: number): number | null {
+  if (!closed) return null
+  return Math.round((wins / closed) * 1000) / 10
+}
+
+/** 「M/D」表記。ブリッジは YYYY-MM-DD で返す */
+export function formatDay(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  if (!m) return date
+  return `${Number(m[2])}/${Number(m[3])}`
+}
+
+/** 「M/D HH:MM」表記。ブリッジは ISO で返す */
+export function formatStamp(iso?: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+export function formatHistoryAnswer(h: HistoryStats | undefined, currency?: string): string {
+  if (!h) return '口座の履歴を読み取れませんでした。'
+  if (!h.closed) {
+    return `過去${h.days}日ぶんの履歴を見ましたが、決済はありませんでした。数字は口座の履歴をそのまま出しています。`
+  }
+  const rate = winRate(h.wins, h.closed)
+  return (
+    `過去${h.days}日で、決済は${h.closed}回、損益は ${formatSigned(h.profit, currency)} です。` +
+    `勝ち${h.wins}・負け${h.losses}${rate != null ? `（勝率${rate}%）` : ''}。` +
+    `いちばん取れた取引が ${formatSigned(h.best ?? 0, currency)}、いちばん損した取引が ${formatSigned(h.worst ?? 0, currency)} でした。` +
+    '数字は口座の履歴をそのまま出しています。'
+  )
+}
+
+export function formatPositionsAnswer(rows: PositionRow[] | undefined, currency?: string): string {
+  const list = rows ?? []
+  if (list.length === 0) {
+    return 'いまお持ちの建玉はありません。次の条件がそろうまで、システムは待っている状態です。'
+  }
+  const floating = list.reduce((sum, r) => sum + (r.profit ?? 0), 0)
+  const symbols = [...new Set(list.map((r) => r.symbol))].join('・')
+  return (
+    `いまの建玉は${list.length}件（${symbols}）、含み損益は ${formatSigned(floating, currency)} です。` +
+    '下に、それぞれの値段と現在値を出しました。'
+  )
 }
