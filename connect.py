@@ -16,7 +16,8 @@
   python connect.py --console          … 経過を画面に出す（調査用）
   python connect.py --install-ea       … システムの配置だけ
   python connect.py --register         … サイト連携の登録だけ
-  python connect.py --uninstall        … 登録の解除
+  python connect.py --stop             … 裏で動いているブリッジを止める
+  python connect.py --uninstall        … 停止して、登録も消す
 """
 from __future__ import annotations
 
@@ -625,8 +626,93 @@ def relay_has_bridge(bridge_id: str) -> bool | None:
     return bridge_id in rooms
 
 
+# 以前の版が使っていたロック名も見る。見落とすと古いブリッジを止められない。
+LOCK_NAMES = ("aitrader-bridge.lock", "trelab-bridge.lock")
+
+
 def bridge_lock_path() -> Path:
-    return Path(os.environ.get("TEMP", "/tmp")) / "aitrader-bridge.lock"
+    return Path(os.environ.get("TEMP", "/tmp")) / LOCK_NAMES[0]
+
+
+def all_lock_paths() -> list[Path]:
+    base = Path(os.environ.get("TEMP", "/tmp"))
+    return [base / name for name in LOCK_NAMES]
+
+
+def process_image(pid: int) -> str:
+    """その番号のプロセスの実行ファイル名。無ければ空。
+
+    Windows の os.kill(pid, 0) は生存確認ではなく強制終了になるため使わない。
+    """
+    if pid <= 0:
+        return ""
+    if os.name == "nt":
+        try:
+            out = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+                creationflags=_no_window_flags(),
+                startupinfo=_hidden_startupinfo(),
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        line = out.strip().splitlines()[0].strip() if out.strip() else ""
+        if not line.startswith('"'):
+            return ""
+        return line.split('","')[0].strip('"')
+    try:
+        os.kill(pid, 0)
+        return "python"
+    except PermissionError:
+        return "python"
+    except OSError:
+        return ""
+
+
+def stop_all_bridges() -> int:
+    """動いているブリッジを終了する（古い名前のものも含めて）。
+
+    画面を出さずに常駐する作りなので、止める手段をここに用意しておく。
+    """
+    stopped = 0
+    for path in all_lock_paths():
+        if not path.is_file():
+            continue
+        try:
+            first = path.read_text(encoding="ascii", errors="replace").splitlines()[0].strip()
+            pid = int(first) if first.isdigit() else None
+        except (OSError, IndexError, ValueError):
+            pid = None
+        if pid is None:
+            continue
+        image = process_image(pid).lower()
+        if not image:
+            continue
+        if "python" not in image and image != Path(sys.executable).name.lower():
+            log(f"PID {pid} は {image} なので触りません")
+            continue
+        log(f"ブリッジ（PID {pid} / {image}）を終了します")
+        if os.name == "nt":
+            run_hidden(["taskkill", "/PID", str(pid), "/F", "/T"], timeout=30)
+        else:
+            try:
+                os.kill(pid, 15)
+            except OSError as exc:
+                log(f"終了できませんでした: {exc}")
+        for _ in range(20):
+            if not process_image(pid):
+                stopped += 1
+                log("終了しました")
+                break
+            time.sleep(0.5)
+        else:
+            log(f"終了できませんでした（PID {pid}）。タスクマネージャーで pythonw.exe を終了してください")
+    if stopped == 0:
+        log("動いているブリッジは見つかりませんでした")
+    return stopped
 
 
 def lock_pid() -> int | None:
@@ -861,7 +947,13 @@ def main() -> int:
         return install_ea_only()
     if "--register" in args:
         return 0 if (register_protocol() and register_startup()) else 1
+    if "--stop" in args:
+        banner("接続をやめる")
+        stop_all_bridges()
+        return 0
     if "--uninstall" in args:
+        banner("登録をすべて消す")
+        stop_all_bridges()
         return unregister()
 
     code = connect_all(room)

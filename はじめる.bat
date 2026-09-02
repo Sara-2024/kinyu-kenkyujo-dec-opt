@@ -245,6 +245,9 @@ echo    次からは、このファイルを開く必要はありません。
 echo    サイトのボタンだけでつながります。
 echo    （パソコンを立ち上げ直したときも自動でつながります）
 echo.
+echo    止めたいとき:  tools\停止する.bat
+echo    連携をやめるとき: tools\連携を解除する.bat
+echo.
 echo    うまくいかないときの記録:
 echo      %%LOCALAPPDATA%%\AITrader\connect.log
 echo  ============================================================

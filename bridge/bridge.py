@@ -77,7 +77,7 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-02.4"
+VERSION = "2026-09-02.5"
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
@@ -102,16 +102,54 @@ def _read_lock(path: Path) -> tuple[int | None, str]:
     return pid, version
 
 
-def _process_alive(pid: int) -> bool:
+def _process_image(pid: int) -> str:
+    """その番号のプロセスの実行ファイル名。無ければ空。
+
+    Windows の os.kill(pid, 0) は「生きているか確認」ではなく
+    その場で強制終了してしまう（Python の仕様）。番号が使い回されて
+    別のソフトを巻き添えにしかねないので、名前で確かめてから触る。
+    """
     if pid <= 0:
-        return False
+        return ""
+    if os.name == "nt":
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        try:
+            out = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+                creationflags=flags,
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        line = out.strip().splitlines()[0].strip() if out.strip() else ""
+        if not line.startswith('"'):
+            return ""  # 「該当するプロセスはありません」
+        return line.split('","')[0].strip('"')
     try:
-        os.kill(pid, 0)
-        return True
+        os.kill(pid, 0)  # POSIX ではシグナル0が生存確認
+        return "python"
     except PermissionError:
-        return True
+        return "python"
     except OSError:
+        return ""
+
+
+def _process_alive(pid: int) -> bool:
+    return bool(_process_image(pid))
+
+
+def _is_bridge_process(pid: int) -> bool:
+    """ブリッジ（python か、自分と同じ実行ファイル）かどうか。
+
+    番号の使い回しで無関係なソフトを終了させないための確認。
+    """
+    image = _process_image(pid).lower()
+    if not image:
         return False
+    return "python" in image or image == Path(sys.executable).name.lower()
 
 
 def _terminate(pid: int) -> None:
@@ -143,10 +181,12 @@ def takeover_old_bridges() -> None:
         if not path.is_file():
             continue
         pid, version = _read_lock(path)
-        if pid is None or pid == me or not _process_alive(pid):
+        if pid is None or pid == me:
             continue
         if version == VERSION:
             continue  # 同じ版なら二重起動チェックに任せる
+        if not _is_bridge_process(pid):
+            continue  # もう居ない、または番号が使い回されている
         log.warning(
             "古いブリッジ（PID %s / 版 %s）が動いています。指令が競合するので終了させます",
             pid,
@@ -158,6 +198,13 @@ def takeover_old_bridges() -> None:
                 log.info("古いブリッジを終了しました")
                 break
             time.sleep(0.25)
+        else:
+            log.error(
+                "古いブリッジ（PID %s）を終了できませんでした。"
+                "タスクマネージャーで pythonw.exe を終了するか、"
+                "tools\\停止する.bat を実行してください",
+                pid,
+            )
 
 
 def acquire_instance_lock() -> None:
