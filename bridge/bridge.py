@@ -74,6 +74,10 @@ except ImportError:
 log = logging.getLogger("bridge")
 _LOCK_FH = None
 
+# どの版のブリッジが動いているかを画面とログで確認できるようにする。
+# 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
+VERSION = "2026-09-02.3"
+
 
 def acquire_instance_lock() -> None:
     """同じPCで bridge.py を二重起動すると、中継が切断と再接続を繰り返す。"""
@@ -98,9 +102,11 @@ def acquire_instance_lock() -> None:
         log.error("別のブリッジがすでに動いています。")
         log.error("start-connect.bat と start-windows.bat を同時に開いていないか、黒い窓が複数ないか確認してください。")
         raise SystemExit(2)
+    # 接続ツールが「いま動いているブリッジが古くないか」を見られるよう、
+    # 番号(PID)と版をロックに書いておく。
     _LOCK_FH.seek(0)
     _LOCK_FH.truncate()
-    _LOCK_FH.write(str(os.getpid()).encode("ascii", "replace"))
+    _LOCK_FH.write(f"{os.getpid()}\n{VERSION}\n".encode("ascii", "replace"))
     _LOCK_FH.flush()
 
 
@@ -797,6 +803,7 @@ class MT5Controller:
         today = await self._call(self._today_stats_blocking) if (self.ready and include_today) else {}
         server_now = await self._call(self._server_now) if self.ready else None
         return {
+            "version": VERSION,
             "server_time": server_now.isoformat(timespec="seconds") if server_now else None,
             "mt5_ready": self.ready,
             "variable": self.cfg.gv_name,
@@ -1164,18 +1171,34 @@ class Bridge:
                     self.mt.ready = False
                     await self.mt.connect_with_retry(self.stop)
                     if self.mt.ready:
-                        await self.mt.set_variable(self.cfg.gv_name, self.mt.desired_value)
+                        # 再接続でも勝手には始めない。止めていたときだけ書き戻す
+                        if float(self.mt.desired_value) == 0.0:
+                            await self.mt.set_variable(self.cfg.gv_name, 0.0)
+                        else:
+                            await self.mt.adopt_current_state()
                     continue
 
                 if self.cfg.reassert:
                     current = await self.mt.get_variable(self.cfg.gv_name)
-                    if current is None or float(current) != float(self.mt.desired_value):
+                    drifted = current is None or float(current) != float(self.mt.desired_value)
+                    # 見張りが売買を「始める」ことは絶対にしない。
+                    # 止めるほうへ戻すだけにする。お客様が操作していないのに
+                    # 稼働中へ戻る、という事故はこれで起こらなくなる。
+                    if drifted and float(self.mt.desired_value) == 0.0:
                         log.warning(
-                            "売買フラグがズレています (現在=%s / あるべき=%s)。書き戻します",
+                            "停止のはずが %s になっていました。停止へ戻します",
+                            current,
+                        )
+                        await self.mt.set_variable(self.cfg.gv_name, 0.0)
+                    elif drifted:
+                        log.info(
+                            "売買フラグが %s（こちらの記録は %s）。勝手には動かさず、そのままにします",
                             current,
                             self.mt.desired_value,
                         )
-                        await self.mt.set_variable(self.cfg.gv_name, self.mt.desired_value)
+                        # MT5 側を正とする。誰かが止めたなら止まったまま
+                        if current is not None:
+                            self.mt.desired_value = float(current)
 
                 await self._push_status_if_changed()
 
@@ -1196,7 +1219,7 @@ class Bridge:
     # ---------- 起動 ----------
     async def run(self) -> None:
         log.info("=" * 62)
-        log.info("トレラボ MT5 ブリッジ起動  bridge_id=%s", self.cfg.bridge_id)
+        log.info("トレラボ MT5 ブリッジ起動  bridge_id=%s  版=%s", self.cfg.bridge_id, VERSION)
         log.info("接続先        : %s", self.cfg.ws_url)
         log.info("制御する変数  : %s (初期値 %s)", self.cfg.gv_name, self.cfg.gv_default)
         if self.cfg.failsafe_sec > 0:

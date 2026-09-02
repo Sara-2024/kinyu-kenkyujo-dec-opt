@@ -24,6 +24,10 @@ export function BridgeStatusBar({
             {bridge.status.terminal_name}
           </span>
         )}
+        {/* どの版の接続ツールが動いているか。更新できているかの確認用 */}
+        {bridge.status.version && (
+          <span className="font-mono ml-3 font-normal text-slate-500">版 {bridge.status.version}</span>
+        )}
       </div>
     )
   }

@@ -28,6 +28,8 @@ export interface BridgeStatus {
   positions?: PositionRow[]
   /** ブローカーのサーバー時刻 */
   server_time?: string
+  /** 動いているブリッジの版 */
+  version?: string
 }
 
 type Ack = {
@@ -79,6 +81,7 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'today',
   'positions',
   'server_time',
+  'version',
 ]
 
 function definedFields(extra: Partial<BridgeStatus> & Record<string, unknown>): Partial<BridgeStatus> {

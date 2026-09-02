@@ -630,14 +630,49 @@ def bridge_lock_path() -> Path:
 
 
 def lock_pid() -> int | None:
+    """ロックの1行目が番号(PID)、2行目が版"""
     path = bridge_lock_path()
     if not path.is_file():
         return None
     try:
-        raw = path.read_text(encoding="ascii", errors="replace").strip()
-        return int(raw) if raw else None
-    except (OSError, ValueError):
+        first = path.read_text(encoding="ascii", errors="replace").splitlines()[0].strip()
+        return int(first) if first else None
+    except (OSError, ValueError, IndexError):
         return None
+
+
+def source_version() -> str:
+    """いま手元にある bridge.py の版"""
+    try:
+        text = (BRIDGE_DIR / "bridge.py").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    hit = re.search(r'^VERSION\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    return hit.group(1) if hit else ""
+
+
+def running_version() -> str:
+    """いま動いているブリッジの版（ロックの2行目）"""
+    lock = bridge_lock_path()
+    if not lock.is_file():
+        return ""
+    try:
+        lines = lock.read_text(encoding="ascii", errors="ignore").splitlines()
+    except OSError:
+        return ""
+    return lines[1].strip() if len(lines) > 1 else ""
+
+
+def bridge_is_outdated() -> bool:
+    """動いているブリッジが古いか。古いまま使うと、直した不具合がそのまま残る。"""
+    mine = source_version()
+    theirs = running_version()
+    if not mine:
+        return False
+    if theirs == mine:
+        return False
+    log(f"動いているブリッジが古い版です（動作中={theirs or '不明'} / 手元={mine}）")
+    return True
 
 
 def stop_stale_bridge() -> None:
@@ -713,7 +748,7 @@ def start_bridge(session: dict | None = None) -> None:
             and relay_is_up()
             and relay_has_bridge(our_id) is False
         )
-        if local_missing:
+        if local_missing or bridge_is_outdated():
             stop_stale_bridge()
         else:
             log("ブリッジはすでに動いています")
