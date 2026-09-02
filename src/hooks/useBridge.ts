@@ -24,6 +24,10 @@ export interface BridgeStatus {
   ea_compiled?: string[]
   gate?: Record<string, number>
   today?: TodayStats
+  /** ブリッジが数秒ごとに送ってくる建玉。画面はこれを見るだけでよい */
+  positions?: PositionRow[]
+  /** ブローカーのサーバー時刻 */
+  server_time?: string
 }
 
 type Ack = {
@@ -73,6 +77,8 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'ea_compiled',
   'gate',
   'today',
+  'positions',
+  'server_time',
 ]
 
 function definedFields(extra: Partial<BridgeStatus> & Record<string, unknown>): Partial<BridgeStatus> {

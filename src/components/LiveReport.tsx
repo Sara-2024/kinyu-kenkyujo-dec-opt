@@ -1,5 +1,6 @@
 // 会話ウィンドウの中に出す「実データの表示」。
 // 数字はすべてブリッジ（MT5）が返したものをそのまま並べるだけで、ここでは作らない。
+import { memo } from 'react'
 import {
   formatDay,
   formatPrice,
@@ -155,10 +156,21 @@ function PositionsView({ positions, currency, updatedAt }: { positions: Position
   )
 }
 
-export function LiveReportView({ report, updatedAt }: { report: LiveReport; updatedAt?: Date | null }) {
+/**
+ * Lab は相場アニメのために 450ms ごとに描き直される。
+ * 表示している数字はそのたびに変わるわけではないので、
+ * memo で「中身が変わったときだけ」描き直すようにしておく。
+ */
+export const LiveReportView = memo(function LiveReportView({
+  report,
+  updatedAt,
+}: {
+  report: LiveReport
+  updatedAt?: Date | null
+}) {
   if (report.kind === 'today') return <TodayView today={report.today} currency={report.currency} updatedAt={updatedAt} />
   if (report.kind === 'history') return <HistoryView history={report.history} currency={report.currency} />
   if (report.kind === 'review')
     return <TradeReviewView review={report.review} history={report.history} currency={report.currency} />
   return <PositionsView positions={report.positions} currency={report.currency} updatedAt={updatedAt} />
-}
+})

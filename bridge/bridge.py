@@ -951,6 +951,9 @@ class Bridge:
         self._failsafe_fired = False
         self._active_ws: Any | None = None
         self._status_key: str = ""
+        # いま画面が何枚開いているか（中継が教えてくれる）。
+        # 0 のあいだは口座の数字を送らない。
+        self.watchers: int = 0
 
     # ---------- WebSocket ----------
     def _connect_kwargs(self) -> dict[str, Any]:
@@ -1007,7 +1010,7 @@ class Bridge:
             )
         )
 
-    async def _push_status_if_changed(self) -> None:
+    async def _push_status_if_changed(self, *, force: bool = False) -> None:
         """口座の数字が動いたら画面へ送り直す。
 
         建玉や損益は、こちらから送らないと画面が古いままになる。
@@ -1017,8 +1020,9 @@ class Bridge:
         if ws is None or not self.mt.ready:
             return
         status = await self.mt.status(include_today=True, include_probe=False)
+        status["positions"] = await self.mt.positions()
         key = self._status_fingerprint(status)
-        if key == self._status_key:
+        if key == self._status_key and not force:
             return
         account_changed = self._status_key.split("|")[:2] != key.split("|")[:2]
         self._status_key = key
@@ -1050,6 +1054,19 @@ class Bridge:
                     log.warning("辞書ではない受信データを無視します: %.120s", raw)
                     continue
 
+                # 指令ではなく、中継からの知らせ（画面が何枚開いているか）
+                if payload.get("type") == "apps":
+                    before = self.watchers
+                    try:
+                        self.watchers = int(payload.get("count", 0))
+                    except (TypeError, ValueError):
+                        self.watchers = 0
+                    log.debug("画面の枚数: %s", self.watchers)
+                    # 開かれた瞬間は、待たずにいまの数字を送る
+                    if before <= 0 and self.watchers > 0:
+                        await self._push_status_if_changed(force=True)
+                    continue
+
                 try:
                     ack = await self.router.handle(payload)
                 except Exception as exc:  # noqa: BLE001 - 1件の失敗で常駐を止めない
@@ -1066,6 +1083,7 @@ class Bridge:
         finally:
             if self._active_ws is ws:
                 self._active_ws = None
+            self.watchers = 0
 
     async def ws_loop(self) -> None:
         backoff = Backoff(self.cfg.reconnect_min, self.cfg.reconnect_max)
@@ -1111,12 +1129,15 @@ class Bridge:
 
         画面から聞かれるのを待たずに送るので、手動でエントリー／決済しても
         そのまま反映される。
+        誰も画面を開いていない間は何もしない（お客様のPCも通信も使わない）。
         """
         interval = max(1.0, self.cfg.push_interval)
         while not self.stop.is_set():
             await _sleep_or_stop(interval, self.stop)
             if self.stop.is_set():
                 break
+            if self.watchers <= 0:
+                continue
             try:
                 await self._push_status_if_changed()
             except asyncio.CancelledError:

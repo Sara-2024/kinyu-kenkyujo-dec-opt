@@ -46,9 +46,6 @@ const HISTORY_DAYS = 30
 /** 添削はもう少し長く見る */
 const REVIEW_DAYS = 180
 
-/** 開いたままの表示を取り直す間隔 */
-const LIVE_REFRESH_MS = 5_000
-
 /** 呼び出し中に見せる、接続ツールの仕事 */
 const CONNECTOR_STEPS = [
   'ログイン中のMT5を探しています',
@@ -176,22 +173,24 @@ export function DialogueWindow({
     [bridge],
   )
 
-  // 出しっぱなしの「今日の成績」「いまのポジション」は、数秒ごとに取り直す。
-  // 手動で建てたり決済したりした分も、こうしないと画面が古いままになる。
+  // 出しっぱなしの「今日の成績」「いまのポジション」は、届いた値で書き換える。
+  //
+  // こちらから定期的に聞きにいくと、Lab が 450ms ごとに再描画する都合で
+  // タイマーが張り直され続けて動かない。ブリッジが数秒ごとに送ってくるので、
+  // それを受けるだけでよい（通信も処理も増えない）。
+  const shownKind = report?.kind
   useEffect(() => {
-    const kind = report?.kind
-    if (!kind || !bridge.live) return
-    if (kind !== 'today' && kind !== 'positions') return
-    const id = setInterval(() => {
-      void (async () => {
-        const got = await fetchLive(kind)
-        if (!got) return
-        setReport(got.report)
-        setReportAt(new Date())
-      })()
-    }, LIVE_REFRESH_MS)
-    return () => clearInterval(id)
-  }, [report?.kind, bridge.live, fetchLive])
+    if (shownKind !== 'today' && shownKind !== 'positions') return
+    const status = bridge.status
+    if (!status) return
+    if (shownKind === 'today' && status.today) {
+      setReport({ kind: 'today', today: status.today, currency: status.currency })
+      setReportAt(new Date())
+    } else if (shownKind === 'positions' && status.positions) {
+      setReport({ kind: 'positions', positions: status.positions, currency: status.currency })
+      setReportAt(new Date())
+    }
+  }, [bridge.status, shownKind])
 
   // ── 通常会話 ──
   const ask = (q: string) => {

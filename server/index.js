@@ -50,6 +50,16 @@ function broadcastToRoom(roomId, message) {
   for (const ws of room.apps) send(ws, message)
 }
 
+/**
+ * その部屋の画面が何枚開いているかを、部屋のブリッジへ伝える。
+ * 誰も見ていない間、ブリッジは口座の数字を送らなくてよい（無駄な通信を止める）。
+ */
+function notifyWatchers(roomId) {
+  const room = rooms.get(roomId)
+  if (!room || !room.bridge) return
+  send(room.bridge, { type: 'apps', count: room.apps.size })
+}
+
 function roomIdFrom(req, url, isBridge) {
   if (isBridge) {
     return normalizeRoom(req.headers['x-bridge-id'] || url.searchParams.get('id') || url.searchParams.get('room'))
@@ -114,6 +124,7 @@ function handleBridge(ws, roomId) {
   }
   room.bridge = ws
   log(`ブリッジ接続: ${roomId}（現在 ${[...rooms.values()].filter((r) => r.bridge).length} 部屋）`)
+  notifyWatchers(roomId)
 
   const ping = setInterval(() => {
     if (ws.readyState === ws.OPEN) ws.ping()
@@ -166,6 +177,7 @@ function handleApp(ws, roomId) {
   const room = roomOf(roomId)
   room.apps.add(ws)
   log(`画面が接続しました room=${roomId}（この部屋 ${room.apps.size} 画面）`)
+  notifyWatchers(roomId)
 
   send(ws, {
     type: 'welcome',
@@ -200,6 +212,7 @@ function handleApp(ws, roomId) {
   const drop = () => {
     room.apps.delete(ws)
     log(`画面が切断しました room=${roomId}（残り ${room.apps.size} 画面）`)
+    notifyWatchers(roomId)
     pruneRoom(roomId)
   }
   ws.on('close', drop)
