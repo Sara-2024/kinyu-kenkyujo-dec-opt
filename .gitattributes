@@ -1,0 +1,3 @@
+# Windows で動かすものは CRLF のまま配る（LF だと goto やラベルで誤動作する）
+*.bat text eol=crlf
+*.vbs text eol=crlf

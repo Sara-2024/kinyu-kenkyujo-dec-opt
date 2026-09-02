@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0bridge"
+cd /d "%~dp0..\bridge"
 
 if exist venv\Scripts\activate.bat (
   call venv\Scripts\activate.bat

@@ -24,19 +24,34 @@ import {
   type ConnectCheck,
 } from '../data/setupFlow'
 import { LiveReportView, type LiveReport } from './LiveReport'
+import { CONNECTOR_WAIT_MS, launchConnector } from '../data/connector'
+import { formatReviewAnswer, reviewTrades } from '../data/tradeReview'
 import { PixelPerson } from './PixelPerson'
 
-type Phase = 'talk' | 'email' | 'sent' | 'connecting' | 'done' | 'control'
+type Phase = 'talk' | 'launching' | 'email' | 'sent' | 'connecting' | 'done' | 'control'
 
 /** この選択肢は、答えを作らずに MT5 から取ってきた数字をそのまま出す */
 const LIVE_QUESTIONS: Record<string, LiveReport['kind']> = {
   '今日の成績は？': 'today',
   '過去の成績は？': 'history',
   'いまのポジションは？': 'positions',
+  'トレードを添削して': 'review',
+  'トレードのクセを教えて': 'review',
 }
 
 /** 過去の成績はこの日数ぶんを口座履歴から集計する */
 const HISTORY_DAYS = 30
+
+/** 添削はもう少し長く見る */
+const REVIEW_DAYS = 180
+
+/** 呼び出し中に見せる、接続ツールの仕事 */
+const CONNECTOR_STEPS = [
+  'ログイン中のMT5を探しています',
+  'システムをMT5に入れて、使える形にしています',
+  '中継サーバーとつないでいます',
+  '次回からPCを立ち上げるだけでつながるようにしています',
+]
 
 export function DialogueWindow({
   character,
@@ -122,10 +137,19 @@ export function DialogueWindow({
   const ask = (q: string) => {
     if (busy || !q.trim()) return
     if (character.startsSetup && q.trim() === character.startsSetup) {
-      setPhase('email')
+      clearTimers()
       setInput('')
       setError(null)
-      setAiText('かしこまりました。接続用のツールをお送りします。難しい設定は、そのツールが代わりに全部やります。')
+      setReport(null)
+      // すでにつながっているPCなら、そのまま接続の確認へ進む
+      if (bridge.live) {
+        setPhase('connecting')
+        setAiText(CONNECT_WAIT)
+        return
+      }
+      setPhase('launching')
+      setAiText('お使いのパソコンの接続ツールを呼び出しています。画面は出ません。裏側でMT5とつなぎます。')
+      launchConnector()
       return
     }
     const question = q.trim()
@@ -156,6 +180,15 @@ export function DialogueWindow({
           if (ack.ok && ack.history) {
             setAiText(formatHistoryAnswer(ack.history, ack.currency))
             setReport({ kind: 'history', history: ack.history, currency: ack.currency })
+          } else {
+            setAiText(failed)
+          }
+        } else if (liveKind === 'review') {
+          const ack = await bridge.send('get_trades', { days: REVIEW_DAYS })
+          if (ack.ok && ack.trades) {
+            const review = reviewTrades(ack.trades, ack.currency)
+            setAiText(formatReviewAnswer(review, ack.currency))
+            setReport({ kind: 'review', review, history: ack.trades, currency: ack.currency })
           } else {
             setAiText(failed)
           }
@@ -213,6 +246,24 @@ export function DialogueWindow({
       `${input.trim()} 宛に接続ツールをお送りしました。ダウンロードして開いていただければ、あとは私が引き継ぎます。`,
     )
   }
+
+  // 「自動売買をはじめる」→ 接続ツールを呼び出したあと。
+  // ツールが入っていれば数秒でブリッジが名乗り出る。無ければメール送付に切り替える。
+  useEffect(() => {
+    if (phase !== 'launching') return
+    if (bridge.live) {
+      setPhase('connecting')
+      setAiText(CONNECT_WAIT)
+      return
+    }
+    const id = setTimeout(() => {
+      setPhase('email')
+      setAiText(
+        'このパソコンには、まだ接続ツールが入っていないようです。お送りしますので、一度だけ開いてください。次からはこのボタン1つでつながります。',
+      )
+    }, CONNECTOR_WAIT_MS)
+    return () => clearTimeout(id)
+  }, [phase, bridge.live])
 
   // 接続ツール（ブリッジ）が生きたら、タイマーではなく実応答で接続を進める
   useEffect(() => {
@@ -358,7 +409,9 @@ export function DialogueWindow({
               className="font-mono ml-2 rounded-[3px] border px-2 py-1 text-[11px] font-bold tracking-wide"
               style={{ borderColor: 'rgba(250,204,21,0.5)', background: 'rgba(250,204,21,0.1)', color: '#ffd23e' }}
             >
-              {phase === 'email'
+              {phase === 'launching'
+                ? '呼び出し中…'
+                : phase === 'email'
                 ? 'おまかせ接続'
                 : phase === 'sent'
                   ? 'ツール送信ずみ'
@@ -499,6 +552,53 @@ export function DialogueWindow({
               </button>
             </div>
           </>
+        )}
+
+        {/* ══════ サイトのボタンから接続ツールを呼び出している間 ══════ */}
+        {phase === 'launching' && (
+          <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+            <div
+              className="mb-3 flex flex-wrap items-center gap-4 rounded-[6px] border px-5 py-4"
+              style={{ borderColor: 'rgba(94,204,255,0.4)', background: 'rgba(94,204,255,0.06)' }}
+            >
+              <span
+                className="spin h-5 w-5 shrink-0 rounded-full"
+                style={{ border: '2px solid rgba(94,204,255,0.2)', borderTopColor: 'var(--accent)' }}
+              />
+              <p className="text-[15px] font-bold text-slate-200">接続ツールを呼び出しています…</p>
+              <span className="font-mono ml-auto text-[12px] tracking-wide text-slate-500">画面は出ません</span>
+            </div>
+
+            <p className="mb-2 text-[13px] font-bold text-slate-400">いま、お客様のパソコンで進んでいること</p>
+            <ol className="space-y-2">
+              {CONNECTOR_STEPS.map((step) => (
+                <li key={step} className="flex items-start gap-3">
+                  <span
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
+                    style={{ background: 'rgba(94,204,255,0.12)', color: 'var(--accent)', border: '1px solid rgba(94,204,255,0.4)' }}
+                  >
+                    ・
+                  </span>
+                  <span className="text-[15px] font-bold text-slate-300">{step}</span>
+                </li>
+              ))}
+            </ol>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPhase('email')
+                  setAiText('かしこまりました。接続ツールをメールでお送りします。一度だけ開いていただければ、あとは私が引き継ぎます。')
+                }}
+                className="rounded-[5px] border px-5 py-3 text-[15px] font-bold text-slate-100 transition hover:brightness-125"
+                style={{ borderColor: 'rgba(148,163,184,0.4)', background: 'rgba(10,18,32,0.6)' }}
+              >
+                まだ入れていないので、メールで受け取る
+              </button>
+              <span className="font-mono text-[12px] text-slate-500">初回だけ、ツールを一度開いていただきます</span>
+            </div>
+          </div>
         )}
 
         {/* ══════ 唯一の入力：連絡先 ══════ */}

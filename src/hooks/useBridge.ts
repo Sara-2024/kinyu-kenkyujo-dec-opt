@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BridgeError, BridgeErrorCode } from '../data/bridgeErrors'
 import type { HistoryStats, PositionRow, TodayStats } from '../data/setupFlow'
+import type { TradeHistory } from '../data/tradeReview'
 
 export interface BridgeStatus {
   bridgeId: string
@@ -36,6 +37,8 @@ type Ack = {
   positions?: PositionRow[]
   /** get_history の応答 */
   history?: HistoryStats
+  /** get_trades の応答（添削のもと） */
+  trades?: TradeHistory
 } & Partial<BridgeStatus>
 
 export type BridgeAck = Ack

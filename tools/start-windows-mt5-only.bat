@@ -1,8 +1,8 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 if not exist bridge\venv (
-  echo Run setup-windows.bat first.
+  echo プロジェクト直下の「はじめる.bat」を先に一度実行してください。
   pause
   exit /b 1
 )
@@ -17,10 +17,10 @@ echo  Do NOT close the 2 black windows.
 echo.
 timeout /t 3 /nobreak >nul
 
-start "Relay" cmd /k "cd /d %~dp0server && npm start"
+start "Relay" cmd /k "cd /d %~dp0..\server && npm start"
 timeout /t 2 /nobreak >nul
 
-start "Bridge" cmd /k "cd /d %~dp0bridge && call venv\Scripts\activate.bat && python bridge.py"
+start "Bridge" cmd /k "cd /d %~dp0..\bridge && call venv\Scripts\activate.bat && python bridge.py"
 
 echo.
 echo ========================================================

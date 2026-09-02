@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 echo.
 echo ========================================================
@@ -9,7 +9,7 @@ echo ========================================================
 echo.
 
 if not exist bridge\venv\Scripts\python.exe (
-  echo Run setup-windows.bat once first.
+  echo プロジェクト直下の「はじめる.bat」を先に一度実行してください。
   pause
   exit /b 1
 )

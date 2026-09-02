@@ -580,9 +580,113 @@ class MT5Controller:
             return {}
         return await self._call(self._history_stats_blocking, days)
 
+    async def trades(self, days: int = 180, limit: int = 500) -> dict[str, Any]:
+        if not self.ready:
+            return {}
+        return await self._call(self._trades_blocking, days, limit)
+
     async def currency(self) -> str | None:
         info = await self._call(mt5.account_info) if self.ready else None
         return getattr(info, "currency", None)
+
+    def _trades_blocking(self, days: int = 180, limit: int = 500) -> dict[str, Any]:
+        """約定履歴を「1トレード」に組み直して返す。添削のもとになるデータ。
+
+        MT5 の履歴は約定(deal)単位なので、position_id でまとめて
+        「いつ建てて、いつ決済して、いくらになったか」の形にする。
+        """
+        try:
+            span = max(1, min(int(days), 3650))
+        except (TypeError, ValueError):
+            span = 180
+        try:
+            cap = max(1, min(int(limit), 2000))
+        except (TypeError, ValueError):
+            cap = 500
+
+        try:
+            now = datetime.now()
+            start = (now - timedelta(days=span)).replace(hour=0, minute=0, second=0, microsecond=0)
+            deals = mt5.history_deals_get(start, now) or ()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("約定履歴を読めません: %s", exc)
+            return {"days": span, "trades": [], "total": 0, "truncated": False}
+
+        entry_in = getattr(mt5, "DEAL_ENTRY_IN", 0)
+        entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
+        entry_out_by = getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)
+        type_buy = getattr(mt5, "DEAL_TYPE_BUY", 0)
+        type_sell = getattr(mt5, "DEAL_TYPE_SELL", 1)
+
+        groups: dict[int, dict[str, Any]] = {}
+        for deal in deals:
+            if getattr(deal, "type", None) not in (type_buy, type_sell):
+                continue  # 入出金・振替は取引ではない
+            pid = int(getattr(deal, "position_id", 0) or 0)
+            if not pid:
+                continue
+            g = groups.setdefault(pid, {"in": [], "out": [], "symbol": "", "magic": 0})
+            g["symbol"] = g["symbol"] or str(getattr(deal, "symbol", "") or "")
+            g["magic"] = g["magic"] or int(getattr(deal, "magic", 0) or 0)
+            entry = getattr(deal, "entry", None)
+            if entry == entry_in:
+                g["in"].append(deal)
+            elif entry in (entry_out, entry_out_by):
+                g["out"].append(deal)
+
+        def weighted(rows: list[Any]) -> tuple[float, float]:
+            volume = sum(float(getattr(d, "volume", 0) or 0) for d in rows)
+            if volume <= 0:
+                return 0.0, 0.0
+            price = sum(float(getattr(d, "price", 0) or 0) * float(getattr(d, "volume", 0) or 0) for d in rows) / volume
+            return round(volume, 2), price
+
+        cache: dict[str, int] = {}
+        trades: list[dict[str, Any]] = []
+        for pid, g in groups.items():
+            if not g["in"] or not g["out"]:
+                continue  # まだ決済していない建玉は positions 側で見る
+            first_in = min(g["in"], key=lambda d: getattr(d, "time", 0))
+            last_out = max(g["out"], key=lambda d: getattr(d, "time", 0))
+            opened = int(getattr(first_in, "time", 0) or 0)
+            closed = int(getattr(last_out, "time", 0) or 0)
+            volume, open_price = weighted(g["in"])
+            _, close_price = weighted(g["out"])
+            profit = 0.0
+            for d in (*g["in"], *g["out"]):
+                profit += (
+                    float(getattr(d, "profit", 0) or 0)
+                    + float(getattr(d, "swap", 0) or 0)
+                    + float(getattr(d, "commission", 0) or 0)
+                )
+            symbol = g["symbol"]
+            trades.append(
+                {
+                    "id": pid,
+                    "symbol": symbol,
+                    "side": "buy" if getattr(first_in, "type", type_buy) == type_buy else "sell",
+                    "volume": volume,
+                    "open_price": open_price,
+                    "close_price": close_price,
+                    "digits": self._digits_blocking(symbol, cache),
+                    "profit": round(profit, 2),
+                    "opened_at": datetime.fromtimestamp(opened).isoformat(timespec="minutes") if opened else "",
+                    "closed_at": datetime.fromtimestamp(closed).isoformat(timespec="minutes") if closed else "",
+                    "held_sec": max(0, closed - opened),
+                    "by_system": bool(g["magic"]),
+                }
+            )
+
+        trades.sort(key=lambda t: t["closed_at"], reverse=True)
+        total = len(trades)
+        return {
+            "days": span,
+            "from": start.strftime("%Y-%m-%d"),
+            "to": now.strftime("%Y-%m-%d"),
+            "total": total,
+            "truncated": total > cap,
+            "trades": trades[:cap],
+        }
 
     async def status(self, *, include_today: bool = False) -> dict[str, Any]:
         info = await self._call(mt5.account_info) if self.ready else None
@@ -697,6 +801,13 @@ class CommandRouter:
             stats = await self.mt.history(days)
             log.debug("指令: 過去実績要求 days=%s -> %s件", days, stats.get("closed"))
             return self._ack(command, request_id, True, history=stats, currency=await self.mt.currency())
+
+        if command in ("get_trades", "trades"):
+            if not self.mt.ready:
+                return self._ack(command, request_id, False, error="MT5に接続していません")
+            data = await self.mt.trades(payload.get("days", 180), payload.get("limit", 500))
+            log.debug("指令: 履歴要求 days=%s -> %s件", payload.get("days"), data.get("total"))
+            return self._ack(command, request_id, True, trades=data, currency=await self.mt.currency())
 
         if command in ("get_status", "status"):
             status = await self.mt.status(include_today=True)

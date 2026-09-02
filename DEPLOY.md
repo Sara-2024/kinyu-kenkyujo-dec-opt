@@ -6,7 +6,7 @@
 |------|--------|-----|
 | 画面（React） | Vercel | https://kinyu-kenkyujo-dec-opt.vercel.app |
 | 中継（WebSocket） | Render | https://kinyu-relay.onrender.com |
-| ブリッジ + MT5 | お客様の Windows | `start-connect.bat` |
+| ブリッジ + MT5 | お客様の Windows | `TrelabConnect.exe`（自分の確認は `はじめる.bat`） |
 
 ```
 ブラウザ ──wss──► Render（中継）◄──wss── bridge.py ──► MT5
@@ -45,10 +45,19 @@ vercel --prod
 TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
 ```
 
+お客様に渡すのは **1本だけ**（`tools\build-windows.bat` で作る `dist\TrelabConnect.exe`）。
+開発機で試すときは `TrelabConnect.vbs` でも同じ処理が動く。
+
 1. MT5 を起動してログイン
-2. `install-ea.bat` → EA を配置
-3. `start-connect.bat` → 中継 + ブリッジ起動
-4. チャートに SiteTestEA を載せ、自動売買 ON
+2. `TrelabConnect.exe`（または `TrelabConnect.vbs`）を**一度だけ**開く
+   - 黒い画面は出ない。中では EA 配置 → コンパイル → ブリッジ起動まで進む
+   - あわせて `trelab://` とスタートアップを登録するので、
+     次回からは**サイトのボタン1つ**、PC再起動後は**自動**でつながる
+3. チャートに SiteTestEA を載せ、自動売買 ON
+4. うまくいかないときは `%LOCALAPPDATA%\Trelab\connect.log` と `bridge.log` を見る
+   （画面付きで追うなら `はじめる.bat` か `tools\start-connect.bat`）
+
+解除するときは `python connect.py --uninstall`（`trelab://` と自動起動の登録を消す）。
 
 ## 動作確認
 

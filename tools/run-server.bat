@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0server"
+cd /d "%~dp0..\server"
 
 if not exist node_modules (
   echo Installing relay server...

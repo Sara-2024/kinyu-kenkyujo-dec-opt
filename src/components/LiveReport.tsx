@@ -10,57 +10,15 @@ import {
   type PositionRow,
   type TodayStats,
 } from '../data/setupFlow'
+import type { TradeHistory, TradeReview } from '../data/tradeReview'
+import { Bar, Frame, GREEN, Heading, RED, Row, tone } from './reportBits'
+import { TradeReviewView } from './TradeReview'
 
 export type LiveReport =
   | { kind: 'today'; today: TodayStats; currency?: string }
   | { kind: 'history'; history: HistoryStats; currency?: string }
   | { kind: 'positions'; positions: PositionRow[]; currency?: string }
-
-const GREEN = '#35f58a'
-const RED = '#ff8484'
-
-function tone(n: number): string {
-  if (n > 0) return GREEN
-  if (n < 0) return RED
-  return '#cbd5e1'
-}
-
-/** 見出し（左に細いシアンの縦棒） */
-function Heading({ title, note }: { title: string; note?: string }) {
-  return (
-    <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <span className="h-3 w-[2px]" style={{ background: 'var(--accent)', boxShadow: '0 0 6px var(--accent)' }} />
-      <p className="text-[14px] font-bold text-slate-200">{title}</p>
-      {note && <p className="font-mono text-[12px] text-slate-500">{note}</p>}
-    </div>
-  )
-}
-
-/** 「項目 …… 値」の一行 */
-function Row({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div
-      className="flex items-baseline justify-between gap-4 border-b py-2 last:border-b-0"
-      style={{ borderColor: 'rgba(94,204,255,0.12)' }}
-    >
-      <span className="text-[14px] text-slate-400">{label}</span>
-      <span className="font-mono text-[16px] font-bold" style={{ color: color ?? '#e8edf5' }}>
-        {value}
-      </span>
-    </div>
-  )
-}
-
-function Frame({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="step-in rounded-[6px] border px-5 py-4"
-      style={{ borderColor: 'rgba(94,204,255,0.28)', background: 'rgba(9,17,31,0.6)' }}
-    >
-      {children}
-    </div>
-  )
-}
+  | { kind: 'review'; review: TradeReview | null; history: TradeHistory; currency?: string }
 
 function TodayView({ today, currency }: { today: TodayStats; currency?: string }) {
   const closed = today.today_closed ?? 0
@@ -111,12 +69,7 @@ function HistoryView({ history, currency }: { history: HistoryStats; currency?: 
               .map((d) => (
                 <div key={d.date} className="flex items-center gap-3">
                   <span className="font-mono w-[52px] shrink-0 text-[13px] text-slate-400">{formatDay(d.date)}</span>
-                  <span className="h-2 min-w-[2px] rounded-full"
-                        style={{
-                          width: `${Math.max(2, (Math.abs(d.profit) / peak) * 58)}%`,
-                          background: tone(d.profit),
-                          boxShadow: `0 0 8px ${tone(d.profit)}55`,
-                        }} />
+                  <Bar ratio={Math.abs(d.profit) / peak} color={tone(d.profit)} />
                   <span className="font-mono ml-auto shrink-0 text-[14px] font-bold" style={{ color: tone(d.profit) }}>
                     {formatSigned(d.profit, currency)}
                   </span>
@@ -196,5 +149,7 @@ function PositionsView({ positions, currency }: { positions: PositionRow[]; curr
 export function LiveReportView({ report }: { report: LiveReport }) {
   if (report.kind === 'today') return <TodayView today={report.today} currency={report.currency} />
   if (report.kind === 'history') return <HistoryView history={report.history} currency={report.currency} />
+  if (report.kind === 'review')
+    return <TradeReviewView review={report.review} history={report.history} currency={report.currency} />
   return <PositionsView positions={report.positions} currency={report.currency} />
 }
