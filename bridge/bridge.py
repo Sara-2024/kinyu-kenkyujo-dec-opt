@@ -77,7 +77,7 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-02.5"
+VERSION = "2026-09-02.6"
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
@@ -626,7 +626,7 @@ class MT5Controller:
         experts = Path(str(data_path)) / "MQL5" / "Experts"
         found: list[str] = []
         compiled: list[str] = []
-        for name in ("SiteTestEA", "TrelabEA"):
+        for name in ("SiteTestEA",):
             if (experts / f"{name}.mq5").is_file():
                 found.append(name)
             if (experts / f"{name}.ex5").is_file():

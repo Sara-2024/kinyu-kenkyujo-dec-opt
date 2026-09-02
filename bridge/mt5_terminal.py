@@ -129,7 +129,7 @@ def probe_ea_files(data_path: str) -> dict[str, Any]:
     include = Path(data_path) / "MQL5" / "Include"
     found: list[str] = []
     compiled: list[str] = []
-    for name in ("SiteTestEA", "TrelabEA", "TrelabGate"):
+    for name in ("SiteTestEA",):
         if (experts / f"{name}.mq5").is_file():
             found.append(name)
         if (experts / f"{name}.ex5").is_file():

@@ -51,7 +51,10 @@ from mt5_terminal import (  # noqa: E402
 
 MT5_SETUP_URL = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 
-EA_FILES = ("SiteTestEA.mq5", "TrelabEA.mq5", "TrelabGate.mq5")
+EA_FILES = ("SiteTestEA.mq5",)
+# 以前に配っていたもの。1つに絞ったので、見つけたら片づける。
+# 残っていると同じ指令ファイルを二重に読み書きして紛らわしい。
+OLD_EA_NAMES = ("TrelabEA", "TrelabGate")
 INCLUDE_FILES = ("TradingGate.mqh",)
 
 PRODUCT_NAME = "AIトレーダー"
@@ -461,6 +464,18 @@ def copy_ea_files(session: dict) -> Path:
             raise SystemExit(f"元ファイルがありません: {src}")
         shutil.copy2(src, experts / name)
         log(f"OK  Experts\\{name}")
+
+    # 以前配った余分なシステムを片づける（チャートに載っていると消せないことがある）
+    for name in OLD_EA_NAMES:
+        for suffix in (".mq5", ".ex5"):
+            stale = experts / f"{name}{suffix}"
+            if not stale.is_file():
+                continue
+            try:
+                stale.unlink()
+                log(f"片づけ  Experts\\{name}{suffix}")
+            except OSError:
+                log(f"注意  {name}{suffix} を消せません（チャートから外してから開き直してください）")
 
     editor = find_metaeditor(data_path, terminal_exe)
     if editor:
