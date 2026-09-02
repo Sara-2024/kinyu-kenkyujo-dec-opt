@@ -357,9 +357,15 @@ export function DialogueWindow({
       const lines = connectChecksFromStatus(ack)
       setChecks(lines)
       setStepIndex(lines.length)
+      // ここが「動かしてよい」という唯一の意思表示。
+      // お客様が「自動売買をはじめる」を押したときだけ稼働に入る。
+      // （ブリッジ側は、これが無いかぎり自分から稼働にはしない）
+      const started = await bridge.send('start_trading')
+      if (cancelled) return
+      const running = typeof started.value === 'number' ? Number(started.value) !== 0 : started.ok
       const created = newConnection(emailRef.current, account, String(ack.server ?? ''), {
         settings: settingsFromGate(ack.gate),
-        running: Number(ack.value) !== 0,
+        running,
       })
       saveConnection(created)
       setConn(created)

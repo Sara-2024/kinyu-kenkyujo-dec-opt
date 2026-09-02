@@ -101,6 +101,25 @@ void PutLabel(const string id, const int x, const int y, const int size, const c
    ObjectSetString(0, id, OBJPROP_TEXT, text);
   }
 
+//+------------------------------------------------------------------+
+//| いまチャートに出している状態を、サイト側から読めるように書き出す。 |
+//| これでサイトの表示と MT5 の表示がズレていないか確認できる。        |
+//+------------------------------------------------------------------+
+void WriteStateFile(const string state, const bool allowed)
+  {
+   int h = FileOpen("trelab_state.ini",
+                    FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
+   if(h == INVALID_HANDLE)
+      return;
+   FileWriteString(h, "state=" + state + "\n");
+   FileWriteString(h, "allowed=" + (allowed ? "1" : "0") + "\n");
+   FileWriteString(h, "at=" + TimeToString(TimeLocal(), TIME_DATE|TIME_SECONDS) + "\n");
+   FileWriteString(h, "account=" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\n");
+   FileWriteString(h, "ea=" + MQLInfoString(MQL_PROGRAM_NAME) + "\n");
+   FileWriteString(h, "common=" + TerminalInfoString(TERMINAL_COMMONDATA_PATH) + "\n");
+   FileClose(h);
+  }
+
 void DrawGateStatus()
   {
    const bool autotrading = (MQLInfoInteger(MQL_TRADE_ALLOWED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED));
@@ -145,11 +164,20 @@ void DrawGateStatus()
       state  = "停止中（サイトから停止）";
      }
 
-   static string last_state = "";
+   static string   last_state = "";
+   static datetime last_write = 0;
    if(state != last_state)
      {
       Print("システム表示: ", state);
       last_state = state;
+      WriteStateFile(state, allowed);
+      last_write = TimeLocal();
+     }
+   else if(TimeLocal() - last_write >= 10)
+     {
+      // 生きていることが分かるよう、変化が無くても10秒ごとに書く
+      WriteStateFile(state, allowed);
+      last_write = TimeLocal();
      }
 
    PutRect(TG_BG, 10, 22, 460, 168, fill, border);

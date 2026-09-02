@@ -73,6 +73,14 @@ export function ControlPanel({
   const running =
     bridge.live && typeof bridge.status?.value === 'number' ? Number(bridge.status.value) !== 0 : conn.running
 
+  // MT5 のチャートに出ている状態と、この画面の状態が食い違っていないか。
+  // 食い違うのは、EAが止まっている・別のフォルダを見ている・誰かが書き換えた、のいずれか。
+  const mt5Mismatch =
+    bridge.live &&
+    bridge.status?.ea_alive === true &&
+    bridge.status?.ea_allowed != null &&
+    (bridge.status.ea_allowed === '1') !== running
+
   const health = (() => {
     if (!bridge.live) return 'MT5との接続を確認できません'
     if (bridge.status?.terminal_connected === false) return 'ターミナルが相場サーバーとつながっていません'
@@ -141,6 +149,39 @@ export function ControlPanel({
           {running ? '■ いますぐ停止' : '▶ 再開する'}
         </button>
       </div>
+
+      {/* ── MT5側が実際に出している状態（表示のズレをその場で見つける） ── */}
+      {bridge.live && bridge.status?.ea_state && (
+        <div
+          className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[5px] border px-4 py-2.5 text-[13px]"
+          style={
+            mt5Mismatch
+              ? { borderColor: 'rgba(250,204,21,0.5)', background: 'rgba(250,204,21,0.08)' }
+              : { borderColor: 'rgba(94,204,255,0.25)', background: 'rgba(94,204,255,0.05)' }
+          }
+        >
+          <span className="font-bold text-slate-400">MT5の表示</span>
+          <span className="font-bold text-slate-100">{bridge.status.ea_state}</span>
+          {bridge.status.ea_state_at && (
+            <span className="font-mono text-[12px] text-slate-500">{bridge.status.ea_state_at}</span>
+          )}
+          {mt5Mismatch && (
+            <span className="w-full font-bold text-[#ffd23e]">
+              ⚠ サイトと違う状態が出ています。指示どおりに戻しています（数十秒で揃います）。
+            </span>
+          )}
+          {bridge.status.ea_alive === false && (
+            <span className="w-full font-bold text-[#ffd23e]">
+              ⚠ チャートにシステムが載っていません。MT5のチャートへドラッグしてください。
+            </span>
+          )}
+          {bridge.status.ea_same_folder === false && (
+            <span className="w-full font-bold text-[#ff8484]">
+              ⚠ MT5と接続ツールが別のフォルダを見ています。接続ツールを開き直してください。
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── 口座 ── */}
       <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-[13px]">

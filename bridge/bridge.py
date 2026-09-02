@@ -29,6 +29,7 @@ import logging
 import os
 import random
 import signal
+import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -76,13 +77,94 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-02.3"
+VERSION = "2026-09-02.4"
+
+
+# 以前の版が使っていたロック名。名前が変わったせいで、
+# 古いブリッジと新しいブリッジが同時に動けてしまっていた。
+LOCK_NAMES = ("aitrader-bridge.lock", "trelab-bridge.lock")
+
+
+def _lock_dir() -> Path:
+    return Path(os.environ.get("TEMP", "."))
+
+
+def _read_lock(path: Path) -> tuple[int | None, str]:
+    """ロックの1行目=番号(PID)、2行目=版"""
+    try:
+        lines = path.read_text(encoding="ascii", errors="ignore").splitlines()
+    except OSError:
+        return None, ""
+    pid = None
+    if lines and lines[0].strip().isdigit():
+        pid = int(lines[0].strip())
+    version = lines[1].strip() if len(lines) > 1 else ""
+    return pid, version
+
+
+def _process_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def _terminate(pid: int) -> None:
+    if os.name == "nt":
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/F"],
+            check=False,
+            creationflags=flags,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    else:
+        try:
+            os.kill(pid, 15)
+        except OSError:
+            pass
+
+
+def takeover_old_bridges() -> None:
+    """自分より古い版のブリッジが残っていたら終わらせる。
+
+    二重に動くと、両方が売買フラグを書きにいって取り合いになる。
+    「触っていないのに稼働中と停止中が入れ替わる」のはこれが原因だった。
+    """
+    me = os.getpid()
+    for name in LOCK_NAMES:
+        path = _lock_dir() / name
+        if not path.is_file():
+            continue
+        pid, version = _read_lock(path)
+        if pid is None or pid == me or not _process_alive(pid):
+            continue
+        if version == VERSION:
+            continue  # 同じ版なら二重起動チェックに任せる
+        log.warning(
+            "古いブリッジ（PID %s / 版 %s）が動いています。指令が競合するので終了させます",
+            pid,
+            version or "不明",
+        )
+        _terminate(pid)
+        for _ in range(20):
+            if not _process_alive(pid):
+                log.info("古いブリッジを終了しました")
+                break
+            time.sleep(0.25)
 
 
 def acquire_instance_lock() -> None:
     """同じPCで bridge.py を二重起動すると、中継が切断と再接続を繰り返す。"""
     global _LOCK_FH
-    path = Path(os.environ.get("TEMP", ".")) / "aitrader-bridge.lock"
+    takeover_old_bridges()
+    path = _lock_dir() / LOCK_NAMES[0]
     _LOCK_FH = open(path, "a+b")
     try:
         if os.name == "nt":
@@ -292,6 +374,43 @@ class MT5Controller:
         self.ready = False
         self._pool.shutdown(wait=False)
 
+    # ---------- お客様の意思（稼働 / 停止） ----------
+    # 売買フラグを動かしてよいのは「サイトからの指示」だけ。
+    # 起動しなおしても、ブリッジが増えても、ここに書いてある値に必ず揃える。
+    def _intent_path(self) -> Path:
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP") or "."
+        folder = Path(base) / "AITrader"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return Path(os.environ.get("TEMP", ".")) / "aitrader-intent.json"
+        return folder / "intent.json"
+
+    def _load_intent(self) -> dict[str, Any] | None:
+        path = self._intent_path()
+        if not path.is_file():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict) or "allowed" not in data:
+            return None
+        return data
+
+    def _save_intent(self, allowed: float, by: str) -> None:
+        data = {
+            "allowed": float(allowed),
+            "by": by,
+            "at": datetime.now().isoformat(timespec="seconds"),
+        }
+        try:
+            self._intent_path().write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        except OSError as exc:
+            log.warning("意思を保存できません: %s", exc)
+        self.intent_by = by
+        self.intent_at = data["at"]
+
     # ---------- 指令ファイル（Python API に global_variable_set が無いため） ----------
     GATE_FILE = "trelab_gate.ini"
 
@@ -372,34 +491,42 @@ class MT5Controller:
             return await self._call(self._get_gv_blocking, name)
 
     async def adopt_current_state(self) -> float:
-        """起動時は MT5 側にある値を正とする。
+        """起動時は「お客様の意思」に MT5 を合わせる。
 
-        ここで既定値を書いてしまうと、お客様が「停止」にしていても
-        ブリッジを立ち上げ直すたびに勝手に稼働中へ戻ってしまう。
+        意思の記録が無い＝まだ一度も操作していないので、安全側の
+        「停止」から始める。稼働に変わるのはサイトで押されたときだけ。
         """
-        current = await self.get_variable(self.cfg.gv_name)
-        if current is not None:
-            self.desired_value = float(current)
+        intent = self._load_intent()
+        if intent is not None:
+            self.desired_value = float(intent.get("allowed", 0.0))
+            self.intent_by = str(intent.get("by", ""))
+            self.intent_at = str(intent.get("at", ""))
             log.info(
-                "いまの売買フラグを引き継ぎます: %s = %s (%s)",
+                "前回の指示を引き継ぎます: %s (%s に %s から)",
+                "稼働" if self.desired_value != 0 else "停止",
+                self.intent_at or "不明",
+                self.intent_by or "不明",
+            )
+        else:
+            self.desired_value = 0.0
+            self._save_intent(0.0, "init")
+            log.info("指示の記録が無いので、停止の状態から始めます")
+
+        current = await self.get_variable(self.cfg.gv_name)
+        if current is None or float(current) != float(self.desired_value):
+            log.info(
+                "MT5 側を指示に合わせます: %s = %s（MT5は %s でした）",
                 self.cfg.gv_name,
                 self.desired_value,
-                "稼働許可" if self.desired_value != 0 else "停止中",
+                current,
             )
-            return self.desired_value
-
-        self.desired_value = float(self.cfg.gv_default)
-        log.info(
-            "売買フラグの記録が無いので初期値を書きます: %s = %s",
-            self.cfg.gv_name,
-            self.desired_value,
-        )
-        await self.set_variable(self.cfg.gv_name, self.desired_value)
+            await self.set_variable(self.cfg.gv_name, self.desired_value)
         return self.desired_value
 
-    async def set_trading(self, allowed: bool) -> tuple[bool, float | None]:
+    async def set_trading(self, allowed: bool, by: str = "サイト") -> tuple[bool, float | None]:
         value = 1.0 if allowed else 0.0
         self.desired_value = value
+        self._save_intent(value, by)
         ok, readback = await self.set_variable(self.cfg.gv_name, value)
         if ok:
             log.info(
@@ -409,6 +536,42 @@ class MT5Controller:
                 "許可" if allowed else "停止",
             )
         return ok, readback
+
+    STATE_FILE = "trelab_state.ini"
+
+    def _ea_state_blocking(self) -> dict[str, Any]:
+        """MT5 のチャートに出ている状態（EA が書き出したもの）。
+
+        サイトの表示と突き合わせるために読む。ここが食い違っていたら、
+        EA とブリッジが別のフォルダを見ている（または EA が止まっている）。
+        """
+        path = self._gate_path().with_name(self.STATE_FILE)
+        out: dict[str, Any] = {}
+        try:
+            if not path.is_file():
+                return {"ea_state": None}
+            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if "=" not in line:
+                    continue
+                key, raw = line.split("=", 1)
+                out[key.strip()] = raw.strip()
+            age = time.time() - path.stat().st_mtime
+        except OSError:
+            return {"ea_state": None}
+        return {
+            "ea_state": out.get("state"),
+            "ea_allowed": out.get("allowed"),
+            "ea_state_at": out.get("at"),
+            "ea_name": out.get("ea"),
+            # EA は10秒ごとに書く。30秒以上古ければ、チャートから外れている
+            "ea_alive": age < 30,
+            # EA が見ているフォルダと、こちらが書いているフォルダが同じか
+            "ea_same_folder": (
+                str(out.get("common", "")).rstrip("\\/") == str(self._gate_path().parent.parent).rstrip("\\/")
+                if out.get("common")
+                else None
+            ),
+        }
 
     def _ea_probe_blocking(self) -> dict[str, Any]:
         term = mt5.terminal_info() if mt5 is not None else None
@@ -802,8 +965,14 @@ class MT5Controller:
         gate = await self._call(self._load_gate) if self.ready else {}
         today = await self._call(self._today_stats_blocking) if (self.ready and include_today) else {}
         server_now = await self._call(self._server_now) if self.ready else None
+        ea = await self._call(self._ea_state_blocking) if self.ready else {}
         return {
             "version": VERSION,
+            "gate_path": str(await self._call(self._gate_path)) if self.ready else None,
+            "intent_by": self.intent_by,
+            "intent_at": self.intent_at,
+            "intent": self.desired_value,
+            **ea,
             "server_time": server_now.isoformat(timespec="seconds") if server_now else None,
             "mt5_ready": self.ready,
             "variable": self.cfg.gv_name,
@@ -1027,6 +1196,16 @@ class Bridge:
         if ws is None or not self.mt.ready:
             return
         status = await self.mt.status(include_today=True, include_probe=False)
+        # 画面が開いている間は、ズレを見つけたらその場で直す（見張りの30秒を待たない）
+        value = status.get("value")
+        if value is None or float(value) != float(self.mt.desired_value):
+            log.warning(
+                "MT5 側が指示と違います（MT5=%s / 指示=%s）。すぐ合わせ直します",
+                value,
+                self.mt.desired_value,
+            )
+            await self.mt.set_variable(self.cfg.gv_name, self.mt.desired_value)
+            status["value"] = self.mt.desired_value
         status["positions"] = await self.mt.positions()
         key = self._status_fingerprint(status)
         if key == self._status_key and not force:
@@ -1171,34 +1350,23 @@ class Bridge:
                     self.mt.ready = False
                     await self.mt.connect_with_retry(self.stop)
                     if self.mt.ready:
-                        # 再接続でも勝手には始めない。止めていたときだけ書き戻す
-                        if float(self.mt.desired_value) == 0.0:
-                            await self.mt.set_variable(self.cfg.gv_name, 0.0)
-                        else:
-                            await self.mt.adopt_current_state()
+                        # 再接続後も、記録してある指示に合わせるだけ
+                        await self.mt.adopt_current_state()
                     continue
 
                 if self.cfg.reassert:
+                    # サイトでの指示だけが正。MT5 側がそれと違っていたら、
+                    # 誰が書き換えたのであれ指示どおりに戻す（＝画面と必ず一致する）。
                     current = await self.mt.get_variable(self.cfg.gv_name)
-                    drifted = current is None or float(current) != float(self.mt.desired_value)
-                    # 見張りが売買を「始める」ことは絶対にしない。
-                    # 止めるほうへ戻すだけにする。お客様が操作していないのに
-                    # 稼働中へ戻る、という事故はこれで起こらなくなる。
-                    if drifted and float(self.mt.desired_value) == 0.0:
+                    if current is None or float(current) != float(self.mt.desired_value):
                         log.warning(
-                            "停止のはずが %s になっていました。停止へ戻します",
-                            current,
-                        )
-                        await self.mt.set_variable(self.cfg.gv_name, 0.0)
-                    elif drifted:
-                        log.info(
-                            "売買フラグが %s（こちらの記録は %s）。勝手には動かさず、そのままにします",
+                            "MT5 側が指示と違います（MT5=%s / 指示=%s。指示したのは %s %s）。合わせ直します",
                             current,
                             self.mt.desired_value,
+                            self.mt.intent_at or "不明",
+                            self.mt.intent_by or "不明",
                         )
-                        # MT5 側を正とする。誰かが止めたなら止まったまま
-                        if current is not None:
-                            self.mt.desired_value = float(current)
+                        await self.mt.set_variable(self.cfg.gv_name, self.mt.desired_value)
 
                 await self._push_status_if_changed()
 
@@ -1209,7 +1377,7 @@ class Bridge:
                             "サーバーと %.0f 秒つながりません。安全のため売買を停止します（デッドマンスイッチ）",
                             offline,
                         )
-                        await self.mt.set_trading(False)
+                        await self.mt.set_trading(False, by="安全装置（サーバーと切断）")
                         self._failsafe_fired = True
             except asyncio.CancelledError:
                 raise

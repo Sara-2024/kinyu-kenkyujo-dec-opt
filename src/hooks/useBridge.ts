@@ -30,6 +30,20 @@ export interface BridgeStatus {
   server_time?: string
   /** 動いているブリッジの版 */
   version?: string
+  /** MT5 のチャートに実際に出ている状態（EAが書き出したもの） */
+  ea_state?: string | null
+  ea_allowed?: string | null
+  ea_state_at?: string | null
+  ea_name?: string | null
+  /** EA が生きているか（10秒ごとの書き込みが届いているか） */
+  ea_alive?: boolean
+  /** EA とブリッジが同じフォルダを見ているか */
+  ea_same_folder?: boolean | null
+  /** サイトから最後に指示された状態と、その時刻・出どころ */
+  intent?: number
+  intent_by?: string
+  intent_at?: string
+  gate_path?: string | null
 }
 
 type Ack = {
@@ -82,6 +96,16 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'positions',
   'server_time',
   'version',
+  'ea_state',
+  'ea_allowed',
+  'ea_state_at',
+  'ea_name',
+  'ea_alive',
+  'ea_same_folder',
+  'intent',
+  'intent_by',
+  'intent_at',
+  'gate_path',
 ]
 
 function definedFields(extra: Partial<BridgeStatus> & Record<string, unknown>): Partial<BridgeStatus> {
