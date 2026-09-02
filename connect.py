@@ -7,12 +7,12 @@
   1. 起動中の MT5 があればそれを使う（無ければ起動／未導入なら公式インストーラ）
   2. ログイン済みターミナルへ システム(EA) をコピーしてコンパイル
   3. ブリッジを裏側で起動して、中継サーバーにつなぐ
-  4. サイトのボタンから起動できるよう trelab:// を登録し、
+  4. サイトのボタンから起動できるよう aitrader:// を登録し、
      次回からPCの起動時にも自動でつながるようにする
 
 サイトに口座パスワードは一切渡さない。
 
-  TrelabConnect.vbs をダブルクリック   … 画面を出さずに全部やる
+  AITrader.vbs をダブルクリック       … 画面を出さずに全部やる
   python connect.py --console          … 経過を画面に出す（調査用）
   python connect.py --install-ea       … システムの配置だけ
   python connect.py --register         … サイト連携の登録だけ
@@ -22,10 +22,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -51,9 +53,13 @@ MT5_SETUP_URL = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/
 EA_FILES = ("SiteTestEA.mq5", "TrelabEA.mq5", "TrelabGate.mq5")
 INCLUDE_FILES = ("TradingGate.mqh",)
 
-APP_NAME = "TrelabConnect"
-PROTOCOL = "trelab"
+PRODUCT_NAME = "AIトレーダー"
+APP_NAME = "AIトレーダー"
+PROTOCOL = "aitrader"
+LEGACY_PROTOCOL = "trelab"
+LEGACY_APP_NAMES = ("TrelabConnect",)
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+ROOM_RE = re.compile(r"^[A-Za-z0-9._:-]{1,80}$")
 
 SEARCH_EXES = [
     Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "MetaTrader 5" / "terminal64.exe",
@@ -66,7 +72,13 @@ CONSOLE = False
 
 def log_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("TMPDIR") or "/tmp"
-    path = Path(base) / "Trelab"
+    path = Path(base) / "AITrader"
+    old = Path(base) / "Trelab"
+    if old.is_dir() and not path.exists():
+        try:
+            old.rename(path)
+        except OSError:
+            pass
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError:
@@ -184,13 +196,31 @@ def launch_command(*args: str) -> list[str]:
 
 
 # ────────────────────────────────────────────────
-# サイトのボタンから起動できるようにする（trelab://）
+# サイトのボタンから起動できるようにする（aitrader://）
 #   ブラウザは仕組み上、勝手にPCのソフトを起動できない。
 #   一度この登録をしておけば、以後はサイトのボタン1つで起動できる。
 # ────────────────────────────────────────────────
+def _delete_protocol(name: str) -> None:
+    try:
+        import winreg
+    except ImportError:
+        return
+    for sub in (
+        rf"Software\Classes\{name}\shell\open\command",
+        rf"Software\Classes\{name}\shell\open",
+        rf"Software\Classes\{name}\shell",
+        rf"Software\Classes\{name}\Application",
+        rf"Software\Classes\{name}",
+    ):
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, sub)
+        except OSError:
+            pass
+
+
 def register_protocol() -> bool:
     if os.name != "nt":
-        log("Windows ではないので trelab:// の登録は省略します")
+        log(f"Windows ではないので {PROTOCOL}:// の登録は省略します")
         return False
     try:
         import winreg
@@ -200,14 +230,18 @@ def register_protocol() -> bool:
     command = " ".join(f'"{part}"' for part in launch_command("--silent", "--from-site")) + ' "%1"'
     try:
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\{PROTOCOL}") as key:
-            winreg.SetValueEx(key, None, 0, winreg.REG_SZ, "URL:Trelab Connect")
+            winreg.SetValueEx(key, None, 0, winreg.REG_SZ, f"URL:{PRODUCT_NAME}")
             winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\{PROTOCOL}\Application") as key:
+            winreg.SetValueEx(key, "ApplicationName", 0, winreg.REG_SZ, PRODUCT_NAME)
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\{PROTOCOL}\shell\open\command") as key:
             winreg.SetValueEx(key, None, 0, winreg.REG_SZ, command)
+        if LEGACY_PROTOCOL != PROTOCOL:
+            _delete_protocol(LEGACY_PROTOCOL)
         log(f"サイトから起動できるようにしました: {PROTOCOL}://")
         return True
     except OSError as exc:
-        log(f"trelab:// を登録できませんでした: {exc}")
+        log(f"{PROTOCOL}:// を登録できませんでした: {exc}")
         return False
 
 
@@ -224,6 +258,11 @@ def register_startup() -> bool:
     try:
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
             winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, command)
+            for old in LEGACY_APP_NAMES:
+                try:
+                    winreg.DeleteValue(key, old)
+                except OSError:
+                    pass
         log("PCの起動時にも自動でつながるようにしました")
         return True
     except OSError as exc:
@@ -240,21 +279,18 @@ def unregister() -> int:
         return 0
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
-            winreg.DeleteValue(key, APP_NAME)
+            for name in (APP_NAME, *LEGACY_APP_NAMES):
+                try:
+                    winreg.DeleteValue(key, name)
+                except OSError:
+                    pass
         log("スタートアップの登録を消しました")
     except OSError:
         pass
-    for sub in (
-        rf"Software\Classes\{PROTOCOL}\shell\open\command",
-        rf"Software\Classes\{PROTOCOL}\shell\open",
-        rf"Software\Classes\{PROTOCOL}\shell",
-        rf"Software\Classes\{PROTOCOL}",
-    ):
-        try:
-            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, sub)
-        except OSError:
-            pass
-    log("trelab:// の登録を消しました")
+    _delete_protocol(PROTOCOL)
+    if LEGACY_PROTOCOL != PROTOCOL:
+        _delete_protocol(LEGACY_PROTOCOL)
+    log(f"{PROTOCOL}:// の登録を消しました")
     return 0
 
 
@@ -451,14 +487,8 @@ def copy_ea_files(session: dict) -> Path:
     return experts
 
 
-def write_bridge_env(session: dict) -> None:
-    """ブリッジが同じ MT5 ターミナル（いまログイン中の口座）へ繋ぐよう .env を更新する。"""
-    exe = resolve_terminal_exe(session)
-    if exe is None:
-        return
+def write_env_key(key: str, val: str) -> None:
     env_path = env_file()
-    key = "MT5_PATH"
-    val = str(exe)
     lines: list[str] = []
     if env_path.is_file():
         lines = env_path.read_text(encoding="utf-8").splitlines()
@@ -476,9 +506,47 @@ def write_bridge_env(session: dict) -> None:
         out.append(f"{key}={val}")
     try:
         env_path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
-        log(f"ブリッジが使う MT5: {val}")
     except OSError as exc:
         log(f".env を書けませんでした: {exc}")
+
+
+def write_bridge_env(session: dict) -> None:
+    """ブリッジが同じ MT5 ターミナル（いまログイン中の口座）へ繋ぐよう .env を更新する。"""
+    exe = resolve_terminal_exe(session)
+    if exe is None:
+        return
+    write_env_key("MT5_PATH", str(exe))
+    log(f"ブリッジが使う MT5: {exe}")
+
+
+def adopt_room(room: str) -> None:
+    """サイトから渡された会員IDを、このPCのブリッジ名として覚える。"""
+    if not ROOM_RE.match(room):
+        return
+    write_env_key("BRIDGE_ID", room)
+    os.environ["BRIDGE_ID"] = room
+    log(f"このPCの部屋: {room}")
+
+
+def is_protocol_url(raw: str) -> bool:
+    lower = raw.lower()
+    return lower.startswith(f"{PROTOCOL}:") or lower.startswith(f"{LEGACY_PROTOCOL}:")
+
+
+def site_room_from_args(argv: list[str]) -> str:
+    """aitrader://connect?room=<会員ID> から部屋を読む。"""
+    for raw in argv:
+        if not is_protocol_url(raw):
+            continue
+        try:
+            parsed = urllib.parse.urlparse(raw.replace("\\", "/"))
+            query = urllib.parse.parse_qs(parsed.query)
+            room = (query.get("room") or [""])[0].strip()
+            if ROOM_RE.match(room):
+                return room
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
 
 
 # ────────────────────────────────────────────────
@@ -517,18 +585,48 @@ def relay_is_up() -> bool:
         return False
 
 
-def relay_bridge_count() -> int | None:
-    """ローカル中継に、いま何台のブリッジが乗っているか。届かなければ None。"""
+def relay_http_origin(ws_url: str) -> str | None:
+    if ws_url.startswith("wss://"):
+        return "https://" + ws_url[len("wss://") :].split("/")[0]
+    if ws_url.startswith("ws://"):
+        return "http://" + ws_url[len("ws://") :].split("/")[0]
+    return None
+
+
+def relay_health() -> dict | None:
+    url = relay_url()
+    origin = "http://127.0.0.1:8080" if relay_is_local(url) else relay_http_origin(url)
+    if not origin:
+        return None
     try:
-        with urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=1.5) as res:
-            data = json.loads(res.read().decode("utf-8", errors="replace"))
-            return int(data.get("bridges", 0))
+        with urllib.request.urlopen(f"{origin}/health", timeout=4) as res:
+            return json.loads(res.read().decode("utf-8", errors="replace"))
     except Exception:  # noqa: BLE001
         return None
 
 
+def relay_bridge_count() -> int | None:
+    data = relay_health()
+    if data is None:
+        return None
+    try:
+        return int(data.get("bridges", 0))
+    except (TypeError, ValueError):
+        return None
+
+
+def relay_has_bridge(bridge_id: str) -> bool | None:
+    data = relay_health()
+    if data is None:
+        return None
+    rooms = data.get("rooms")
+    if not isinstance(rooms, list):
+        return None
+    return bridge_id in rooms
+
+
 def bridge_lock_path() -> Path:
-    return Path(os.environ.get("TEMP", "/tmp")) / "trelab-bridge.lock"
+    return Path(os.environ.get("TEMP", "/tmp")) / "aitrader-bridge.lock"
 
 
 def lock_pid() -> int | None:
@@ -608,9 +706,14 @@ def bridge_env(session: dict | None) -> dict[str, str]:
 
 
 def start_bridge(session: dict | None = None) -> None:
+    our_id = env_value("BRIDGE_ID") or "vps-01"
     if bridge_already_running():
-        # プロセスは生きていても、中継に乗っていなければ E003 のままになる
-        if relay_is_local(relay_url()) and relay_is_up() and relay_bridge_count() == 0:
+        local_missing = (
+            relay_is_local(relay_url())
+            and relay_is_up()
+            and relay_has_bridge(our_id) is False
+        )
+        if local_missing:
             stop_stale_bridge()
         else:
             log("ブリッジはすでに動いています")
@@ -658,9 +761,14 @@ def install_ea_only() -> int:
     return 0
 
 
-def connect_all() -> int:
+def connect_all(room: str = "") -> int:
     """サイトのボタン1つで呼ばれる本体。画面は出さない。"""
     banner("接続開始")
+
+    if room:
+        adopt_room(room)
+        if bridge_already_running() and relay_has_bridge(room) is not True:
+            stop_stale_bridge()
 
     # 次からサイトのボタンで起動できるようにする（初回だけ効く）
     register_protocol()
@@ -699,13 +807,13 @@ def connect_all() -> int:
 
 def main() -> int:
     global CONSOLE
-    args = [a for a in sys.argv[1:]]
-    # trelab://connect のように渡ってくる引数は、いまは合図としてだけ使う
-    args = [a for a in args if not a.lower().startswith(f"{PROTOCOL}:")]
+    raw_args = [a for a in sys.argv[1:]]
+    room = site_room_from_args(raw_args)
+    args = [a for a in raw_args if not is_protocol_url(a)]
     CONSOLE = "--console" in args or "--self-test" in args
 
     os.chdir(str(ROOT))
-    log(f"起動 argv={sys.argv[1:]} frozen={FROZEN}")
+    log(f"起動 argv={raw_args} frozen={FROZEN} room={room or '-'}")
 
     if "--run-bridge" in args:  # exe 版が自分自身をブリッジとして動かすとき
         sys.argv = [sys.argv[0]]
@@ -721,7 +829,7 @@ def main() -> int:
     if "--uninstall" in args:
         return unregister()
 
-    code = connect_all()
+    code = connect_all(room)
     if CONSOLE:
         print()
         input("  続けるには Enter を押してください...")

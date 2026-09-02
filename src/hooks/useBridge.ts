@@ -48,6 +48,12 @@ export type BridgePhase = 'connecting' | 'live' | 'no_bridge' | 'error'
 /** 接続先。未設定ならローカルの中継サーバー */
 export const WS_URL = import.meta.env.VITE_RELAY_URL || 'ws://localhost:8080/app'
 
+function appUrl(roomId?: string | null): string {
+  if (!roomId) return WS_URL
+  const sep = WS_URL.includes('?') ? '&' : '?'
+  return `${WS_URL}${sep}room=${encodeURIComponent(roomId)}`
+}
+
 const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'bridgeId',
   'account',
@@ -89,7 +95,7 @@ function mergeStatus(prev: BridgeStatus | null, extra: Partial<BridgeStatus> & {
   }
 }
 
-export function useBridge() {
+export function useBridge(roomId?: string | null) {
   const [phase, setPhase] = useState<BridgePhase>('connecting')
   const [error, setError] = useState<BridgeError | null>(null)
   const [status, setStatus] = useState<BridgeStatus | null>(null)
@@ -108,8 +114,16 @@ export function useBridge() {
   }
 
   useEffect(() => {
+    if (!roomId) {
+      setStatus(null)
+      setErr('E003')
+      return
+    }
+
     let closed = false
     let retry: ReturnType<typeof setTimeout> | null = null
+
+    const target = appUrl(roomId)
 
     const connect = () => {
       if (closed) return
@@ -118,9 +132,9 @@ export function useBridge() {
 
       let ws: WebSocket
       try {
-        ws = new WebSocket(WS_URL)
+        ws = new WebSocket(target)
       } catch (e) {
-        setErr('E001', `${WS_URL} — ${e instanceof Error ? e.message : 'open failed'}`)
+        setErr('E001', `${target} — ${e instanceof Error ? e.message : 'open failed'}`)
         retry = setTimeout(connect, 5000)
         return
       }
@@ -140,7 +154,9 @@ export function useBridge() {
         }
 
         if (payload.type === 'welcome') {
-          const list = (payload.bridges as BridgeStatus[]) ?? []
+          const list = ((payload.bridges as BridgeStatus[]) ?? []).filter((row) =>
+            roomId ? String(row.bridgeId) === roomId : true,
+          )
           if (list.length > 0) {
             setStatus(list[0])
             setPhase('live')
@@ -148,17 +164,19 @@ export function useBridge() {
             hadLive.current = true
           } else {
             setStatus(null)
-            setErr('E003', `relay=${WS_URL}`)
+            setErr('E003', `relay=${target}`)
           }
           return
         }
+
+        if (roomId && payload.bridgeId && String(payload.bridgeId) !== roomId) return
 
         if (payload.type === 'bridge_online') {
           if (offlineTimer.current) {
             clearTimeout(offlineTimer.current)
             offlineTimer.current = null
           }
-          setStatus({ ...(payload.status as BridgeStatus), bridgeId: String(payload.bridgeId) })
+          setStatus({ ...(payload.status as BridgeStatus), bridgeId: String(payload.bridgeId ?? roomId ?? '') })
           setPhase('live')
           setError(null)
           hadLive.current = true
@@ -170,7 +188,7 @@ export function useBridge() {
             clearTimeout(offlineTimer.current)
             offlineTimer.current = null
           }
-          setStatus({ ...(payload.status as BridgeStatus), bridgeId: String(payload.bridgeId) })
+          setStatus({ ...(payload.status as BridgeStatus), bridgeId: String(payload.bridgeId ?? roomId ?? '') })
           setPhase('live')
           setError(null)
           hadLive.current = true
@@ -204,13 +222,13 @@ export function useBridge() {
       ws.onclose = (ev) => {
         if (wsRef.current !== ws) return
         setPhase(hadLive.current ? 'error' : 'connecting')
-        setErr('E002', `code=${ev.code} relay=${WS_URL}`)
+        setErr('E002', `code=${ev.code} relay=${target}`)
         wsRef.current = null
         if (!closed) retry = setTimeout(connect, 5000)
       }
 
       ws.onerror = () => {
-        setErr('E001', WS_URL)
+        setErr('E001', target)
       }
     }
 
@@ -221,7 +239,7 @@ export function useBridge() {
       if (offlineTimer.current) clearTimeout(offlineTimer.current)
       wsRef.current?.close()
     }
-  }, [])
+  }, [roomId])
 
   const send = useCallback(
     (command: string, extra: Record<string, unknown> = {}): Promise<Ack> =>
@@ -237,7 +255,7 @@ export function useBridge() {
         }
         const id = `app-${++seq.current}`
         waiting.current.set(id, resolve)
-        ws.send(JSON.stringify({ id, command, ...extra }))
+        ws.send(JSON.stringify({ id, command, ...(roomId ? { bridgeId: roomId } : {}), ...extra }))
         setTimeout(() => {
           if (waiting.current.has(id)) {
             waiting.current.delete(id)
@@ -245,8 +263,8 @@ export function useBridge() {
           }
         }, 12000)
       }),
-    [phase],
+    [phase, roomId],
   )
 
-  return { live, phase, status, error, wsUrl: WS_URL, send }
+  return { live, phase, status, error, wsUrl: appUrl(roomId), send }
 }

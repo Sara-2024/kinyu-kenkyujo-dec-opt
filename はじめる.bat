@@ -11,7 +11,7 @@ echo  ============================================================
 echo.
 echo    このファイルは「あなたが確認するとき」用です。
 echo    経過が見えるように、わざと画面を出しています。
-echo    お客様が使うときは何も表示されません（TrelabConnect.vbs）。
+echo    お客様が使うときは何も表示されません（AITrader.exe）。
 echo.
 echo  ------------------------------------------------------------
 echo.
@@ -126,7 +126,6 @@ REM 画面が見にいく中継（.env より .env.local が優先されます�
 > .env.local echo VITE_RELAY_URL=ws://localhost:8080/app
 REM ブリッジがつなぐ中継
 > bridge\.env echo TRELAB_WS_URL=ws://127.0.0.1:8080/bridge
->> bridge\.env echo BRIDGE_ID=vps-01
 >> bridge\.env echo GV_NAME=AI_TRADING_ALLOWED
 >> bridge\.env echo GV_DEFAULT=1
 >> bridge\.env echo LOG_LEVEL=INFO
@@ -175,7 +174,6 @@ REM ------------------------------------------------------------
 REM テストのときに書いた「画面の接続先」は本番では邪魔になるので消す
 if exist .env.local del .env.local
 > bridge\.env echo TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
->> bridge\.env echo BRIDGE_ID=vps-01
 >> bridge\.env echo GV_NAME=AI_TRADING_ALLOWED
 >> bridge\.env echo GV_DEFAULT=1
 >> bridge\.env echo LOG_LEVEL=INFO
@@ -248,7 +246,7 @@ echo    サイトのボタンだけでつながります。
 echo    （パソコンを立ち上げ直したときも自動でつながります）
 echo.
 echo    うまくいかないときの記録:
-echo      %%LOCALAPPDATA%%\Trelab\connect.log
+echo      %%LOCALAPPDATA%%\AITrader\connect.log
 echo  ============================================================
 echo.
 echo    この画面は閉じても大丈夫です（裏側で動き続けます）。

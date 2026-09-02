@@ -6,11 +6,14 @@
 |------|--------|-----|
 | 画面（React） | Vercel | https://kinyu-kenkyujo-dec-opt.vercel.app |
 | 中継（WebSocket） | Render | https://kinyu-relay.onrender.com |
-| ブリッジ + MT5 | お客様の Windows | `TrelabConnect.exe`（自分の確認は `はじめる.bat`） |
+| ブリッジ + MT5 | お客様の Windows | `AITrader.exe`（自分の確認は `はじめる.bat`） |
 
 ```
 ブラウザ ──wss──► Render（中継）◄──wss── bridge.py ──► MT5
+          room=会員ID                    id=会員ID
 ```
+
+サイトは1つ。中継も1台。会員ごとに部屋を分けて、他人の口座・停止/再開が混ざらない。
 
 ## 1. 中継サーバー（Render）— 初回のみ
 
@@ -45,19 +48,37 @@ vercel --prod
 TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
 ```
 
-お客様に渡すのは **1本だけ**（`tools\build-windows.bat` で作る `dist\TrelabConnect.exe`）。
-開発機で試すときは `TrelabConnect.vbs` でも同じ処理が動く。
+お客様に渡すのは **1本だけ**（`tools\build-windows.bat` で作る `dist\AITrader.exe`）。
+開発機で試すときは `AITrader.vbs` でも同じ処理が動く。
 
 1. MT5 を起動してログイン
-2. `TrelabConnect.exe`（または `TrelabConnect.vbs`）を**一度だけ**開く
+2. `AITrader.exe`（または `AITrader.vbs`）を**一度だけ**開く
    - 黒い画面は出ない。中では EA 配置 → コンパイル → ブリッジ起動まで進む
-   - あわせて `trelab://` とスタートアップを登録するので、
+   - あわせて `aitrader://` とスタートアップを登録するので、
      次回からは**サイトのボタン1つ**、PC再起動後は**自動**でつながる
 3. チャートに SiteTestEA を載せ、自動売買 ON
-4. うまくいかないときは `%LOCALAPPDATA%\Trelab\connect.log` と `bridge.log` を見る
+4. うまくいかないときは `%LOCALAPPDATA%\AITrader\connect.log` と `bridge.log` を見る
    （画面付きで追うなら `はじめる.bat` か `tools\start-connect.bat`）
 
-解除するときは `python connect.py --uninstall`（`trelab://` と自動起動の登録を消す）。
+解除するときは `python connect.py --uninstall`（`aitrader://` と自動起動の登録を消す）。
+
+## 4. お客様への渡し方
+
+渡すものは2つだけ。
+
+1. 本番サイトのURL（ログイン用アカウントも渡す）
+2. `AITrader.exe`
+
+GitHub のZIPや `はじめる.bat` は渡さない。
+
+お客様側の手順:
+
+1. サイトにログイン
+2. `AITrader.exe` を一度開く（初回だけ）
+3. アルゴ → 自動売買をはじめる（または つなぎ直す）
+   → その会員の部屋で MT5 とつながる
+
+中継は **Render を再デプロイ** して、部屋分けのコードが入っていることを確認する。
 
 ## 動作確認
 

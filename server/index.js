@@ -1,11 +1,11 @@
 // トレラボ 中継サーバー
 //
 // ブラウザ（管理画面）と、MT5のそばで動くブリッジ(bridge.py)をつなぐ。
-// 両者は別々のWebSocket接続なので、このサーバーが間に立って指令と応答を橋渡しする。
+// 会員ごとに room を分け、他人の口座・指令が混ざらないようにする。
 //
-//   ブラウザ  ──/app───┐
-//                      ├─ このサーバー ─→ 指令の中継
-//   bridge.py ─/bridge─┘
+//   ブラウザ  ──/app?room=<会員ID>───┐
+//                                    ├─ このサーバー ─→ 同じ部屋だけ中継
+//   bridge.py ─/bridge?id=<会員ID>───┘
 //
 // 起動:  npm start          （既定 8080番）
 //        PORT=9000 npm start
@@ -15,13 +15,10 @@ import { WebSocketServer } from 'ws'
 
 const PORT = Number(process.env.PORT) || 8080
 const TOKEN = (process.env.TRELAB_TOKEN || '').trim() // 空なら認証なし
+const ROOM_RE = /^[A-Za-z0-9._:-]{1,80}$/
 
-/** bridgeId → WebSocket */
-const bridges = new Map()
-/** ブラウザ側の接続 */
-const apps = new Set()
-/** 各ブリッジが最後に伝えてきた状態（新しく開いたブラウザに即座に見せるため） */
-const lastStatus = new Map()
+/** roomId → { bridge, apps, status } */
+const rooms = new Map()
 
 const now = () => new Date().toISOString().slice(11, 19)
 const log = (...args) => console.log(`[${now()}]`, ...args)
@@ -30,25 +27,48 @@ function send(ws, message) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message))
 }
 
-/** ブラウザ全員に配る */
-function broadcastToApps(message) {
-  for (const ws of apps) send(ws, message)
+function normalizeRoom(raw) {
+  const id = String(raw || '').trim()
+  if (ROOM_RE.test(id)) return id
+  return 'vps-01'
 }
 
-/** いまつながっているブリッジの一覧 */
-function bridgeList() {
-  return [...bridges.keys()].map((id) => ({
-    bridgeId: id,
-    online: true,
-    ...(lastStatus.get(id) ?? {}),
-  }))
+function roomOf(id) {
+  if (!rooms.has(id)) rooms.set(id, { bridge: null, apps: new Set(), status: null })
+  return rooms.get(id)
+}
+
+function pruneRoom(id) {
+  const room = rooms.get(id)
+  if (!room) return
+  if (!room.bridge && room.apps.size === 0) rooms.delete(id)
+}
+
+function broadcastToRoom(roomId, message) {
+  const room = rooms.get(roomId)
+  if (!room) return
+  for (const ws of room.apps) send(ws, message)
+}
+
+function roomIdFrom(req, url, isBridge) {
+  if (isBridge) {
+    return normalizeRoom(req.headers['x-bridge-id'] || url.searchParams.get('id') || url.searchParams.get('room'))
+  }
+  return normalizeRoom(url.searchParams.get('room') || url.searchParams.get('id'))
 }
 
 const server = createServer((req, res) => {
-  // 死活確認用（Renderなどのヘルスチェックにも使える）
-  if (req.url === '/health') {
+  if (req.url?.startsWith('/health')) {
+    const liveRooms = [...rooms.entries()].filter(([, room]) => room.bridge)
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ ok: true, bridges: bridges.size, apps: apps.size }))
+    res.end(
+      JSON.stringify({
+        ok: true,
+        bridges: liveRooms.length,
+        apps: [...rooms.values()].reduce((n, room) => n + room.apps.size, 0),
+        rooms: liveRooms.map(([id]) => id),
+      }),
+    )
     return
   }
   res.writeHead(404)
@@ -66,7 +86,6 @@ server.on('upgrade', (req, socket, head) => {
     return
   }
 
-  // トークンを設定している場合だけ確認する（ヘッダーでもクエリでも可）
   if (TOKEN) {
     const header = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     const query = url.searchParams.get('token') || ''
@@ -78,27 +97,23 @@ server.on('upgrade', (req, socket, head) => {
     }
   }
 
+  const isBridge = path === '/bridge'
+  const roomId = roomIdFrom(req, url, isBridge)
+
   wss.handleUpgrade(req, socket, head, (ws) => {
-    if (path === '/bridge') {
-      const id = req.headers['x-bridge-id'] || url.searchParams.get('id') || 'bridge-1'
-      handleBridge(ws, String(id))
-    } else {
-      handleApp(ws)
-    }
+    if (isBridge) handleBridge(ws, roomId)
+    else handleApp(ws, roomId)
   })
 })
 
-// ────────────────────────────────
-// ブリッジ側（MT5のそば）
-// ────────────────────────────────
-function handleBridge(ws, bridgeId) {
-  const previous = bridges.get(bridgeId)
-  if (previous && previous !== ws) {
-    log(`ブリッジ ${bridgeId} が再接続したため、古い接続を閉じます`)
-    previous.close(4001, 'replaced')
+function handleBridge(ws, roomId) {
+  const room = roomOf(roomId)
+  if (room.bridge && room.bridge !== ws) {
+    log(`部屋 ${roomId} のブリッジが再接続したため、古い接続を閉じます`)
+    room.bridge.close(4001, 'replaced')
   }
-  bridges.set(bridgeId, ws)
-  log(`ブリッジ接続: ${bridgeId}（現在 ${bridges.size} 台）`)
+  room.bridge = ws
+  log(`ブリッジ接続: ${roomId}（現在 ${[...rooms.values()].filter((r) => r.bridge).length} 部屋）`)
 
   const ping = setInterval(() => {
     if (ws.readyState === ws.OPEN) ws.ping()
@@ -109,56 +124,54 @@ function handleBridge(ws, bridgeId) {
     try {
       payload = JSON.parse(raw.toString())
     } catch {
-      log(`ブリッジ ${bridgeId} から読めないデータ`)
+      log(`ブリッジ ${roomId} から読めないデータ`)
       return
     }
 
-    // 名乗り（口座情報など）は覚えておき、ブラウザ全員に配る
     if (payload.type === 'hello') {
-      lastStatus.set(bridgeId, payload)
-      log(`ブリッジ ${bridgeId} 名乗り: 口座=${payload.account} ${payload.server ?? ''}`)
-      broadcastToApps({ type: 'bridge_online', bridgeId, status: payload })
+      room.status = payload
+      log(`ブリッジ ${roomId} 名乗り: 口座=${payload.account} ${payload.server ?? ''}`)
+      broadcastToRoom(roomId, { type: 'bridge_online', bridgeId: roomId, status: payload })
       return
     }
 
     if (payload.type === 'status_update') {
-      const merged = { ...(lastStatus.get(bridgeId) ?? {}), ...payload }
-      lastStatus.set(bridgeId, merged)
-      log(`ブリッジ ${bridgeId} 口座更新: 口座=${payload.account} ${payload.server ?? ''}`)
-      broadcastToApps({ type: 'bridge_status', bridgeId, status: merged })
+      room.status = { ...(room.status ?? {}), ...payload }
+      log(`ブリッジ ${roomId} 口座更新: 口座=${payload.account} ${payload.server ?? ''}`)
+      broadcastToRoom(roomId, { type: 'bridge_status', bridgeId: roomId, status: room.status })
       return
     }
 
-    // 指令への応答。状態も更新しておく
     if (payload.type === 'ack') {
-      const merged = { ...(lastStatus.get(bridgeId) ?? {}), ...payload }
-      lastStatus.set(bridgeId, merged)
-      log(`ブリッジ ${bridgeId} 応答: ${payload.command} ok=${payload.ok} value=${payload.value}`)
+      room.status = { ...(room.status ?? {}), ...payload }
+      log(`ブリッジ ${roomId} 応答: ${payload.command} ok=${payload.ok} value=${payload.value}`)
     }
-    broadcastToApps({ ...payload, bridgeId })
+    broadcastToRoom(roomId, { ...payload, bridgeId: roomId })
   })
 
   const drop = (code) => {
     clearInterval(ping)
-    if (bridges.get(bridgeId) === ws) {
-      bridges.delete(bridgeId)
-      log(`ブリッジ切断: ${bridgeId} code=${code ?? ''}`)
-      broadcastToApps({ type: 'bridge_offline', bridgeId })
+    if (room.bridge === ws) {
+      room.bridge = null
+      log(`ブリッジ切断: ${roomId} code=${code ?? ''}`)
+      broadcastToRoom(roomId, { type: 'bridge_offline', bridgeId: roomId })
+      pruneRoom(roomId)
     }
   }
   ws.on('close', (code) => drop(code))
-  ws.on('error', (err) => log(`ブリッジ ${bridgeId} エラー: ${err.message}`))
+  ws.on('error', (err) => log(`ブリッジ ${roomId} エラー: ${err.message}`))
 }
 
-// ────────────────────────────────
-// ブラウザ側（管理画面）
-// ────────────────────────────────
-function handleApp(ws) {
-  apps.add(ws)
-  log(`画面が接続しました（現在 ${apps.size} 画面）`)
+function handleApp(ws, roomId) {
+  const room = roomOf(roomId)
+  room.apps.add(ws)
+  log(`画面が接続しました room=${roomId}（この部屋 ${room.apps.size} 画面）`)
 
-  // つないだ直後に、いまの状況を渡す
-  send(ws, { type: 'welcome', bridges: bridgeList() })
+  send(ws, {
+    type: 'welcome',
+    room: roomId,
+    bridges: room.bridge ? [{ bridgeId: roomId, online: true, ...(room.status ?? {}) }] : [],
+  })
 
   ws.on('message', (raw) => {
     let payload
@@ -168,9 +181,7 @@ function handleApp(ws) {
       return
     }
 
-    const targetId = payload.bridgeId || [...bridges.keys()][0]
-    const target = targetId ? bridges.get(targetId) : null
-
+    const target = room.bridge
     if (!target) {
       send(ws, {
         type: 'ack',
@@ -182,13 +193,14 @@ function handleApp(ws) {
       return
     }
 
-    log(`画面 → ブリッジ ${targetId}: ${payload.command} ${payload.name ?? ''} ${payload.value ?? ''}`)
-    send(target, payload)
+    log(`画面 → 部屋 ${roomId}: ${payload.command} ${payload.name ?? ''} ${payload.value ?? ''}`)
+    send(target, { ...payload, bridgeId: roomId })
   })
 
   const drop = () => {
-    apps.delete(ws)
-    log(`画面が切断しました（残り ${apps.size} 画面）`)
+    room.apps.delete(ws)
+    log(`画面が切断しました room=${roomId}（残り ${room.apps.size} 画面）`)
+    pruneRoom(roomId)
   }
   ws.on('close', drop)
   ws.on('error', drop)
@@ -198,7 +210,7 @@ server.listen(PORT, () => {
   log('='.repeat(56))
   log(`トレラボ中継サーバー 起動  ポート ${PORT}`)
   log(`  ブリッジ用 : ws://localhost:${PORT}/bridge`)
-  log(`  画面用     : ws://localhost:${PORT}/app`)
+  log(`  画面用     : ws://localhost:${PORT}/app?room=<会員ID>`)
   log(`  死活確認   : http://localhost:${PORT}/health`)
   log(TOKEN ? '  認証       : 有効' : '  認証       : なし（ローカル検証用）')
   log('='.repeat(56))

@@ -192,7 +192,7 @@ export function Lab() {
   // チュートリアルは会員ごとに初回だけ
   const [tutorial, setTutorial] = useState(() => !localStorage.getItem(tutorialKey))
   const { candles, price, dir, shocked, triggerShock } = useMarket()
-  const bridge = useBridge()
+  const bridge = useBridge(member?.id)
   const [news, setNews] = useState<NewsItem | null>(null)
   const [dialogueId, setDialogueId] = useState<string | null>(null)
 

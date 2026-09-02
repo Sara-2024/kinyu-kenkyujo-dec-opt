@@ -78,7 +78,7 @@ _LOCK_FH = None
 def acquire_instance_lock() -> None:
     """同じPCで bridge.py を二重起動すると、中継が切断と再接続を繰り返す。"""
     global _LOCK_FH
-    path = Path(os.environ.get("TEMP", ".")) / "trelab-bridge.lock"
+    path = Path(os.environ.get("TEMP", ".")) / "aitrader-bridge.lock"
     _LOCK_FH = open(path, "a+b")
     try:
         if os.name == "nt":

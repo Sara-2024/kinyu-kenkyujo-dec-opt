@@ -157,7 +157,7 @@ export function DialogueWindow({
       }
       setPhase('launching')
       setAiText('お使いのパソコンの接続ツールを呼び出しています。画面は出ません。裏側でMT5とつなぎます。')
-      launchConnector()
+      launchConnector(member?.id)
       return
     }
     const question = q.trim()
@@ -375,16 +375,16 @@ export function DialogueWindow({
     if (bridge.phase !== 'no_bridge') return
     if (reconnectTried.current) return
     reconnectTried.current = true
-    launchConnector()
+    launchConnector(member?.id)
     if (character.reconnecting) setAiText(character.reconnecting)
-  }, [character, phase, conn, bridge.live, bridge.phase])
+  }, [character, phase, conn, bridge.live, bridge.phase, member?.id])
 
   // 管理画面は ControlPanel 側で出すので、ここでは出さない（二重表示になる）
   const showBridgeBar =
     character.id === 'algo' && (phase === 'sent' || phase === 'connecting' || phase === 'done')
 
   const reconnect = () => {
-    launchConnector()
+    launchConnector(member?.id)
     if (character.reconnecting) setAiText(character.reconnecting)
   }
 

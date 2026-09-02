@@ -1,11 +1,11 @@
-' トレラボ 接続ツール（画面を出さずに起動する入口）
+' AIトレーダー 接続ツール（画面を出さずに起動する入口）
 '
 ' ダブルクリックしても黒い画面は出ません。中では connect.py が
 '   ・ログイン中の MT5 を見つける
 '   ・システム(EA)を配置してコンパイル
 '   ・ブリッジを裏側で起動して中継サーバーにつなぐ
-'   ・サイトのボタン(trelab://)とPC起動時の自動接続を登録
-' を順にやります。経過は %LOCALAPPDATA%\Trelab\connect.log に残ります。
+'   ・サイトのボタン(aitrader://)とPC起動時の自動接続を登録
+' を順にやります。経過は %LOCALAPPDATA%\AITrader\connect.log に残ります。
 
 Option Explicit
 Dim fso, shell, here, py, cmd, i
@@ -20,7 +20,7 @@ If Not fso.FileExists(py) Then py = "pythonw.exe"
 
 cmd = """" & py & """ """ & here & "\connect.py"" --silent"
 
-' trelab://connect のようにブラウザから渡ってくる引数をそのまま送る
+' aitrader://connect のようにブラウザから渡ってくる引数をそのまま送る
 For i = 0 To WScript.Arguments.Count - 1
   cmd = cmd & " """ & WScript.Arguments(i) & """"
 Next
