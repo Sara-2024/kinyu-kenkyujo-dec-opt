@@ -12,6 +12,7 @@ import { BridgeStatusBar } from './BridgeStatusBar'
 import { ControlPanel } from './ControlPanel'
 import type { useBridge } from '../hooks/useBridge'
 import { saveLead } from '../data/leads'
+import { useAuth } from '../hooks/AuthContext'
 import { formatBridgeError } from '../data/bridgeErrors'
 import {
   CONNECT_WAIT,
@@ -62,6 +63,7 @@ export function DialogueWindow({
   onClose: () => void
   bridge: ReturnType<typeof useBridge>
 }) {
+  const { member } = useAuth()
   const [aiText, setAiText] = useState(character.greeting)
   const [shown, setShown] = useState(0)
   const [input, setInput] = useState('')
@@ -78,6 +80,7 @@ export function DialogueWindow({
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const emailRef = useRef('')
+  const reconnectTried = useRef(false)
 
   const clearTimers = () => {
     timers.current.forEach(clearTimeout)
@@ -96,14 +99,11 @@ export function DialogueWindow({
     setChecks([])
     setError(null)
     setReport(null)
+    reconnectTried.current = false
 
     if (saved && character.id === 'algo') {
       setPhase('control')
-      setAiText(
-        saved.running
-          ? 'おかえりなさい。設定を変えるか、私に相談するか、上のボタンでお選びください。'
-          : 'おかえりなさい。いまは停止中です。再開もこの画面からどうぞ。',
-      )
+      setAiText(saved.running ? (character.returningRunning ?? character.greeting) : (character.returningStopped ?? character.greeting))
       return
     }
     setPhase('talk')
@@ -128,8 +128,11 @@ export function DialogueWindow({
   }, [aiText])
 
   useEffect(() => {
-    if (phase === 'email') inputRef.current?.focus()
-  }, [phase])
+    if (phase === 'email') {
+      if (member?.email && !input) setInput(member.email)
+      inputRef.current?.focus()
+    }
+  }, [phase, member?.email, input])
 
   const typing = shown < aiText.length
 
@@ -141,6 +144,11 @@ export function DialogueWindow({
       setInput('')
       setError(null)
       setReport(null)
+      if (member && !member.can_trade) {
+        setAiText('このアカウントでは自動売買の操作が許可されていません。運営に確認してください。')
+        return
+      }
+      emailRef.current = member?.email ?? emailRef.current
       // すでにつながっているPCなら、そのまま接続の確認へ進む
       if (bridge.live) {
         setPhase('connecting')
@@ -357,9 +365,28 @@ export function DialogueWindow({
     }
   }, [conn, bridge.live, bridge.status, character.id, phase])
 
+  // 連携済みで戻ってきたのにブリッジが切れている → 接続ツールを一度だけ呼び直す
+  useEffect(() => {
+    if (character.id !== 'algo' || phase !== 'control' || !conn) return
+    if (bridge.live) {
+      reconnectTried.current = false
+      return
+    }
+    if (bridge.phase !== 'no_bridge') return
+    if (reconnectTried.current) return
+    reconnectTried.current = true
+    launchConnector()
+    if (character.reconnecting) setAiText(character.reconnecting)
+  }, [character, phase, conn, bridge.live, bridge.phase])
+
+  // 管理画面は ControlPanel 側で出すので、ここでは出さない（二重表示になる）
   const showBridgeBar =
-    character.id === 'algo' &&
-    (phase === 'sent' || phase === 'connecting' || phase === 'done' || phase === 'control')
+    character.id === 'algo' && (phase === 'sent' || phase === 'connecting' || phase === 'done')
+
+  const reconnect = () => {
+    launchConnector()
+    if (character.reconnecting) setAiText(character.reconnecting)
+  }
 
   /** 連携後だけ出す「設定 / 相談」の切り替え */
   const canSwitch = !!conn && character.id === 'algo' && (phase === 'control' || phase === 'talk')
@@ -796,6 +823,7 @@ export function DialogueWindow({
           <ControlPanel
             bridge={bridge}
             conn={conn}
+            onReconnect={reconnect}
             onChange={(next) => {
               saveConnection(next)
               setConn(next)

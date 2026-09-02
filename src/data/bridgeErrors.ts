@@ -18,6 +18,5 @@ export interface BridgeError {
 }
 
 export function formatBridgeError(err: BridgeError): string {
-  const base = BRIDGE_ERRORS[err.code]
-  return err.detail ? `${err.code}: ${base} — ${err.detail}` : `${err.code}: ${base}`
+  return `${err.code}: ${BRIDGE_ERRORS[err.code]}`
 }

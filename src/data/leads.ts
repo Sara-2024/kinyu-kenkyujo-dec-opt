@@ -1,15 +1,12 @@
-import { supabase } from '../lib/supabase'
+import { memberSaveLead, readToken } from './auth'
 
-/** 接続フローで入力されたメールを Supabase に記録する。失敗しても UI は止めない。 */
+/** 接続フローで入力されたメールを、ログイン中の会員に紐づけて保存する。 */
 export async function saveLead(email: string): Promise<void> {
-  if (!supabase) return
+  const token = readToken()
+  if (!token) return
   try {
-    const { error } = await supabase.from('leads').insert({
-      email,
-      source: 'algo-connect',
-    })
-    if (error) console.warn('[leads]', error.message)
-  } catch {
-    // ネットワーク障害など。商談デモは localStorage 側で続行する。
+    await memberSaveLead(token, email)
+  } catch (error) {
+    console.warn('[leads]', error)
   }
 }

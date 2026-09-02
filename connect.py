@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -516,6 +517,47 @@ def relay_is_up() -> bool:
         return False
 
 
+def relay_bridge_count() -> int | None:
+    """ローカル中継に、いま何台のブリッジが乗っているか。届かなければ None。"""
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=1.5) as res:
+            data = json.loads(res.read().decode("utf-8", errors="replace"))
+            return int(data.get("bridges", 0))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def bridge_lock_path() -> Path:
+    return Path(os.environ.get("TEMP", "/tmp")) / "trelab-bridge.lock"
+
+
+def lock_pid() -> int | None:
+    path = bridge_lock_path()
+    if not path.is_file():
+        return None
+    try:
+        raw = path.read_text(encoding="ascii", errors="replace").strip()
+        return int(raw) if raw else None
+    except (OSError, ValueError):
+        return None
+
+
+def stop_stale_bridge() -> None:
+    """ロックは残っているが中継に乗っていないプロセスを終了する。"""
+    pid = lock_pid()
+    if pid is None:
+        return
+    log(f"中継に乗っていないブリッジ (pid={pid}) を終了します")
+    if os.name == "nt":
+        run_hidden(["taskkill", "/PID", str(pid), "/F"])
+    else:
+        try:
+            os.kill(pid, 15)
+        except OSError as exc:
+            log(f"終了できませんでした: {exc}")
+    time.sleep(0.6)
+
+
 def start_relay() -> None:
     """本番の中継はクラウド側にあるので、ここが動くのは検証用のローカルだけ。"""
     if not (SERVER_DIR / "index.js").is_file():
@@ -530,7 +572,7 @@ def start_relay() -> None:
 
 def bridge_already_running() -> bool:
     """bridge.py は二重起動をロックで弾く。ロックが取れなければ動いている。"""
-    lock = Path(os.environ.get("TEMP", "/tmp")) / "trelab-bridge.lock"
+    lock = bridge_lock_path()
     if not lock.is_file():
         return False
     try:
@@ -567,8 +609,15 @@ def bridge_env(session: dict | None) -> dict[str, str]:
 
 def start_bridge(session: dict | None = None) -> None:
     if bridge_already_running():
-        log("ブリッジはすでに動いています")
-        return
+        # プロセスは生きていても、中継に乗っていなければ E003 のままになる
+        if relay_is_local(relay_url()) and relay_is_up() and relay_bridge_count() == 0:
+            stop_stale_bridge()
+        else:
+            log("ブリッジはすでに動いています")
+            return
+        if bridge_already_running():
+            log("古いブリッジを終了できませんでした")
+            return
     if FROZEN:
         cmd = [sys.executable, "--run-bridge"]
     else:

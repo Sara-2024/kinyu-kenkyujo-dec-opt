@@ -104,6 +104,7 @@ export function useBridge() {
   const setErr = (code: BridgeErrorCode, detail?: string) => {
     setError({ code, detail })
     setPhase(code === 'E003' || code === 'E004' ? 'no_bridge' : 'error')
+    if (detail) console.warn(`[bridge] ${code}`, detail)
   }
 
   useEffect(() => {

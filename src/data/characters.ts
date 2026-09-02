@@ -29,6 +29,12 @@ export interface Character {
   fallback: string
   /** 連携後に出す選択肢（設定がすんだ人向け） */
   connectedChoices?: string[]
+  /** 連携済みで、前回が稼働中のまま戻ってきたとき */
+  returningRunning?: string
+  /** 連携済みで、前回が停止中のまま戻ってきたとき */
+  returningStopped?: string
+  /** 連携済みなのにブリッジが切れているとき */
+  reconnecting?: string
   color: string
   look: Look
 }
@@ -60,6 +66,11 @@ export const CHARACTERS: Record<string, Character> = {
     role: '自動売買',
     greeting:
       'アルゴです。自動売買の担当をしています。設定から日々の運用まで、面倒なところはすべて私にお任せください。',
+    returningRunning:
+      'おかえりなさい。設定を変えるか、私に相談するか、上のボタンでお選びください。',
+    returningStopped: 'おかえりなさい。いまは停止中です。再開もこの画面からどうぞ。',
+    reconnecting:
+      '接続が切れているようです。接続ツールを呼び出しています。つながったら、この画面から再開できます。',
     color: '#facc15',
     look: {
       skin: '#f5c9a2',

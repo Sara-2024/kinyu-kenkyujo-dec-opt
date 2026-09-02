@@ -2,7 +2,30 @@
 // 一度つないだら、次からは設定のやり直しではなく管理画面に入る。
 import { defaultSettings, settingsFromGate } from './eaSettings'
 
-const KEY = 'trelab-connection'
+const LEGACY_KEY = 'trelab-connection'
+
+let ownerId: string | null = null
+let persist: ((conn: Connection | null) => void) | null = null
+
+function storageKey(): string {
+  return ownerId ? `${LEGACY_KEY}:${ownerId}` : `${LEGACY_KEY}:none`
+}
+
+/** ログイン中の会員に紐づける。他の人の保存データは読まない。 */
+export function setConnectionOwner(memberId: string | null): void {
+  ownerId = memberId
+}
+
+export function setConnectionPersist(fn: ((conn: Connection | null) => void) | null): void {
+  persist = fn
+}
+
+function parseConnection(raw: string): Connection | null {
+  const parsed = JSON.parse(raw) as Connection
+  if (parsed.account === '70418552') return null
+  parsed.settings = { ...defaultSettings(), ...(parsed.settings ?? {}) }
+  return parsed
+}
 
 export interface Connection {
   email: string
@@ -14,34 +37,44 @@ export interface Connection {
 }
 
 export function loadConnection(): Connection | null {
+  if (!ownerId) return null
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(storageKey())
     if (!raw) return null
-    const parsed = JSON.parse(raw) as Connection
-    // 以前の画面が埋め込んでいたダミー口座は、実接続とみなさない
-    if (parsed.account === '70418552') return null
-    // 設定項目が増えた場合に備えて既定値で埋める
-    parsed.settings = { ...defaultSettings(), ...(parsed.settings ?? {}) }
+    return parseConnection(raw)
+  } catch {
+    return null
+  }
+}
+
+export function applyRemoteConnection(raw: unknown): Connection | null {
+  if (!raw || typeof raw !== 'object') return null
+  try {
+    const parsed = parseConnection(JSON.stringify(raw))
+    if (!parsed) return null
+    saveConnection(parsed, { skipRemote: true })
     return parsed
   } catch {
     return null
   }
 }
 
-export function saveConnection(conn: Connection): void {
+export function saveConnection(conn: Connection, opts?: { skipRemote?: boolean }): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(conn))
+    localStorage.setItem(storageKey(), JSON.stringify(conn))
   } catch {
     // 保存できなくても操作は続けられるようにする
   }
+  if (!opts?.skipRemote) persist?.(conn)
 }
 
 export function clearConnection(): void {
   try {
-    localStorage.removeItem(KEY)
+    localStorage.removeItem(storageKey())
   } catch {
     // 同上
   }
+  persist?.(null)
 }
 
 export function newConnection(

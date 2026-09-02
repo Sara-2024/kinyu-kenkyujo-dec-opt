@@ -1,0 +1,286 @@
+import { useEffect, useState } from 'react'
+import { Link, Navigate } from 'react-router-dom'
+import {
+  adminListMembers,
+  adminSetEntryPassword,
+  adminSetPassword,
+  adminUpdateMember,
+  authErrorMessage,
+  type Member,
+  type MemberRole,
+  type MemberStatus,
+} from '../data/auth'
+import { useAuth } from '../hooks/AuthContext'
+
+export function Admin() {
+  const { member, token, ready } = useAuth()
+  const [rows, setRows] = useState<Member[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [entry, setEntry] = useState('')
+  const [pwTarget, setPwTarget] = useState<Member | null>(null)
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'auto'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  const reload = async () => {
+    if (!token) return
+    try {
+      setRows(await adminListMembers(token))
+    } catch (err) {
+      setError(authErrorMessage(err))
+    }
+  }
+
+  useEffect(() => {
+    if (ready && member?.role === 'admin' && token) void reload()
+  }, [ready, member, token])
+
+  if (ready && !member) return <Navigate to="/login" replace />
+  if (ready && member && member.role !== 'admin') return <Navigate to="/" replace />
+
+  const act = async (id: string, run: () => Promise<void>) => {
+    if (!token) return
+    setBusyId(id)
+    setError(null)
+    try {
+      await run()
+      await reload()
+    } catch (err) {
+      setError(authErrorMessage(err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const changeRole = (row: Member, role: MemberRole) =>
+    act(row.id, async () => {
+      await adminUpdateMember(token!, row.id, { role })
+    })
+  const changeStatus = (row: Member, status: MemberStatus) =>
+    act(row.id, async () => {
+      await adminUpdateMember(token!, row.id, { status })
+    })
+  const changeTrade = (row: Member, can_trade: boolean) =>
+    act(row.id, async () => {
+      await adminUpdateMember(token!, row.id, { can_trade })
+    })
+
+  const savePassword = async () => {
+    if (!pwTarget || !token) return
+    if (pw1 !== pw2) {
+      setError('パスワード（確認）が一致しません。')
+      return
+    }
+    await act(pwTarget.id, () => adminSetPassword(token, pwTarget.id, pw1))
+    setPwTarget(null)
+    setPw1('')
+    setPw2('')
+  }
+
+  const saveEntry = async () => {
+    if (!token) return
+    await act('entry', () => adminSetEntryPassword(token, entry))
+    setEntry('')
+  }
+
+  return (
+    <div className="min-h-screen px-6 py-6" style={{ background: '#070b14', color: '#e8edf5' }}>
+      <div className="mx-auto max-w-[1100px]">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="h-4 w-[3px]" style={{ background: 'var(--accent)' }} />
+          <h1 className="text-[22px] font-bold">管理者画面</h1>
+          <Link to="/" className="ml-auto text-[15px] font-bold" style={{ color: 'var(--accent)' }}>
+            研究所へ戻る
+          </Link>
+        </div>
+        <p className="mt-2 text-[15px] text-slate-400">
+          利用中のアカウント一覧です。権限の付与と、パスワード忘れの再設定ができます。
+        </p>
+
+        {error && (
+          <p className="mt-4 text-[15px]" style={{ color: '#ff8484' }}>
+            {error}
+          </p>
+        )}
+
+        <div
+          className="mt-5 overflow-x-auto rounded-[4px] border"
+          style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
+        >
+          <table className="w-full min-w-[860px] text-left text-[15px]">
+            <thead>
+              <tr className="border-b text-slate-400" style={{ borderColor: 'var(--panel-border)' }}>
+                <th className="px-3 py-3 font-bold">メール</th>
+                <th className="px-3 py-3 font-bold">権限</th>
+                <th className="px-3 py-3 font-bold">状態</th>
+                <th className="px-3 py-3 font-bold">自動売買</th>
+                <th className="px-3 py-3 font-bold">MT5口座</th>
+                <th className="px-3 py-3 font-bold">最終ログイン</th>
+                <th className="px-3 py-3 font-bold">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-b" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
+                  <td className="px-3 py-3">
+                    {row.email}
+                    {row.id === member?.id ? (
+                      <span className="ml-2 text-[12px] text-slate-500">自分</span>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-3">{row.role === 'admin' ? '管理者' : '一般'}</td>
+                  <td className="px-3 py-3">{row.status === 'active' ? '利用中' : '停止'}</td>
+                  <td className="px-3 py-3">{row.can_trade ? '許可' : '不可'}</td>
+                  <td className="px-3 py-3 text-slate-300">
+                    {row.account ? `${row.account} / ${row.server ?? ''}` : '—'}
+                  </td>
+                  <td className="px-3 py-3 text-slate-400">
+                    {row.last_login_at ? new Date(row.last_login_at).toLocaleString('ja-JP') : '—'}
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Mini
+                        disabled={busyId === row.id}
+                        onClick={() => void changeRole(row, row.role === 'admin' ? 'user' : 'admin')}
+                      >
+                        {row.role === 'admin' ? '一般にする' : '管理者にする'}
+                      </Mini>
+                      <Mini
+                        disabled={busyId === row.id}
+                        onClick={() => void changeStatus(row, row.status === 'active' ? 'suspended' : 'active')}
+                      >
+                        {row.status === 'active' ? '停止' : '再開'}
+                      </Mini>
+                      <Mini
+                        disabled={busyId === row.id}
+                        onClick={() => void changeTrade(row, !row.can_trade)}
+                      >
+                        {row.can_trade ? '売買を止める' : '売買を許可'}
+                      </Mini>
+                      <Mini
+                        disabled={busyId === row.id}
+                        onClick={() => {
+                          setPwTarget(row)
+                          setPw1('')
+                          setPw2('')
+                          setError(null)
+                        }}
+                      >
+                        パスワード変更
+                      </Mini>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                    まだアカウントがありません。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {pwTarget && (
+          <div
+            className="mt-5 rounded-[4px] border px-5 py-5"
+            style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
+          >
+            <p className="text-[16px] font-bold">パスワードを変更 — {pwTarget.email}</p>
+            <p className="mt-1 text-[14px] text-slate-400">変更すると、その人は再ログインが必要になります。</p>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-[14px]">新しいパスワード</span>
+                <input
+                  type="password"
+                  value={pw1}
+                  onChange={(e) => setPw1(e.target.value)}
+                  className="h-11 w-56 rounded-[4px] border px-3 text-[15px]"
+                  style={{ background: 'rgba(8,14,26,0.9)', borderColor: 'var(--panel-border)' }}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[14px]">確認</span>
+                <input
+                  type="password"
+                  value={pw2}
+                  onChange={(e) => setPw2(e.target.value)}
+                  className="h-11 w-56 rounded-[4px] border px-3 text-[15px]"
+                  style={{ background: 'rgba(8,14,26,0.9)', borderColor: 'var(--panel-border)' }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => void savePassword()}
+                className="h-11 rounded-[4px] px-5 text-[15px] font-bold text-[#081018]"
+                style={{ background: 'var(--accent)' }}
+              >
+                変更する
+              </button>
+              <button type="button" onClick={() => setPwTarget(null)} className="h-11 px-3 text-[15px] text-slate-400">
+                キャンセル
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div
+          className="mt-5 rounded-[4px] border px-5 py-5"
+          style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
+        >
+          <p className="text-[16px] font-bold">入場パスワード</p>
+          <p className="mt-1 text-[14px] text-slate-400">新規登録のときに使う合言葉です。8文字以上。</p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <input
+              type="password"
+              value={entry}
+              onChange={(e) => setEntry(e.target.value)}
+              className="h-11 w-64 rounded-[4px] border px-3 text-[15px]"
+              style={{ background: 'rgba(8,14,26,0.9)', borderColor: 'var(--panel-border)' }}
+            />
+            <button
+              type="button"
+              onClick={() => void saveEntry()}
+              className="h-11 rounded-[4px] px-5 text-[15px] font-bold text-[#081018]"
+              style={{ background: 'var(--accent)' }}
+            >
+              入場パスワードを更新
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Mini({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: string
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="h-11 rounded-[4px] border px-3 text-[13px] font-bold text-slate-100 disabled:opacity-40"
+      style={{ borderColor: 'var(--panel-border)', background: 'rgba(8,14,26,0.7)' }}
+    >
+      {children}
+    </button>
+  )
+}

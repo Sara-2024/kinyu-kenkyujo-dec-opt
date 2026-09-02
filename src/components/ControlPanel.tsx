@@ -14,11 +14,13 @@ export function ControlPanel({
   conn,
   onChange,
   onReset,
+  onReconnect,
   bridge,
 }: {
   conn: Connection
   onChange: (next: Connection) => void
   onReset: () => void
+  onReconnect?: () => void
   bridge: ReturnType<typeof useBridge>
 }) {
   const [draft, setDraft] = useState<Record<string, number>>(conn.settings)
@@ -46,6 +48,10 @@ export function ControlPanel({
 
     if (!bridge.live) {
       setSending(false)
+      if (onReconnect) {
+        onReconnect()
+        return
+      }
       setFailed(bridge.error ? formatBridgeError(bridge.error) : 'E008: MT5 未接続')
       return
     }
@@ -83,7 +89,7 @@ export function ControlPanel({
 
   return (
     <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
-      <BridgeStatusBar bridge={bridge} />
+      <BridgeStatusBar bridge={bridge} onReconnect={onReconnect} />
       {/* ── 稼働状態 ── */}
       <div
         className="mb-4 flex flex-wrap items-center gap-4 rounded-[6px] border px-5 py-4"
@@ -107,6 +113,10 @@ export function ControlPanel({
           onClick={async () => {
             const next = !running
             if (!bridge.live) {
+              if (onReconnect) {
+                onReconnect()
+                return
+              }
               setFailed(bridge.error ? formatBridgeError(bridge.error) : 'E008: MT5 未接続')
               return
             }

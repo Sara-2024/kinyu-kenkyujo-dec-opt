@@ -7,10 +7,12 @@
 //    AI通知が研究員の頭上に随時ポップアップする
 // ---------------------------------------------------------------
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { DialogueWindow } from '../components/DialogueWindow'
 import { PixelPerson } from '../components/PixelPerson'
 import { BigChart, CodePanel, Desk, DeskMonitor, ServerRack, StatusMonitor, ToolBox } from '../components/Panels'
 import { CHARACTERS, type Character } from '../data/characters'
+import { useAuth } from '../hooks/AuthContext'
 import { useBridge } from '../hooks/useBridge'
 import { useMarket } from '../hooks/useMarket'
 
@@ -185,8 +187,10 @@ function ZoneHeader({ zone, extra }: { zone: (typeof ZONES)[keyof typeof ZONES];
 }
 
 export function Lab() {
-  // チュートリアルは初回訪問時のみ
-  const [tutorial, setTutorial] = useState(() => !localStorage.getItem('lab-tutorial-done'))
+  const { member, logout } = useAuth()
+  const tutorialKey = member ? `lab-tutorial-done:${member.id}` : 'lab-tutorial-done'
+  // チュートリアルは会員ごとに初回だけ
+  const [tutorial, setTutorial] = useState(() => !localStorage.getItem(tutorialKey))
   const { candles, price, dir, shocked, triggerShock } = useMarket()
   const bridge = useBridge()
   const [news, setNews] = useState<NewsItem | null>(null)
@@ -288,10 +292,10 @@ export function Lab() {
       setDialogueId(id)
       if (tutorial) {
         setTutorial(false)
-        localStorage.setItem('lab-tutorial-done', '1')
+        localStorage.setItem(tutorialKey, '1')
       }
     },
-    [tutorial, base],
+    [tutorial, base, tutorialKey],
   )
 
   const closeDialogue = useCallback(() => {
@@ -370,6 +374,26 @@ export function Lab() {
         >
           ⚡ 急変動シミュレート
         </button>
+        <div className="ml-3 flex items-center gap-2">
+          <span className="hidden max-w-[12rem] truncate text-[13px] text-slate-400 lg:inline">{member?.email}</span>
+          {member?.role === 'admin' && (
+            <Link
+              to="/admin"
+              className="flex h-11 items-center rounded-[4px] border px-3 text-[13px] font-bold text-slate-100"
+              style={{ borderColor: 'var(--panel-border)', background: 'rgba(8,14,26,0.8)' }}
+            >
+              管理者
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="h-11 rounded-[4px] border px-3 text-[13px] font-bold text-slate-100"
+            style={{ borderColor: 'var(--panel-border)', background: 'rgba(8,14,26,0.8)' }}
+          >
+            ログアウト
+          </button>
+        </div>
       </header>
 
       {/* ================= ビュー（パン・ズームの受け皿） ================= */}

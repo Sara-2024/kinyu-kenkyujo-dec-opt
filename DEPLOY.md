@@ -27,8 +27,8 @@
 | キー | 値 |
 |------|-----|
 | `VITE_RELAY_URL` | `wss://kinyu-relay.onrender.com/app` |
-| `VITE_SUPABASE_URL` | （任意）Supabase Project URL |
-| `VITE_SUPABASE_ANON_KEY` | （任意）Supabase anon key |
+| `VITE_SUPABASE_URL` | Supabase Project URL（ログインに必須） |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key（ログインに必須） |
 
 ```bash
 vercel env add VITE_RELAY_URL production
