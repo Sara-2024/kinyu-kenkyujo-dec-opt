@@ -33,7 +33,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable
@@ -161,6 +161,8 @@ class Config:
 
     # 見張り
     watchdog_interval: float = field(default_factory=lambda: _env_float("WATCHDOG_INTERVAL_SEC", 30.0))
+    # 口座の数字（残高・建玉・今日の成績）を画面へ送り直す間隔
+    push_interval: float = field(default_factory=lambda: _env_float("PUSH_INTERVAL_SEC", 5.0))
     reassert: bool = field(default_factory=lambda: _env_bool("REASSERT_STATE", True))
     # 0 より大きいと、その秒数だけ切断が続いた時に自動で売買を止める（デッドマンスイッチ）
     failsafe_sec: float = field(default_factory=lambda: _env_float("FAILSAFE_DISCONNECT_SEC", 0.0))
@@ -201,8 +203,13 @@ class MT5Controller:
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mt5")
         self._lock = asyncio.Lock()
         self.ready = False
-        # 「サーバーから最後に指示された状態」。再接続や再起動のあとで復元する
+        # 「サーバーから最後に指示された状態」。再接続や再起動のあとで復元する。
+        # 起動時は adopt_current_state() で MT5 側の実際の値を引き継ぐので、
+        # ここでの初期値は「MT5 側にも記録が無かったとき」だけ使われる。
         self.desired_value: float = cfg.gv_default
+        # ブローカーのサーバー時刻と UTC の差（秒）。履歴の日付はこれで判断する
+        self._server_offset: int = 0
+        self._server_offset_at: float = 0.0
 
     async def _call(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """ブロッキングなMT5呼び出しを専用スレッドで実行する"""
@@ -358,6 +365,32 @@ class MT5Controller:
         async with self._lock:
             return await self._call(self._get_gv_blocking, name)
 
+    async def adopt_current_state(self) -> float:
+        """起動時は MT5 側にある値を正とする。
+
+        ここで既定値を書いてしまうと、お客様が「停止」にしていても
+        ブリッジを立ち上げ直すたびに勝手に稼働中へ戻ってしまう。
+        """
+        current = await self.get_variable(self.cfg.gv_name)
+        if current is not None:
+            self.desired_value = float(current)
+            log.info(
+                "いまの売買フラグを引き継ぎます: %s = %s (%s)",
+                self.cfg.gv_name,
+                self.desired_value,
+                "稼働許可" if self.desired_value != 0 else "停止中",
+            )
+            return self.desired_value
+
+        self.desired_value = float(self.cfg.gv_default)
+        log.info(
+            "売買フラグの記録が無いので初期値を書きます: %s = %s",
+            self.cfg.gv_name,
+            self.desired_value,
+        )
+        await self.set_variable(self.cfg.gv_name, self.desired_value)
+        return self.desired_value
+
     async def set_trading(self, allowed: bool) -> tuple[bool, float | None]:
         value = 1.0 if allowed else 0.0
         self.desired_value = value
@@ -390,6 +423,78 @@ class MT5Controller:
             "ea_compiled": compiled,
             "ea_installed": len(found) > 0,
         }
+
+    # ---------- 時刻 ----------
+    # MT5 は約定やティックの時刻を「ブローカーのサーバー時計」で持っている。
+    # Python の datetime.now() をそのまま渡すと、日本時間との差のぶんだけ
+    # 窓がずれて、直近の取引が丸ごと抜け落ちる（手動の売買が出てこない原因）。
+    def _server_offset_blocking(self) -> int:
+        """サーバー時計と UTC の差（秒）。気配値の時刻から割り出す。"""
+        now = time.time()
+        if self._server_offset_at and now - self._server_offset_at < 600:
+            return self._server_offset
+
+        candidates: list[str] = []
+        try:
+            candidates += [str(getattr(p, "symbol", "")) for p in (mt5.positions_get() or ())]
+        except Exception:  # noqa: BLE001
+            pass
+        candidates += ["USDJPY", "EURUSD", "GBPUSD", "XAUUSD"]
+
+        for symbol in [c for c in candidates if c]:
+            try:
+                info = mt5.symbol_info(symbol)
+                if info is None:
+                    continue
+                if not getattr(info, "visible", True):
+                    mt5.symbol_select(symbol, True)
+                tick = mt5.symbol_info_tick(symbol)
+                stamp = int(getattr(tick, "time", 0) or 0)
+                if not stamp:
+                    continue
+                offset = stamp - int(now)
+                # 週末は最後のティックが古いので、常識的な時差の範囲だけ信じる
+                if abs(offset) <= 14 * 3600:
+                    self._server_offset = int(round(offset / 900.0) * 900)
+                    self._server_offset_at = now
+                    log.debug("サーバー時計との差: %+d 分 (%s)", self._server_offset // 60, symbol)
+                    return self._server_offset
+            except Exception:  # noqa: BLE001
+                continue
+
+        # 分からないときは UTC とみなす（前回の値があればそれを使う）
+        self._server_offset_at = now
+        return self._server_offset
+
+    def _server_now(self) -> datetime:
+        """ブローカーの時計でのいま。MT5 の履歴画面と同じ時刻。"""
+        return datetime.fromtimestamp(time.time() + self._server_offset_blocking(), tz=timezone.utc).replace(tzinfo=None)
+
+    @staticmethod
+    def _server_dt(stamp: int) -> datetime:
+        """約定時刻（サーバー時計）を datetime にする"""
+        return datetime.fromtimestamp(int(stamp), tz=timezone.utc).replace(tzinfo=None)
+
+    def _deals_between(self, start: datetime, end: datetime) -> list[Any]:
+        """サーバー時計の [start, end] に入る約定。
+
+        MT5 に渡す窓は前後1日ぶん広げ、絞り込みは Python 側で行う。
+        こうすると、時差の扱いが環境で違っても取りこぼさない。
+        """
+        try:
+            rows = mt5.history_deals_get(start - timedelta(days=1), end + timedelta(days=1)) or ()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("約定履歴を読めません: %s", exc)
+            return []
+        out = []
+        for deal in rows:
+            stamp = int(getattr(deal, "time", 0) or 0)
+            if not stamp:
+                continue
+            when = self._server_dt(stamp)
+            if start <= when <= end:
+                out.append(deal)
+        return out
 
     def _digits_blocking(self, symbol: str, cache: dict[str, int]) -> int:
         """小数点以下の桁数。銘柄ごとに一度だけ問い合わせる。"""
@@ -431,7 +536,7 @@ class MT5Controller:
                     "profit": round(float(getattr(pos, "profit", 0) or 0), 2),
                     "swap": round(float(getattr(pos, "swap", 0) or 0), 2),
                     "digits": self._digits_blocking(symbol, cache),
-                    "opened_at": datetime.fromtimestamp(opened).isoformat(timespec="minutes") if opened else "",
+                    "opened_at": self._server_dt(opened).isoformat(timespec="minutes") if opened else "",
                 }
             )
         rows.sort(key=lambda r: r["opened_at"], reverse=True)
@@ -456,9 +561,9 @@ class MT5Controller:
             "daily": [],
         }
         try:
-            now = datetime.now()
+            now = self._server_now()
             start = (now - timedelta(days=span - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            deals = mt5.history_deals_get(start, now) or ()
+            deals = self._deals_between(start, now)
             entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
             entry_out_by = getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)
             type_buy = getattr(mt5, "DEAL_TYPE_BUY", 0)
@@ -493,7 +598,7 @@ class MT5Controller:
                 best = max(best, p)
                 worst = min(worst, p)
                 stamp = int(getattr(deal, "time", 0) or 0)
-                key = datetime.fromtimestamp(stamp).strftime("%Y-%m-%d") if stamp else start.strftime("%Y-%m-%d")
+                key = self._server_dt(stamp).strftime("%Y-%m-%d") if stamp else start.strftime("%Y-%m-%d")
                 row = per_day.setdefault(key, {"date": key, "closed": 0, "profit": 0.0})
                 row["closed"] += 1
                 row["profit"] += p
@@ -529,9 +634,9 @@ class MT5Controller:
             "open_profit": 0.0,
         }
         try:
-            now = datetime.now()
+            now = self._server_now()
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            deals = mt5.history_deals_get(start, now) or ()
+            deals = self._deals_between(start, now)
             entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
             entry_out_by = getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)
             type_buy = getattr(mt5, "DEAL_TYPE_BUY", 0)
@@ -604,13 +709,9 @@ class MT5Controller:
         except (TypeError, ValueError):
             cap = 500
 
-        try:
-            now = datetime.now()
-            start = (now - timedelta(days=span)).replace(hour=0, minute=0, second=0, microsecond=0)
-            deals = mt5.history_deals_get(start, now) or ()
-        except Exception as exc:  # noqa: BLE001
-            log.warning("約定履歴を読めません: %s", exc)
-            return {"days": span, "trades": [], "total": 0, "truncated": False}
+        now = self._server_now()
+        start = (now - timedelta(days=span)).replace(hour=0, minute=0, second=0, microsecond=0)
+        deals = self._deals_between(start, now)
 
         entry_in = getattr(mt5, "DEAL_ENTRY_IN", 0)
         entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
@@ -670,8 +771,8 @@ class MT5Controller:
                     "close_price": close_price,
                     "digits": self._digits_blocking(symbol, cache),
                     "profit": round(profit, 2),
-                    "opened_at": datetime.fromtimestamp(opened).isoformat(timespec="minutes") if opened else "",
-                    "closed_at": datetime.fromtimestamp(closed).isoformat(timespec="minutes") if closed else "",
+                    "opened_at": self._server_dt(opened).isoformat(timespec="minutes") if opened else "",
+                    "closed_at": self._server_dt(closed).isoformat(timespec="minutes") if closed else "",
                     "held_sec": max(0, closed - opened),
                     "by_system": bool(g["magic"]),
                 }
@@ -688,13 +789,15 @@ class MT5Controller:
             "trades": trades[:cap],
         }
 
-    async def status(self, *, include_today: bool = False) -> dict[str, Any]:
+    async def status(self, *, include_today: bool = False, include_probe: bool = True) -> dict[str, Any]:
         info = await self._call(mt5.account_info) if self.ready else None
         term = await self._call(mt5.terminal_info) if self.ready else None
-        probe = await self._call(self._ea_probe_blocking) if self.ready else {}
+        probe = await self._call(self._ea_probe_blocking) if (self.ready and include_probe) else {}
         gate = await self._call(self._load_gate) if self.ready else {}
         today = await self._call(self._today_stats_blocking) if (self.ready and include_today) else {}
+        server_now = await self._call(self._server_now) if self.ready else None
         return {
+            "server_time": server_now.isoformat(timespec="seconds") if server_now else None,
             "mt5_ready": self.ready,
             "variable": self.cfg.gv_name,
             "value": await self.get_variable(self.cfg.gv_name),
@@ -871,8 +974,8 @@ class Bridge:
         self.connected_since = time.time()
         self._failsafe_fired = False
         self._active_ws = ws
-        status = await self.mt.status()
-        self._status_key = f"{status.get('account')}:{status.get('server')}"
+        status = await self.mt.status(include_today=True)
+        self._status_key = self._status_fingerprint(status)
         await self._send(
             ws,
             {
@@ -885,16 +988,42 @@ class Bridge:
         )
         log.info("トレラボに接続しました: %s", self.cfg.ws_url)
 
+    @staticmethod
+    def _status_fingerprint(status: dict[str, Any]) -> str:
+        """画面に出る数字が動いたかどうかの目印"""
+        today = status.get("today") or {}
+        return "|".join(
+            str(x)
+            for x in (
+                status.get("account"),
+                status.get("server"),
+                status.get("value"),
+                status.get("balance"),
+                status.get("equity"),
+                today.get("today_closed"),
+                today.get("today_profit"),
+                today.get("open_positions"),
+                today.get("open_profit"),
+            )
+        )
+
     async def _push_status_if_changed(self) -> None:
+        """口座の数字が動いたら画面へ送り直す。
+
+        建玉や損益は、こちらから送らないと画面が古いままになる。
+        手動の売買もここで拾われる（EA かどうかは関係ない）。
+        """
         ws = self._active_ws
         if ws is None or not self.mt.ready:
             return
-        status = await self.mt.status()
-        key = f"{status.get('account')}:{status.get('server')}"
+        status = await self.mt.status(include_today=True, include_probe=False)
+        key = self._status_fingerprint(status)
         if key == self._status_key:
             return
+        account_changed = self._status_key.split("|")[:2] != key.split("|")[:2]
         self._status_key = key
-        log.info("MT5 口座が切り替わりました: %s", key)
+        if account_changed:
+            log.info("MT5 口座が切り替わりました: %s / %s", status.get("account"), status.get("server"))
         await self._send(
             ws,
             {
@@ -977,6 +1106,24 @@ class Bridge:
             await _sleep_or_stop(delay, self.stop)
 
     # ---------- 見張り ----------
+    async def status_pusher(self) -> None:
+        """口座の数字が動いていないか、数秒おきに見て、動いていたら画面へ送る。
+
+        画面から聞かれるのを待たずに送るので、手動でエントリー／決済しても
+        そのまま反映される。
+        """
+        interval = max(1.0, self.cfg.push_interval)
+        while not self.stop.is_set():
+            await _sleep_or_stop(interval, self.stop)
+            if self.stop.is_set():
+                break
+            try:
+                await self._push_status_if_changed()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                log.debug("状態の送信で例外: %s", exc)
+
     async def watchdog(self) -> None:
         """
         定期的に
@@ -1038,21 +1185,25 @@ class Bridge:
         await self.mt.connect_with_retry(self.stop)
         if self.stop.is_set():
             return
-        # 起動直後の状態を確定させておく（EAが不定値を読まないように）
+        # 起動直後は、MT5 側にある値をそのまま引き継ぐ。
+        # 勝手に稼働中へ戻さないための要。記録が無いときだけ初期値を書く。
         try:
-            await self.mt.set_variable(self.cfg.gv_name, self.mt.desired_value)
+            await self.mt.adopt_current_state()
         except Exception as exc:  # noqa: BLE001
-            log.exception("起動時の指令書き込みに失敗しました（中継への接続は続けます）: %s", exc)
+            log.exception("起動時の状態引き継ぎに失敗しました（中継への接続は続けます）: %s", exc)
 
         watchdog = asyncio.create_task(self.watchdog(), name="watchdog")
+        pusher = asyncio.create_task(self.status_pusher(), name="pusher")
         try:
             await self.ws_loop()
         finally:
-            watchdog.cancel()
-            try:
-                await watchdog
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                pass
+            for task in (watchdog, pusher):
+                task.cancel()
+            for task in (watchdog, pusher):
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                    pass
             await self.mt.shutdown()
             log.info("ブリッジを終了しました")
 

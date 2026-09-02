@@ -4,7 +4,7 @@
 // 「おまかせ接続」モードを併せ持つ。
 // 売りたいのは “設定はAIが代わりに全部やる” という体験なので、
 // お客様に入力していただくのは連絡先だけ。残りはAIが順に片づける様子を見せる。
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Character } from '../data/characters'
 import { clearConnection, loadConnection, newConnection, saveConnection, applyBridgeToConnection, connectionMatchesBridge, connectionAccountKey, type Connection } from '../data/connection'
 import { settingsFromGate } from '../data/eaSettings'
@@ -46,6 +46,9 @@ const HISTORY_DAYS = 30
 /** 添削はもう少し長く見る */
 const REVIEW_DAYS = 180
 
+/** 開いたままの表示を取り直す間隔 */
+const LIVE_REFRESH_MS = 5_000
+
 /** 呼び出し中に見せる、接続ツールの仕事 */
 const CONNECTOR_STEPS = [
   'ログイン中のMT5を探しています',
@@ -76,6 +79,7 @@ export function DialogueWindow({
   const [error, setError] = useState<string | null>(null)
   const [conn, setConn] = useState<Connection | null>(() => loadConnection())
   const [report, setReport] = useState<LiveReport | null>(null)
+  const [reportAt, setReportAt] = useState<Date | null>(null)
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
@@ -136,6 +140,59 @@ export function DialogueWindow({
 
   const typing = shown < aiText.length
 
+  // ── MT5 から実データを取る（会話からも、開いたままの自動更新からも使う）──
+  const fetchLive = useCallback(
+    async (kind: LiveReport['kind']): Promise<{ report: LiveReport; text: string } | null> => {
+      if (kind === 'today') {
+        const ack = await bridge.send('get_status')
+        if (!ack.ok || !ack.today) return null
+        return { report: { kind: 'today', today: ack.today, currency: ack.currency }, text: formatTodayAnswer(ack) }
+      }
+      if (kind === 'history') {
+        const ack = await bridge.send('get_history', { days: HISTORY_DAYS })
+        if (!ack.ok || !ack.history) return null
+        return {
+          report: { kind: 'history', history: ack.history, currency: ack.currency },
+          text: formatHistoryAnswer(ack.history, ack.currency),
+        }
+      }
+      if (kind === 'review') {
+        const ack = await bridge.send('get_trades', { days: REVIEW_DAYS })
+        if (!ack.ok || !ack.trades) return null
+        const review = reviewTrades(ack.trades, ack.currency)
+        return {
+          report: { kind: 'review', review, history: ack.trades, currency: ack.currency },
+          text: formatReviewAnswer(review, ack.currency),
+        }
+      }
+      const ack = await bridge.send('get_positions')
+      if (!ack.ok) return null
+      const rows = ack.positions ?? []
+      return {
+        report: { kind: 'positions', positions: rows, currency: ack.currency },
+        text: formatPositionsAnswer(rows, ack.currency),
+      }
+    },
+    [bridge],
+  )
+
+  // 出しっぱなしの「今日の成績」「いまのポジション」は、数秒ごとに取り直す。
+  // 手動で建てたり決済したりした分も、こうしないと画面が古いままになる。
+  useEffect(() => {
+    const kind = report?.kind
+    if (!kind || !bridge.live) return
+    if (kind !== 'today' && kind !== 'positions') return
+    const id = setInterval(() => {
+      void (async () => {
+        const got = await fetchLive(kind)
+        if (!got) return
+        setReport(got.report)
+        setReportAt(new Date())
+      })()
+    }, LIVE_REFRESH_MS)
+    return () => clearInterval(id)
+  }, [report?.kind, bridge.live, fetchLive])
+
   // ── 通常会話 ──
   const ask = (q: string) => {
     if (busy || !q.trim()) return
@@ -173,42 +230,13 @@ export function DialogueWindow({
           setBusy(false)
           return
         }
-        const failed = '口座の数字を読み取れませんでした。接続ツールが起動しているか見てください。'
-
-        if (liveKind === 'today') {
-          const ack = await bridge.send('get_status')
-          if (ack.ok) {
-            setAiText(formatTodayAnswer(ack))
-            if (ack.today) setReport({ kind: 'today', today: ack.today, currency: ack.currency })
-          } else {
-            setAiText(failed)
-          }
-        } else if (liveKind === 'history') {
-          const ack = await bridge.send('get_history', { days: HISTORY_DAYS })
-          if (ack.ok && ack.history) {
-            setAiText(formatHistoryAnswer(ack.history, ack.currency))
-            setReport({ kind: 'history', history: ack.history, currency: ack.currency })
-          } else {
-            setAiText(failed)
-          }
-        } else if (liveKind === 'review') {
-          const ack = await bridge.send('get_trades', { days: REVIEW_DAYS })
-          if (ack.ok && ack.trades) {
-            const review = reviewTrades(ack.trades, ack.currency)
-            setAiText(formatReviewAnswer(review, ack.currency))
-            setReport({ kind: 'review', review, history: ack.trades, currency: ack.currency })
-          } else {
-            setAiText(failed)
-          }
+        const got = await fetchLive(liveKind)
+        if (got) {
+          setAiText(got.text)
+          setReport(got.report)
+          setReportAt(new Date())
         } else {
-          const ack = await bridge.send('get_positions')
-          if (ack.ok) {
-            const rows = ack.positions ?? []
-            setAiText(formatPositionsAnswer(rows, ack.currency))
-            setReport({ kind: 'positions', positions: rows, currency: ack.currency })
-          } else {
-            setAiText(failed)
-          }
+          setAiText('口座の数字を読み取れませんでした。接続ツールが起動しているか見てください。')
         }
         setBusy(false)
       })()
@@ -520,7 +548,7 @@ export function DialogueWindow({
           <>
             {report && !typing && (
               <div className="px-6 pb-3">
-                <LiveReportView report={report} />
+                <LiveReportView report={report} updatedAt={reportAt} />
               </div>
             )}
             <div className="flex flex-wrap gap-2.5 px-6 pb-3">

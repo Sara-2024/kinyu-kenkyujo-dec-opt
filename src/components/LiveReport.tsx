@@ -20,7 +20,16 @@ export type LiveReport =
   | { kind: 'positions'; positions: PositionRow[]; currency?: string }
   | { kind: 'review'; review: TradeReview | null; history: TradeHistory; currency?: string }
 
-function TodayView({ today, currency }: { today: TodayStats; currency?: string }) {
+/** 「いま何時時点の数字か」。開いたままでも数秒ごとに新しくなる */
+function liveNote(base: string, updatedAt?: Date | null): string {
+  if (!updatedAt) return base
+  const hh = String(updatedAt.getHours()).padStart(2, '0')
+  const mm = String(updatedAt.getMinutes()).padStart(2, '0')
+  const ss = String(updatedAt.getSeconds()).padStart(2, '0')
+  return `${base}・${hh}:${mm}:${ss} 現在`
+}
+
+function TodayView({ today, currency, updatedAt }: { today: TodayStats; currency?: string; updatedAt?: Date | null }) {
   const closed = today.today_closed ?? 0
   const profit = today.today_profit ?? 0
   const open = today.open_positions ?? 0
@@ -28,7 +37,7 @@ function TodayView({ today, currency }: { today: TodayStats; currency?: string }
   const rate = winRate(today.today_wins ?? 0, closed)
   return (
     <Frame>
-      <Heading title="今日の成績" note="MT5の口座履歴より" />
+      <Heading title="今日の成績" note={liveNote('MT5の口座履歴より', updatedAt)} />
       <Row label="決済した回数" value={`${closed} 回`} />
       <Row label="確定した損益" value={formatSigned(profit, currency)} color={tone(profit)} />
       <Row
@@ -83,11 +92,11 @@ function HistoryView({ history, currency }: { history: HistoryStats; currency?: 
   )
 }
 
-function PositionsView({ positions, currency }: { positions: PositionRow[]; currency?: string }) {
+function PositionsView({ positions, currency, updatedAt }: { positions: PositionRow[]; currency?: string; updatedAt?: Date | null }) {
   if (positions.length === 0) {
     return (
       <Frame>
-        <Heading title="いまのポジション" note="MT5の建玉より" />
+        <Heading title="いまのポジション" note={liveNote('MT5の建玉より', updatedAt)} />
         <p className="py-2 text-[15px] font-bold text-slate-300">建玉はありません。次の条件がそろうまで待っています。</p>
       </Frame>
     )
@@ -97,7 +106,7 @@ function PositionsView({ positions, currency }: { positions: PositionRow[]; curr
 
   return (
     <Frame>
-      <Heading title="いまのポジション" note={`${positions.length} 件・MT5の建玉より`} />
+      <Heading title="いまのポジション" note={liveNote(`${positions.length} 件・MT5の建玉より`, updatedAt)} />
       <div className="max-h-[240px] overflow-y-auto pr-1">
         {positions.map((p) => {
           const buy = p.side === 'buy'
@@ -146,10 +155,10 @@ function PositionsView({ positions, currency }: { positions: PositionRow[]; curr
   )
 }
 
-export function LiveReportView({ report }: { report: LiveReport }) {
-  if (report.kind === 'today') return <TodayView today={report.today} currency={report.currency} />
+export function LiveReportView({ report, updatedAt }: { report: LiveReport; updatedAt?: Date | null }) {
+  if (report.kind === 'today') return <TodayView today={report.today} currency={report.currency} updatedAt={updatedAt} />
   if (report.kind === 'history') return <HistoryView history={report.history} currency={report.currency} />
   if (report.kind === 'review')
     return <TradeReviewView review={report.review} history={report.history} currency={report.currency} />
-  return <PositionsView positions={report.positions} currency={report.currency} />
+  return <PositionsView positions={report.positions} currency={report.currency} updatedAt={updatedAt} />
 }
