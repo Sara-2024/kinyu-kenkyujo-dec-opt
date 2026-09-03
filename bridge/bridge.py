@@ -77,13 +77,13 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-03.1"
+VERSION = "2026-09-03.2"
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
 # 古いブリッジと新しいブリッジが同時に動けてしまっていた。
 LOCK_NAMES = ("aitrader-bridge.lock", "trelab-bridge.lock")
-LOCK_RECORD_LEN = 64  # 番号と版を固定長で書く（切り詰めない）
+LOCK_RECORD_LEN = 128  # 番号・版・部屋を固定長で書く（切り詰めない）
 
 
 def _lock_dir() -> Path:
@@ -310,7 +310,9 @@ def acquire_instance_lock() -> None:
     # 接続ツールが「いま動いているブリッジが古くないか」を見られるよう、
     # 番号(PID)と版をロックに書いておく。ロックを取れた側だけが書く。
     # 切り詰めずに固定長で上書きする（ロック中の領域でも自分の handle からは書ける）。
-    stamp = f"{os.getpid()}\n{VERSION}\n".encode("ascii", "replace").ljust(LOCK_RECORD_LEN, b" ")
+    # 3行目は部屋（会員ID）。接続ツールが「サイトと違う部屋で動いていないか」を見る。
+    room = os.environ.get("BRIDGE_ID", "").strip() or "vps-01"
+    stamp = f"{os.getpid()}\n{VERSION}\n{room}\n".encode("ascii", "replace").ljust(LOCK_RECORD_LEN, b" ")
     try:
         _LOCK_FH.seek(0)
         _LOCK_FH.write(stamp)

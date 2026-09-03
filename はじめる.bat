@@ -124,11 +124,9 @@ if errorlevel 1 (
 
 REM 画面が見にいく中継（.env より .env.local が優先されます）
 > .env.local echo VITE_RELAY_URL=ws://localhost:8080/app
-REM ブリッジがつなぐ中継
-> bridge\.env echo TRELAB_WS_URL=ws://127.0.0.1:8080/bridge
->> bridge\.env echo GV_NAME=AI_TRADING_ALLOWED
->> bridge\.env echo GV_DEFAULT=1
->> bridge\.env echo LOG_LEVEL=INFO
+REM ブリッジがつなぐ中継。bridge\.env を丸ごと書き直すと、サイトから
+REM 受け取った部屋（会員ID）が消えてしまうので、接続先の1項目だけ直す
+set "RELAY=ws://127.0.0.1:8080/bridge"
 
 if not exist server\node_modules (
   echo          中継サーバーの準備をしています。数分かかります...
@@ -173,10 +171,7 @@ REM ------------------------------------------------------------
 :HONBAN
 REM テストのときに書いた「画面の接続先」は本番では邪魔になるので消す
 if exist .env.local del .env.local
-> bridge\.env echo TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
->> bridge\.env echo GV_NAME=AI_TRADING_ALLOWED
->> bridge\.env echo GV_DEFAULT=1
->> bridge\.env echo LOG_LEVEL=INFO
+set "RELAY=wss://kinyu-relay.onrender.com/bridge"
 set "SITE=https://kinyu-kenkyujo-dec-opt.vercel.app"
 echo          接続先: クラウドの中継サーバー
 if not defined HASCURL goto CONNECT
@@ -202,7 +197,7 @@ REM ============================================================
 echo.
 echo   [5/5]  つなぎます
 echo  ------------------------------------------------------------
-bridge\venv\Scripts\python.exe connect.py --console
+bridge\venv\Scripts\python.exe connect.py --console --relay %RELAY%
 echo  ------------------------------------------------------------
 echo.
 
@@ -238,6 +233,7 @@ echo.
 echo      1. アルゴ（自動売買）をクリック
 echo      2. 「自動売買をはじめる」を押す
 echo         → 数秒で接続まで進みます
+echo         （最初はここを押すまで、サイトからはつながって見えません）
 echo      3. 「今日の成績」「過去の成績」「いまのポジション」
 echo      4. リン（チャート分析）→「トレードを添削して」
 echo.

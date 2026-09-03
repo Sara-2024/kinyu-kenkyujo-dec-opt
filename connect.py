@@ -18,6 +18,7 @@
   python connect.py --register         … サイト連携の登録だけ
   python connect.py --stop             … 裏で動いているブリッジを止める
   python connect.py --uninstall        … 停止して、登録も消す
+  python connect.py --relay <URL>      … 中継の接続先を .env に書く（他の項目は残す）
 """
 from __future__ import annotations
 
@@ -849,6 +850,27 @@ def running_version() -> str:
     return lines[1].strip() if len(lines) > 1 else ""
 
 
+def running_room() -> str:
+    """いま動いているブリッジの部屋＝会員ID（ロックの3行目。古い版は空）"""
+    lock = bridge_lock_path()
+    if not lock.is_file():
+        return ""
+    try:
+        lines = lock.read_text(encoding="ascii", errors="ignore").splitlines()
+    except OSError:
+        return ""
+    return lines[2].strip() if len(lines) > 2 else ""
+
+
+def bridge_in_other_room(our_id: str) -> bool:
+    """サイトが見ている部屋と違う名前で動いていると、サイトからは居ないように見える（E003）。"""
+    theirs = running_room()
+    if not theirs or theirs == our_id:
+        return False
+    log(f"動いているブリッジの部屋が違います（動作中={theirs} / サイト={our_id}）")
+    return True
+
+
 def bridge_is_outdated() -> bool:
     """動いているブリッジが古いか。古いまま使うと、直した不具合がそのまま残る。"""
     mine = source_version()
@@ -925,7 +947,7 @@ def start_bridge(session: dict | None = None) -> None:
             and relay_is_up()
             and relay_has_bridge(our_id) is False
         )
-        if local_missing or bridge_is_outdated():
+        if local_missing or bridge_is_outdated() or bridge_in_other_room(our_id):
             stop_stale_bridge()
         else:
             log("ブリッジはすでに動いています")
@@ -1027,6 +1049,17 @@ def main() -> int:
 
     os.chdir(str(ROOT))
     log(f"起動 argv={raw_args} frozen={FROZEN} room={room or '-'}")
+
+    # はじめる.bat から「中継の接続先」を受け取る。.env を丸ごと書き直すと
+    # サイトから受け取った部屋（BRIDGE_ID）が消えて E003 になるので、1項目だけ直す。
+    if "--relay" in args:
+        idx = args.index("--relay")
+        target = args[idx + 1].strip() if idx + 1 < len(args) else ""
+        if target:
+            write_env_key("TRELAB_WS_URL", target)
+            os.environ["TRELAB_WS_URL"] = target
+            log(f"中継の接続先: {target}")
+        del args[idx : idx + 2]
 
     if "--run-bridge" in args:  # exe 版が自分自身をブリッジとして動かすとき
         sys.argv = [sys.argv[0]]
