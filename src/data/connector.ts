@@ -8,7 +8,8 @@
 export const CONNECTOR_SCHEME = 'aitrader'
 
 /** 呼び出してから、ブリッジが名乗り出るのを待つ時間 */
-export const CONNECTOR_WAIT_MS = 12_000
+// EA のコンパイルと MT5 の初期化を挟むので、12秒だと足りないことがある
+export const CONNECTOR_WAIT_MS = 30_000
 
 export function launchConnector(roomId?: string | null): void {
   if (typeof window === 'undefined') return

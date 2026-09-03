@@ -19,6 +19,7 @@
   python connect.py --stop             … 裏で動いているブリッジを止める
   python connect.py --uninstall        … 停止して、登録も消す
   python connect.py --relay <URL>      … 中継の接続先を .env に書く（他の項目は残す）
+  python connect.py --status           … いまの状態と記録の末尾をまとめて出す
 """
 from __future__ import annotations
 
@@ -996,6 +997,66 @@ def install_ea_only() -> int:
     return 0
 
 
+def _tail(path: Path, n: int = 25) -> list[str]:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace").splitlines()[-n:]
+    except OSError:
+        return []
+
+
+def _protocol_command() -> str:
+    """aitrader:// を押したときに Windows が実行するコマンド（登録が無ければ空）"""
+    if os.name != "nt":
+        return ""
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\{PROTOCOL}\shell\open\command") as key:
+            return str(winreg.QueryValueEx(key, None)[0])
+    except (ImportError, OSError):
+        return ""
+
+
+def show_status() -> int:
+    """つながらないとき、原因を一目で見られるように、いまの状態を全部出す。"""
+    banner("いまの状態")
+    log(f"手元の版        : {source_version() or '不明'}")
+    log(f"中継の接続先    : {relay_url()}")
+    log(f"この PC の部屋  : {env_value('BRIDGE_ID') or '（未設定 → vps-01）'}")
+    log(f"設定ファイル    : {env_file()}")
+    print()
+    lock = bridge_lock_path()
+    if lock.is_file():
+        log(f"ロック          : {lock}")
+        log(f"  番号 / 版 / 部屋: {lock_pid() or '不明'} / {running_version() or '不明'} / {running_room() or '不明'}")
+        log(f"  ロック中        : {'はい（ブリッジが動いている）' if bridge_already_running() else 'いいえ'}")
+    else:
+        log(f"ロック          : なし（{lock}）")
+    procs = list_bridge_processes()
+    if procs:
+        for pid, image in procs:
+            log(f"動いているブリッジ: PID {pid} / {image}")
+    else:
+        log("動いているブリッジ: 見つかりません")
+    print()
+    health = relay_health()
+    if health is None:
+        log("中継 /health    : 応答なし（中継が動いていない、または届かない）")
+    else:
+        rooms = health.get("rooms")
+        log(f"中継 /health    : 応答あり  ブリッジが居る部屋 = {rooms if rooms else 'なし'}")
+    cmd = _protocol_command()
+    log(f"{PROTOCOL}:// の登録: {cmd or '未登録（サイトのボタンから起動できません）'}")
+    print()
+    for name in ("connect.log", "bridge.log"):
+        path = CONFIG_DIR / name
+        log(f"--- {path} の末尾 ---")
+        for line in _tail(path):
+            print(f"    {line}")
+        print()
+    return 0
+
+
 def connect_all(room: str = "") -> int:
     """サイトのボタン1つで呼ばれる本体。画面は出さない。"""
     banner("接続開始")
@@ -1072,6 +1133,8 @@ def main() -> int:
         return install_ea_only()
     if "--register" in args:
         return 0 if (register_protocol() and register_startup()) else 1
+    if "--status" in args:
+        return show_status()
     if "--stop" in args:
         banner("接続をやめる")
         stop_all_bridges()
