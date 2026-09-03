@@ -77,12 +77,13 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-02.6"
+VERSION = "2026-09-03.1"
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
 # 古いブリッジと新しいブリッジが同時に動けてしまっていた。
 LOCK_NAMES = ("aitrader-bridge.lock", "trelab-bridge.lock")
+LOCK_RECORD_LEN = 64  # 番号と版を固定長で書く（切り詰めない）
 
 
 def _lock_dir() -> Path:
@@ -118,6 +119,7 @@ def _process_image(pid: int) -> str:
                 ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
                 capture_output=True,
                 text=True,
+                errors="replace",
                 check=False,
                 timeout=20,
                 creationflags=flags,
@@ -169,6 +171,66 @@ def _terminate(pid: int) -> None:
             pass
 
 
+def _list_bridge_processes() -> list[int]:
+    """bridge.py（か exe の --run-bridge）として動いている、自分以外のプロセス番号。
+
+    古い版はロックに番号を書いていないので、ロックだけでは見つけられない。
+    """
+    me = os.getpid()
+    if os.name == "nt":
+        script = (
+            "Get-CimInstance Win32_Process | "
+            "Where-Object { $_.CommandLine -and "
+            "($_.CommandLine -like '*bridge.py*' -or $_.CommandLine -like '*--run-bridge*') } | "
+            "ForEach-Object { \"$($_.ProcessId)|$($_.Name)\" }"
+        )
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        try:
+            out = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                check=False,
+                timeout=40,
+                creationflags=flags,
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+    else:
+        try:
+            raw = subprocess.run(
+                ["ps", "-eo", "pid=,args="],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                check=False,
+                timeout=20,
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        out = "\n".join(
+            f"{ln.split()[0]}|{Path(ln.split()[1]).name}"
+            for ln in raw.splitlines()
+            if ln.strip() and ("bridge.py" in ln or "--run-bridge" in ln)
+        )
+    pids: list[int] = []
+    own_exe = Path(sys.executable).name.lower()
+    for line in out.splitlines():
+        if "|" not in line:
+            continue
+        pid_s, image = line.strip().split("|", 1)
+        if not pid_s.isdigit():
+            continue
+        pid = int(pid_s)
+        image = image.lower()
+        if pid == me:
+            continue
+        if "python" in image or image == own_exe:
+            pids.append(pid)
+    return pids
+
+
 def takeover_old_bridges() -> None:
     """自分より古い版のブリッジが残っていたら終わらせる。
 
@@ -176,6 +238,8 @@ def takeover_old_bridges() -> None:
     「触っていないのに稼働中と停止中が入れ替わる」のはこれが原因だった。
     """
     me = os.getpid()
+    same_version: set[int] = set()
+    targets: dict[int, str] = {}
     for name in LOCK_NAMES:
         path = _lock_dir() / name
         if not path.is_file():
@@ -184,13 +248,20 @@ def takeover_old_bridges() -> None:
         if pid is None or pid == me:
             continue
         if version == VERSION:
+            same_version.add(pid)
             continue  # 同じ版なら二重起動チェックに任せる
         if not _is_bridge_process(pid):
             continue  # もう居ない、または番号が使い回されている
+        targets[pid] = version or "不明"
+    # ロックに番号を書かない古い版は、コマンドラインから探す
+    for pid in _list_bridge_processes():
+        if pid not in same_version and pid not in targets:
+            targets[pid] = "不明"
+    for pid, version in targets.items():
         log.warning(
             "古いブリッジ（PID %s / 版 %s）が動いています。指令が競合するので終了させます",
             pid,
-            version or "不明",
+            version,
         )
         _terminate(pid)
         for _ in range(20):
@@ -212,13 +283,18 @@ def acquire_instance_lock() -> None:
     global _LOCK_FH
     takeover_old_bridges()
     path = _lock_dir() / LOCK_NAMES[0]
-    _LOCK_FH = open(path, "a+b")
     try:
+        path.touch(exist_ok=True)
+    except OSError:
+        pass
+    _LOCK_FH = open(path, "r+b")  # 追記モードだと seek しても末尾に書かれてしまう
+    try:
+        _LOCK_FH.seek(0)
         if os.name == "nt":
             import msvcrt
 
-            _LOCK_FH.seek(0)
             if _LOCK_FH.read(1) == b"":
+                _LOCK_FH.seek(0)
                 _LOCK_FH.write(b"0")
                 _LOCK_FH.flush()
             _LOCK_FH.seek(0)
@@ -229,14 +305,18 @@ def acquire_instance_lock() -> None:
             fcntl.flock(_LOCK_FH.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         log.error("別のブリッジがすでに動いています。")
-        log.error("start-connect.bat と start-windows.bat を同時に開いていないか、黒い窓が複数ないか確認してください。")
+        log.error("tools\\停止する.bat で止めてから、もう一度お試しください。")
         raise SystemExit(2)
     # 接続ツールが「いま動いているブリッジが古くないか」を見られるよう、
-    # 番号(PID)と版をロックに書いておく。
-    _LOCK_FH.seek(0)
-    _LOCK_FH.truncate()
-    _LOCK_FH.write(f"{os.getpid()}\n{VERSION}\n".encode("ascii", "replace"))
-    _LOCK_FH.flush()
+    # 番号(PID)と版をロックに書いておく。ロックを取れた側だけが書く。
+    # 切り詰めずに固定長で上書きする（ロック中の領域でも自分の handle からは書ける）。
+    stamp = f"{os.getpid()}\n{VERSION}\n".encode("ascii", "replace").ljust(LOCK_RECORD_LEN, b" ")
+    try:
+        _LOCK_FH.seek(0)
+        _LOCK_FH.write(stamp)
+        _LOCK_FH.flush()
+    except OSError as exc:
+        log.warning("ロックに番号を書けませんでした: %s", exc)
 
 
 # ============================================================

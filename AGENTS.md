@@ -51,6 +51,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   MT5 の表示が勝手に入れ替わる。起動時に `takeover_old_bridges()` で
   古い版を終了させてからロックを取る。ロック名を変えるときは、
   古い名前も `LOCK_NAMES` に残すこと（残さないと二重に動ける）。
+  ロックに番号を書いていない古い版も居るので、止めるときはロック頼みにせず
+  「`bridge.py` を実行中の python」をコマンドラインから探す
+  （`connect.py list_bridge_processes()` / `bridge.py _list_bridge_processes()`）。
 - **手動の売買も同じように扱う。** magic の有無で拾う・拾わないを決めない
   （`by_system` は表示の区別に使うだけ）。
 

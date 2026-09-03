@@ -82,6 +82,8 @@ export function DialogueWindow({
   const inputRef = useRef<HTMLInputElement>(null)
   const emailRef = useRef('')
   const reconnectTried = useRef(false)
+  // この画面でブリッジが一度でも動いていたか（キャラを切り替えても覚えておく）
+  const bridgeSeenLive = useRef(false)
 
   const clearTimers = () => {
     timers.current.forEach(clearTimeout)
@@ -398,15 +400,17 @@ export function DialogueWindow({
     }
   }, [conn, bridge.live, bridge.status, character.id, phase])
 
-  // 連携済みで戻ってきたのにブリッジが切れている → 接続ツールを一度だけ呼び直す
+  // 連携済みで戻ってきたのにブリッジが切れている → 接続ツールを一度だけ呼び直す。
+  // ただし、この画面でいちど動いていたブリッジが消えたときは呼ばない
+  // （お客様が「停止する」で止めた直後に、サイトが勝手に起こし直してしまうため）。
   useEffect(() => {
     if (character.id !== 'algo' || phase !== 'control' || !conn) return
     if (bridge.live) {
-      reconnectTried.current = false
+      bridgeSeenLive.current = true
       return
     }
     if (bridge.phase !== 'no_bridge') return
-    if (reconnectTried.current) return
+    if (reconnectTried.current || bridgeSeenLive.current) return
     reconnectTried.current = true
     launchConnector(member?.id)
     if (character.reconnecting) setAiText(character.reconnecting)

@@ -667,6 +667,7 @@ def process_image(pid: int) -> str:
                 ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
                 capture_output=True,
                 text=True,
+                errors="replace",
                 check=False,
                 timeout=20,
                 creationflags=_no_window_flags(),
@@ -687,12 +688,98 @@ def process_image(pid: int) -> str:
         return ""
 
 
+BRIDGE_IMAGE_HINTS = ("python", "aitrader", "trelab")
+
+
+def list_bridge_processes() -> list[tuple[int, str]]:
+    """bridge.py（か exe の --run-bridge）として動いているプロセスを全部挙げる。
+
+    ロックファイルに番号が書かれていない古い版や、ロックが別の場所に
+    できてしまった場合でも、これなら見つけられる。
+    """
+    me = os.getpid()
+    found: list[tuple[int, str]] = []
+    if os.name == "nt":
+        script = (
+            "Get-CimInstance Win32_Process | "
+            "Where-Object { $_.CommandLine -and "
+            "($_.CommandLine -like '*bridge.py*' -or $_.CommandLine -like '*--run-bridge*') } | "
+            "ForEach-Object { \"$($_.ProcessId)|$($_.Name)\" }"
+        )
+        try:
+            out = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                check=False,
+                timeout=40,
+                creationflags=_no_window_flags(),
+                startupinfo=_hidden_startupinfo(),
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            log(f"プロセス一覧を取れませんでした: {exc}")
+            return found
+    else:
+        try:
+            out = subprocess.run(
+                ["ps", "-eo", "pid=,args="],
+                capture_output=True,
+                text=True,
+                errors="replace",
+                check=False,
+                timeout=20,
+            ).stdout
+            out = "\n".join(
+                f"{ln.split()[0]}|{Path(ln.split()[1]).name}"
+                for ln in out.splitlines()
+                if ln.strip() and ("bridge.py" in ln or "--run-bridge" in ln)
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return found
+    for line in out.splitlines():
+        line = line.strip()
+        if "|" not in line:
+            continue
+        pid_s, image = line.split("|", 1)
+        if not pid_s.strip().isdigit():
+            continue
+        pid = int(pid_s)
+        image = image.strip().lower()
+        if pid == me or pid <= 0:
+            continue
+        if not any(h in image for h in BRIDGE_IMAGE_HINTS):
+            continue  # エディタで bridge.py を開いているだけ、など
+        found.append((pid, image))
+    return found
+
+
+def kill_process(pid: int) -> None:
+    if os.name == "nt":
+        run_hidden(["taskkill", "/PID", str(pid), "/F", "/T"], timeout=30)
+    else:
+        try:
+            os.kill(pid, 15)
+        except OSError as exc:
+            log(f"終了できませんでした: {exc}")
+
+
+def wait_gone(pid: int, seconds: float = 10.0) -> bool:
+    for _ in range(int(seconds / 0.5)):
+        if not process_image(pid):
+            return True
+        time.sleep(0.5)
+    return not process_image(pid)
+
+
 def stop_all_bridges() -> int:
-    """動いているブリッジを終了する（古い名前のものも含めて）。
+    """動いているブリッジを終了する（古い名前・古い版のものも含めて）。
 
     画面を出さずに常駐する作りなので、止める手段をここに用意しておく。
+    ロックの番号 → コマンドラインの検索、の順で探す。
     """
     stopped = 0
+    targets: list[tuple[int, str]] = []
     for path in all_lock_paths():
         if not path.is_file():
             continue
@@ -701,31 +788,29 @@ def stop_all_bridges() -> int:
             pid = int(first) if first.isdigit() else None
         except (OSError, IndexError, ValueError):
             pid = None
-        if pid is None:
+        if not pid:
             continue
         image = process_image(pid).lower()
         if not image:
             continue
-        if "python" not in image and image != Path(sys.executable).name.lower():
+        if not any(h in image for h in BRIDGE_IMAGE_HINTS):
             log(f"PID {pid} は {image} なので触りません")
             continue
+        targets.append((pid, image))
+    for pid, image in list_bridge_processes():
+        if all(pid != t[0] for t in targets):
+            targets.append((pid, image))
+
+    for pid, image in targets:
         log(f"ブリッジ（PID {pid} / {image}）を終了します")
-        if os.name == "nt":
-            run_hidden(["taskkill", "/PID", str(pid), "/F", "/T"], timeout=30)
+        kill_process(pid)
+        if wait_gone(pid):
+            stopped += 1
+            log("終了しました")
         else:
-            try:
-                os.kill(pid, 15)
-            except OSError as exc:
-                log(f"終了できませんでした: {exc}")
-        for _ in range(20):
-            if not process_image(pid):
-                stopped += 1
-                log("終了しました")
-                break
-            time.sleep(0.5)
-        else:
-            log(f"終了できませんでした（PID {pid}）。タスクマネージャーで pythonw.exe を終了してください")
-    if stopped == 0:
+            log(f"終了できませんでした（PID {pid}）。タスクマネージャーで {image} を終了してください")
+
+    if stopped == 0 and not targets:
         log("動いているブリッジは見つかりませんでした")
     return stopped
 
@@ -777,18 +862,9 @@ def bridge_is_outdated() -> bool:
 
 
 def stop_stale_bridge() -> None:
-    """ロックは残っているが中継に乗っていないプロセスを終了する。"""
-    pid = lock_pid()
-    if pid is None:
-        return
-    log(f"中継に乗っていないブリッジ (pid={pid}) を終了します")
-    if os.name == "nt":
-        run_hidden(["taskkill", "/PID", str(pid), "/F"])
-    else:
-        try:
-            os.kill(pid, 15)
-        except OSError as exc:
-            log(f"終了できませんでした: {exc}")
+    """古い版、または中継に乗っていないブリッジを終了する。"""
+    log("いま動いているブリッジを止めて、入れ替えます")
+    stop_all_bridges()
     time.sleep(0.6)
 
 
@@ -855,7 +931,8 @@ def start_bridge(session: dict | None = None) -> None:
             log("ブリッジはすでに動いています")
             return
         if bridge_already_running():
-            log("古いブリッジを終了できませんでした")
+            log("古いブリッジを終了できませんでした。tools\\停止する.bat を実行するか、")
+            log("タスクマネージャーで pythonw.exe を終了してから、もう一度お試しください")
             return
     if FROZEN:
         cmd = [sys.executable, "--run-bridge"]
