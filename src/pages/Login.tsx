@@ -16,6 +16,25 @@ type Step = 'welcome' | 'entry' | 'email' | 'password' | 'login' | 'done'
 
 const RED = '#ff8484'
 
+// 受付の舞台。ソシャゲのログイン画面のように、画面の真ん中にこの大きさで置く
+const STAGE_W = 880
+const SCENE_H = 300 // 壁〜床の場面の高さ
+const FLOOR_Y = 262 // 場面の中で床が始まる高さ（カウンターの下端）
+const DESK_H = 68
+const STAGE_MAX_H = 760 // いちばん背が高い状態（パスワード入力）の目安
+
+/** 画面に収まる倍率。大きい画面でも等倍より広げない */
+function useStageScale(): number {
+  const calc = () => Math.min(1, (window.innerWidth - 24) / STAGE_W, (window.innerHeight - 24) / STAGE_MAX_H)
+  const [scale, setScale] = useState(calc)
+  useEffect(() => {
+    const onResize = () => setScale(calc())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return scale
+}
+
 /** 一文字ずつ出す */
 function useTypewriter(text: string): { shown: string; typing: boolean; skip: () => void } {
   const [n, setN] = useState(0)
@@ -53,6 +72,7 @@ export function Login() {
   const [confirm, setConfirm] = useState('')
 
   const { shown, typing, skip } = useTypewriter(line)
+  const scale = useStageScale()
   const firstInput = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -182,69 +202,45 @@ export function Login() {
     step === 'entry' ? 1 : step === 'email' ? 2 : step === 'password' ? 3 : step === 'done' && entry ? 4 : 0
 
   return (
-    <div className="relative h-screen w-full overflow-hidden select-none" style={{ background: '#070b14' }}>
-      {/* ── 壁 ── */}
+    <div className="fixed inset-0 flex items-center justify-center overflow-hidden select-none" style={{ background: '#05080f' }}>
+      {/* 画面の外側は暗くして、真ん中の受付に目が行くようにする */}
       <div
-        className="absolute inset-0"
+        className="pointer-events-none absolute inset-0"
+        style={{ background: 'radial-gradient(ellipse 60% 55% at 50% 50%, rgba(94,204,255,0.07), transparent 70%)' }}
+      />
+
+      {/* ── 受付の舞台（固定サイズ。画面が小さいときは丸ごと縮める） ── */}
+      <div
+        className="relative overflow-hidden rounded-[10px] border"
         style={{
+          width: STAGE_W,
+          transform: `scale(${scale})`,
+          borderColor: 'var(--panel-border)',
+          boxShadow: 'var(--panel-glow), 0 30px 80px rgba(0,0,0,0.6)',
           backgroundColor: '#070b14',
           backgroundImage:
             'linear-gradient(rgba(94,204,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(94,204,255,0.05) 1px, transparent 1px), linear-gradient(180deg, #060a14 0%, #0c1629 100%)',
           backgroundSize: '48px 48px, 48px 48px, 100% 100%',
         }}
-      />
-
-      {/* ── 上部バー ── */}
-      <div className="absolute inset-x-0 top-0 flex h-[52px] items-center gap-4 border-b px-6" style={{ borderColor: 'rgba(94,204,255,0.18)', background: 'rgba(8,14,26,0.9)' }}>
-        <span className="h-4 w-[3px]" style={{ background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)' }} />
-        <span className="font-mono text-[15px] font-bold tracking-[0.3em] text-slate-100">MARKET RESEARCH LAB</span>
-        <span className="text-[14px] text-slate-400">トレード研究所</span>
-        <span className="font-mono ml-auto text-[12px] tracking-[0.25em] text-slate-500">ENTRANCE</span>
-      </div>
-
-      {/* ── 壁の飾り（灯りと掲示板） ── */}
-      {[18, 82].map((x) => (
-        <div key={x} className="absolute top-[52px] h-[14%] w-[2px]" style={{ left: `${x}%`, background: 'linear-gradient(180deg, var(--accent), transparent)', opacity: 0.55 }} />
-      ))}
-      {[18, 82].map((x) => (
-        <div
-          key={`l${x}`}
-          className="absolute top-[calc(52px+14%)] h-3 w-14 -translate-x-1/2 rounded-b-[6px]"
-          style={{ left: `${x}%`, background: 'rgba(94,204,255,0.5)', boxShadow: '0 0 40px 14px rgba(94,204,255,0.18)' }}
-        />
-      ))}
-      <div
-        className="absolute left-[18%] top-[calc(52px+14%+28px)] w-[210px] -translate-x-1/2 rounded-[4px] border px-4 py-3"
-        style={{ borderColor: 'rgba(94,204,255,0.28)', background: 'rgba(9,17,31,0.7)' }}
       >
-        <p className="font-mono text-[11px] tracking-[0.3em] text-slate-500">GUIDE</p>
-        <p className="mt-1 text-[14px] font-bold leading-relaxed text-slate-300">
-          {t('受付：{{yui}}')}
-          <br />
-          {t('分析室：{{rin}}')}
-          <br />
-          {t('自動売買：{{algo}}')}
-        </p>
-      </div>
-      <div
-        className="absolute left-[82%] top-[calc(52px+14%+28px)] w-[210px] -translate-x-1/2 rounded-[4px] border px-4 py-3"
-        style={{ borderColor: 'rgba(94,204,255,0.28)', background: 'rgba(9,17,31,0.7)' }}
-      >
-        <p className="font-mono text-[11px] tracking-[0.3em] text-slate-500">NOTICE</p>
-        <p className="mt-1 text-[14px] font-bold leading-relaxed text-slate-300">
-          ご入場には入場パスワードが必要です。
-          <br />
-          お持ちでない方は担当者へお尋ねください。
-        </p>
-      </div>
+        <div className="accent-line h-px w-full" />
 
-      {/* ── 受付カウンター・床・会話ウィンドウ（ひとかたまりで画面の下に寄せる） ── */}
-      <div className="absolute bottom-[22px] left-1/2 isolate z-10 w-[min(94vw,46rem)] -translate-x-1/2">
-        {/* 受付カウンターとユイ */}
-        <div className="relative mx-auto w-[420px] max-w-full">
+        {/* 受付の場面（壁・看板・ユイ・カウンター・床） */}
+        <div className="relative" style={{ height: SCENE_H }}>
+          {/* 灯り */}
+          {[14, 86].map((x) => (
+            <div key={x} className="absolute top-0 h-[70px] w-[2px]" style={{ left: `${x}%`, background: 'linear-gradient(180deg, var(--accent), transparent)', opacity: 0.5 }} />
+          ))}
+          {[14, 86].map((x) => (
+            <div
+              key={`l${x}`}
+              className="absolute top-[70px] h-2.5 w-12 -translate-x-1/2 rounded-b-[6px]"
+              style={{ left: `${x}%`, background: 'rgba(94,204,255,0.5)', boxShadow: '0 0 36px 12px rgba(94,204,255,0.16)' }}
+            />
+          ))}
           {/* 看板 */}
           <div
-            className="absolute left-1/2 top-[-190px] -translate-x-1/2 rounded-[4px] border px-5 py-2"
+            className="absolute left-1/2 top-[26px] -translate-x-1/2 rounded-[4px] border px-5 py-2"
             style={{ borderColor: 'rgba(94,204,255,0.4)', background: 'rgba(9,17,31,0.85)', boxShadow: 'var(--panel-glow)' }}
           >
             <p className="font-mono whitespace-nowrap text-[13px] font-bold tracking-[0.35em]" style={{ color: 'var(--accent)' }}>
@@ -253,37 +249,39 @@ export function Login() {
           </div>
           {/* 受付の灯り */}
           <div
-            className="pointer-events-none absolute left-1/2 top-[-160px] h-[260px] w-[520px] -translate-x-1/2"
+            className="pointer-events-none absolute left-1/2 top-[40px] h-[260px] w-[520px] -translate-x-1/2"
             style={{ background: 'radial-gradient(ellipse 50% 50% at 50% 60%, rgba(94,204,255,0.14), transparent 70%)' }}
           />
-          {/* ユイ */}
-          <div className="absolute left-1/2 bottom-[30px] -translate-x-1/2">
-            <PixelPerson look={yui.look} s={6.5} surprised={surprised} />
-          </div>
-          {/* カウンター */}
-          <div className="relative">
-            <div className="h-4 rounded-t-[4px] border border-b-0 border-[#2a1608] bg-[#8a5a2b]" />
-            <div className="rounded-b-[4px] border border-t-0 border-[#2a1608] bg-[#6e4520] px-4 py-3 text-center">
-              <p className="font-mono text-[15px] font-bold tracking-[0.35em] text-amber-100">RECEPTION</p>
-            </div>
-          </div>
-          {/* 床（カウンターの下端から画面の下まで） */}
+          {/* 床（カウンターの下端から場面の下端まで） */}
           <div
-            className="pointer-events-none absolute left-1/2 top-full -z-10 h-[100vh] w-screen -translate-x-1/2"
+            className="absolute inset-x-0 bottom-0"
             style={{
+              top: FLOOR_Y,
               backgroundColor: '#0d1729',
               backgroundImage:
-                'linear-gradient(90deg, rgba(94,204,255,0.08) 1px, transparent 1px), linear-gradient(180deg, #101c33 0%, #070b14 100%)',
+                'linear-gradient(90deg, rgba(94,204,255,0.08) 1px, transparent 1px), linear-gradient(180deg, #101c33 0%, #0a1222 100%)',
               backgroundSize: '96px 100%, 100% 100%',
               borderTop: '1px solid rgba(94,204,255,0.35)',
               boxShadow: '0 -1px 12px rgba(94,204,255,0.35)',
             }}
           />
+          {/* ユイとカウンター */}
+          <div className="absolute left-1/2 w-[380px] -translate-x-1/2" style={{ top: FLOOR_Y - DESK_H }}>
+            <div className="absolute left-1/2 bottom-[26px] -translate-x-1/2">
+              <PixelPerson look={yui.look} s={6} surprised={surprised} />
+            </div>
+            <div className="relative">
+              <div className="h-4 rounded-t-[4px] border border-b-0 border-[#2a1608] bg-[#8a5a2b]" />
+              <div className="rounded-b-[4px] border border-t-0 border-[#2a1608] bg-[#6e4520] px-4 py-3 text-center">
+                <p className="font-mono text-[15px] font-bold tracking-[0.35em] text-amber-100">RECEPTION</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ── 会話ウィンドウ ── */}
         <div
-          className="relative mt-5 rounded-[8px] border backdrop-blur-[2px]"
+          className="relative mx-5 -mt-3 mb-5 rounded-[8px] border backdrop-blur-[2px]"
         style={{ background: 'var(--panel-bg)', borderColor: 'var(--panel-border)', boxShadow: 'var(--panel-glow)' }}
       >
         <div className="accent-line h-px w-full rounded-t-[8px]" />
