@@ -77,7 +77,7 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-03.2"
+VERSION = "2026-09-04.1"
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
@@ -973,6 +973,123 @@ class MT5Controller:
             log.warning("本日の実績を読めません: %s", exc)
             return empty
 
+    # ---------- 相場（気配値・ローソク足） ----------
+    # 画面のチャートとティッカーは、連携中はここから取る。
+    # 出すのは MT5 の「気配値」ウィンドウにある銘柄だけで、順番は
+    # よく見る通貨ペアを先にし、あとは気配値の並びどおり。
+    MARKET_PREFERRED = (
+        "USDJPY", "XAUUSD", "GOLD", "EURUSD", "EURJPY", "GBPUSD", "GBPJPY",
+        "AUDJPY", "AUDUSD", "USDCHF", "NZDUSD", "BTCUSD", "US30", "NAS100", "JP225",
+    )
+
+    def _market_symbols_blocking(self) -> list[str]:
+        try:
+            rows = mt5.symbols_get() or ()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("銘柄一覧を読めません: %s", exc)
+            return []
+        visible = [getattr(r, "name", "") for r in rows if getattr(r, "visible", False)]
+        visible = [v for v in visible if v]
+
+        def base(name: str) -> str:
+            # "USDJPY.m" / "USDJPYm" / "USDJPY-raw" などの業者ごとの飾りを落とす
+            head = name.split(".")[0].split("-")[0].split("_")[0].upper()
+            return head[:6] if len(head) > 6 and head[:6].isalpha() else head
+
+        ranked: list[str] = []
+        for want in self.MARKET_PREFERRED:
+            for name in visible:
+                if name in ranked:
+                    continue
+                if base(name) == want:
+                    ranked.append(name)
+                    break
+        ranked += [n for n in visible if n not in ranked]
+        return ranked
+
+    def _rates(self, symbol: str, timeframe: int, count: int) -> list[Any]:
+        try:
+            rows = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("ローソク足を読めません %s: %s", symbol, exc)
+            return []
+        return list(rows) if rows is not None else []
+
+    def _market_blocking(self, chart_symbol: str | None, interval: str, count: int) -> dict[str, Any]:
+        symbols = self._market_symbols_blocking()
+        offset = self._server_offset_blocking()
+        tf_map = {
+            "5m": getattr(mt5, "TIMEFRAME_M5", 5),
+            "15m": getattr(mt5, "TIMEFRAME_M15", 15),
+            "1h": getattr(mt5, "TIMEFRAME_H1", 16385),
+        }
+        if interval not in tf_map:
+            interval = "15m"
+        tf_d1 = getattr(mt5, "TIMEFRAME_D1", 16408)
+
+        quotes: list[dict[str, Any]] = []
+        for name in symbols[:12]:
+            try:
+                info = mt5.symbol_info(name)
+                tick = mt5.symbol_info_tick(name)
+            except Exception:  # noqa: BLE001
+                continue
+            if info is None or tick is None:
+                continue
+            price = float(getattr(tick, "bid", 0) or 0)
+            if price <= 0:
+                continue
+            days = self._rates(name, tf_d1, 2)
+            # 前日の終値。今日の足しか無ければ、その始値で代用する
+            prev = float(days[-2]["close"]) if len(days) >= 2 else (float(days[-1]["open"]) if days else price)
+            quotes.append(
+                {
+                    "symbol": name,
+                    "price": price,
+                    "prevClose": prev,
+                    "changePct": ((price - prev) / prev * 100.0) if prev else 0.0,
+                    "digits": int(getattr(info, "digits", 2) or 2),
+                    "at": int(time.time()),
+                }
+            )
+
+        chart: dict[str, Any] | None = None
+        target = chart_symbol if chart_symbol in symbols else (symbols[0] if symbols else None)
+        if target:
+            info = mt5.symbol_info(target)
+            rows = self._rates(target, tf_map[interval], max(20, min(int(count), 300)))
+            days = self._rates(target, tf_d1, 2)
+            tick = mt5.symbol_info_tick(target)
+            price = float(getattr(tick, "bid", 0) or 0) if tick else 0.0
+            if rows:
+                if price <= 0:
+                    price = float(rows[-1]["close"])
+                prev = float(days[-2]["close"]) if len(days) >= 2 else float(rows[0]["open"])
+                chart = {
+                    "symbol": target,
+                    "interval": interval,
+                    "digits": int(getattr(info, "digits", 2) or 2) if info else 2,
+                    "price": price,
+                    "prevClose": prev,
+                    # 足の時刻はサーバー時計なので、UTC に直してから渡す（画面は日本時間で出す）
+                    "candles": [
+                        {
+                            "t": int(r["time"]) - offset,
+                            "o": float(r["open"]),
+                            "h": float(r["high"]),
+                            "l": float(r["low"]),
+                            "c": float(r["close"]),
+                        }
+                        for r in rows
+                    ],
+                }
+        return {"symbols": symbols[:12], "quotes": quotes, "chart": chart}
+
+    async def market(self, chart_symbol: str | None, interval: str = "15m", count: int = 120) -> dict[str, Any]:
+        if not self.ready:
+            return {"symbols": [], "quotes": [], "chart": None}
+        return await self._call(self._market_blocking, chart_symbol, interval, count)
+
     async def positions(self) -> list[dict[str, Any]]:
         if not self.ready:
             return []
@@ -1216,6 +1333,17 @@ class CommandRouter:
             data = await self.mt.trades(payload.get("days", 180), payload.get("limit", 500))
             log.debug("指令: 履歴要求 days=%s -> %s件", payload.get("days"), data.get("total"))
             return self._ack(command, request_id, True, trades=data, currency=await self.mt.currency())
+
+        if command in ("get_market", "market"):
+            if not self.mt.ready:
+                return self._ack(command, request_id, False, error="MT5に接続していません")
+            symbol = payload.get("symbol")
+            data = await self.mt.market(
+                str(symbol) if symbol else None,
+                str(payload.get("interval", "15m")),
+                int(payload.get("count", 120) or 120),
+            )
+            return self._ack(command, request_id, True, **data)
 
         if command in ("get_status", "status"):
             status = await self.mt.status(include_today=True)

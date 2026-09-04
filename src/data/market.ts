@@ -4,6 +4,9 @@ import type { Candle, ChartData, Quote } from '../../api/_lib/market'
 
 export type { Candle, ChartData, Quote }
 
+/** 'mt5' = お客様の MT5 のレート、'web' = 参考レート */
+export type MarketSource = 'mt5' | 'web'
+
 export interface SymbolInfo {
   /** Yahoo Finance の記号 */
   symbol: string
@@ -41,6 +44,17 @@ export const CHART_SYMBOLS: SymbolInfo[] = [
   { symbol: 'BTC-USD', label: 'BTC/USD', digits: 0, group: true },
   { symbol: '^N225', label: 'NIKKEI', digits: 0, group: true },
 ]
+
+/** MT5 の銘柄名から表示名を作る（"USDJPY.m" → "USD/JPY"、"XAUUSD" → "GOLD"） */
+export function mt5SymbolInfo(name: string, digits: number): SymbolInfo {
+  const head = name.split('.')[0].split('-')[0].split('_')[0].toUpperCase()
+  const core = head.length > 6 && /^[A-Z]+$/.test(head) ? head.slice(0, 6) : head
+  let label = name
+  if (core === 'XAUUSD' || core === 'GOLD') label = 'GOLD'
+  else if (core === 'XAGUSD') label = 'SILVER'
+  else if (/^[A-Z]{6}$/.test(core)) label = `${core.slice(0, 3)}/${core.slice(3)}`
+  return { symbol: name, label, digits, group: digits <= 2 && !/^[A-Z]{6}$/.test(core) }
+}
 
 export function symbolInfo(symbol: string): SymbolInfo {
   return (

@@ -1,7 +1,7 @@
 // 壁の大型ライブチャート、サーバーラック、コードモニター、机まわり。
 // パネルはすべて共通トークン（--panel-bg / --panel-border / --panel-glow）で統一。
 import type { CSSProperties, ReactNode } from 'react'
-import { CHART_SYMBOLS, formatMarketPrice, symbolInfo, type Candle } from '../data/market'
+import { formatMarketPrice, symbolInfo, type Candle, type MarketSource, type SymbolInfo } from '../data/market'
 
 const GREEN = '#2fbf62'
 const RED = '#e04b4b'
@@ -46,7 +46,9 @@ export function PanelLabel({ text, color = 'var(--accent)' }: { text: string; co
 export function BigChart({
   candles,
   symbol,
+  symbols,
   onSymbol,
+  source,
   interval,
   price,
   prevClose,
@@ -57,7 +59,10 @@ export function BigChart({
 }: {
   candles: Candle[]
   symbol: string
+  /** 切り替えられる銘柄。連携中は MT5 の気配値から */
+  symbols: SymbolInfo[]
   onSymbol: (symbol: string) => void
+  source: MarketSource
   interval: string
   price: number
   prevClose: number
@@ -68,7 +73,7 @@ export function BigChart({
 }) {
   const W = 520
   const H = 200
-  const info = symbolInfo(symbol)
+  const info = symbols.find((s) => s.symbol === symbol) ?? symbolInfo(symbol)
   const fmt = (v: number) => formatMarketPrice(v, info)
   const priceColor = dir >= 0 ? GREEN : RED
   const changePct = prevClose ? ((price - prevClose) / prevClose) * 100 : 0
@@ -110,6 +115,14 @@ export function BigChart({
       <div className="flex items-baseline gap-3 px-6 pt-3.5">
         <span className="font-dot text-[22px] font-bold tracking-wider text-slate-100">{info.label}</span>
         <span className="font-mono text-[12px] text-slate-400">{intervalLabel}</span>
+        {source === 'mt5' && (
+          <span
+            className="font-mono rounded-[3px] border px-1.5 py-0.5 text-[10px] font-bold tracking-[0.15em]"
+            style={{ borderColor: 'rgba(53,245,138,0.5)', color: GREEN, background: 'rgba(53,245,138,0.08)' }}
+          >
+            MT5 LIVE
+          </span>
+        )}
         <span className="font-mono hidden text-[11px] tracking-[0.2em] lg:inline" style={{ color: '#ffd23e' }}>
           ─ MA20
         </span>
@@ -137,7 +150,7 @@ export function BigChart({
 
       {/* 銘柄の切り替え */}
       <div className="mt-2 flex gap-1.5 px-6">
-        {CHART_SYMBOLS.map((s) => {
+        {symbols.map((s) => {
           const on = s.symbol === symbol
           return (
             <button

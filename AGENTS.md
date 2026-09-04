@@ -54,6 +54,10 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   ロックに番号を書いていない古い版も居るので、止めるときはロック頼みにせず
   「`bridge.py` を実行中の python」をコマンドラインから探す
   （`connect.py list_bridge_processes()` / `bridge.py _list_bridge_processes()`）。
+- **チャートとティッカーは、連携中は MT5 の気配値を使う。**
+  ブリッジの `get_market` が気配値ウィンドウの銘柄・現在値・ローソク足を返し、
+  `useMarket(bridge)` が 4 秒ごとに取る。未連携のときだけ `/api/market`（Yahoo）。
+  中継は `get_market` を状態に混ぜない（`QUIET_COMMANDS`）。
 - **手動の売買も同じように扱う。** magic の有無で拾う・拾わないを決めない
   （`by_system` は表示の区別に使うだけ）。
 
