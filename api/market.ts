@@ -1,6 +1,6 @@
 // Vercel のサーバー関数。中身は _lib/market.ts。
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { handleMarket } from './_lib/market'
+import { handleMarket } from './_lib/market.js'
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', 'http://localhost')
