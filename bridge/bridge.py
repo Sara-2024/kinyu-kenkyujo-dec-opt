@@ -427,9 +427,6 @@ class MT5Controller:
         # ブローカーのサーバー時刻と UTC の差（秒）。履歴の日付はこれで判断する
         self._server_offset: int = 0
         self._server_offset_at: float = 0.0
-        # 気配値ウィンドウの銘柄（並べ替え済み）と、それを読んだ時刻
-        self._market_symbols_cache: list[str] = []
-        self._market_symbols_at: float = 0.0
 
     async def _call(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """ブロッキングなMT5呼び出しを専用スレッドで実行する"""
@@ -986,17 +983,6 @@ class MT5Controller:
     )
 
     def _market_symbols_blocking(self) -> list[str]:
-        # 銘柄一覧は業者によっては数千件あるので、1分に1回だけ読み直す
-        now = time.time()
-        if self._market_symbols_cache and now - self._market_symbols_at < 60:
-            return self._market_symbols_cache
-        ranked = self._market_symbols_scan()
-        if ranked:
-            self._market_symbols_cache = ranked
-            self._market_symbols_at = now
-        return ranked
-
-    def _market_symbols_scan(self) -> list[str]:
         try:
             rows = mt5.symbols_get() or ()
         except Exception as exc:  # noqa: BLE001
