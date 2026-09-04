@@ -28,7 +28,7 @@ function useSpriteScale(ref: React.RefObject<HTMLDivElement | null>): number {
     const fit = () => {
       const h = el.clientHeight
       // 人物の高さはだいたい 17 × s。カウンター（70px）と余白ぶんを引く
-      setS(Math.max(7, Math.min(13, (h - 70 - 30) / 17)))
+      setS(Math.max(5, Math.min(12, (h - 52 - 20) / 17)))
     }
     fit()
     const ro = new ResizeObserver(fit)
@@ -209,215 +209,190 @@ export function Login() {
 
   return (
     <div
-      className="fixed inset-0 flex flex-col overflow-hidden select-none"
+      className="fixed inset-0 flex items-center justify-center overflow-hidden select-none"
       style={{
         backgroundColor: '#0c1730',
         backgroundImage:
-          'radial-gradient(ellipse 70% 60% at 50% 30%, rgba(94,204,255,0.16), transparent 70%), linear-gradient(rgba(94,204,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(94,204,255,0.06) 1px, transparent 1px), linear-gradient(180deg, #0a1428 0%, #11203c 55%, #0d1a33 100%)',
+          'radial-gradient(ellipse 60% 55% at 50% 45%, rgba(94,204,255,0.16), transparent 70%), linear-gradient(rgba(94,204,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(94,204,255,0.05) 1px, transparent 1px), linear-gradient(180deg, #0a1428 0%, #11203c 55%, #0d1a33 100%)',
         backgroundSize: '100% 100%, 48px 48px, 48px 48px, 100% 100%',
       }}
     >
-      {/* ── 題字（これがログイン画面だと分かるように） ── */}
-      <div className="flex shrink-0 items-end justify-between px-[5%] pt-7">
-        <div>
+      {/* 真ん中の一列だけ使う。上から 題字 → ユイ → 会話ウィンドウ */}
+      <div className="flex h-full max-h-[840px] w-[min(94vw,40rem)] flex-col items-center overflow-y-auto py-5">
+        {/* ── 題字 ── */}
+        <div className="shrink-0 text-center">
           <p className="font-mono text-[12px] tracking-[0.35em] text-slate-400">MARKET RESEARCH LAB</p>
-          <p className="mt-1 text-[26px] font-bold leading-none text-white">
-            トレード研究所
-            <span className="ml-3 text-[18px] font-bold" style={{ color: 'var(--accent)' }}>
-              受付
-            </span>
+          <p className="mt-1 text-[28px] font-bold leading-none text-white">トレード研究所</p>
+          <p className="mt-2 text-[17px] font-bold" style={{ color: 'var(--accent)' }}>
+            {modeLabel}
           </p>
         </div>
-        <div
-          className="rounded-[6px] border px-5 py-2.5 text-[18px] font-bold tracking-wide"
-          style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)', color: 'var(--accent)', boxShadow: 'var(--panel-glow)' }}
-        >
-          {modeLabel}
-        </div>
-      </div>
 
-      {/* ── 場面：受付カウンターの向こうにユイ ── */}
-      <div ref={sceneRef} className="relative min-h-0 flex-1">
-        {/* 天井の灯り */}
-        {[22, 78].map((x) => (
-          <div key={x} className="absolute top-0 h-[22%] w-[2px]" style={{ left: `${x}%`, background: 'linear-gradient(180deg, var(--accent), transparent)', opacity: 0.45 }} />
-        ))}
-        {[22, 78].map((x) => (
+        {/* ── ユイ（カウンター越しに、こちらを向いて話す） ── */}
+        <div ref={sceneRef} className="relative min-h-[160px] w-full flex-1">
           <div
-            key={`l${x}`}
-            className="absolute top-[22%] h-2.5 w-14 -translate-x-1/2 rounded-b-[6px]"
-            style={{ left: `${x}%`, background: 'rgba(94,204,255,0.55)', boxShadow: '0 0 48px 16px rgba(94,204,255,0.18)' }}
+            className="pointer-events-none absolute left-1/2 bottom-0 h-full w-[560px] -translate-x-1/2"
+            style={{ background: 'radial-gradient(ellipse 45% 55% at 50% 70%, rgba(94,204,255,0.2), transparent 70%)' }}
           />
-        ))}
-        {/* ユイを照らすスポットライト */}
-        <div
-          className="pointer-events-none absolute left-1/2 bottom-0 h-full w-[720px] -translate-x-1/2"
-          style={{ background: 'radial-gradient(ellipse 45% 55% at 50% 70%, rgba(94,204,255,0.2), transparent 70%)' }}
-        />
-        {/* ユイ（話しているあいだは少し弾む） */}
-        <div className={`absolute left-1/2 bottom-[34px] -translate-x-1/2 ${typing ? 'animate-bob' : ''}`}>
-          <PixelPerson look={yui.look} s={spriteScale} surprised={surprised} />
-        </div>
-        {/* カウンター */}
-        <div className="absolute left-1/2 bottom-0 w-[min(92vw,640px)] -translate-x-1/2">
-          <div className="h-[18px] rounded-t-[5px] border border-b-0 border-[#2a1608] bg-[#8a5a2b]" />
-          <div className="border-x border-[#2a1608] bg-[#6e4520] px-4 py-3.5 text-center" style={{ boxShadow: 'inset 0 -14px 24px rgba(0,0,0,0.25)' }}>
-            <p className="font-mono text-[16px] font-bold tracking-[0.4em] text-amber-100">RECEPTION</p>
+          <div className={`absolute left-1/2 bottom-[22px] -translate-x-1/2 ${typing ? 'animate-bob' : ''}`}>
+            <PixelPerson look={yui.look} s={spriteScale} surprised={surprised} />
+          </div>
+          <div className="absolute left-1/2 bottom-0 w-[360px] max-w-full -translate-x-1/2">
+            <div className="h-[14px] rounded-t-[5px] border border-b-0 border-[#2a1608] bg-[#8a5a2b]" />
+            <div className="rounded-b-[5px] border border-t-0 border-[#2a1608] bg-[#6e4520] px-4 py-2 text-center" style={{ boxShadow: 'inset 0 -12px 20px rgba(0,0,0,0.25)' }}>
+              <p className="font-mono text-[15px] font-bold tracking-[0.4em] text-amber-100">RECEPTION</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* ── 床の線（カウンターの下端） ── */}
-      <div className="h-px w-full shrink-0" style={{ background: 'rgba(94,204,255,0.45)', boxShadow: '0 0 14px rgba(94,204,255,0.5)' }} />
+        {/* ── 会話ウィンドウ（吹き出し） ── */}
+        <div className="relative mt-5 w-full shrink-0">
+          {/* 吹き出しのしっぽ */}
+          <div
+            className="absolute left-1/2 top-[-9px] h-4 w-4 -translate-x-1/2 border-l border-t"
+            style={{ background: 'var(--panel-bg)', borderColor: 'var(--panel-border)', transform: 'translateX(-50%) rotate(45deg)' }}
+          />
+          <div
+            className="relative rounded-[8px] border backdrop-blur-[2px]"
+            style={{ background: 'var(--panel-bg)', borderColor: 'var(--panel-border)', boxShadow: 'var(--panel-glow)' }}
+          >
+            <div className="accent-line h-px w-full rounded-t-[8px]" />
 
-      <div className="shrink-0 px-[4%] pb-6 pt-4">
-        {/* ── 会話ウィンドウ ── */}
-        <div
-          className="relative mx-auto w-full max-w-[64rem] rounded-[8px] border backdrop-blur-[2px]"
-        style={{ background: 'var(--panel-bg)', borderColor: 'var(--panel-border)', boxShadow: 'var(--panel-glow)' }}
-      >
-        <div className="accent-line h-px w-full rounded-t-[8px]" />
+            {/* 名札 */}
+            <div className="flex items-center gap-3 border-b px-5 py-2.5" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+              <div className="-my-1 shrink-0">
+                <PixelPerson look={yui.look} s={2.6} />
+              </div>
+              <span className="h-4 w-[2px]" style={{ background: yui.color, boxShadow: `0 0 8px ${yui.color}` }} />
+              <p className="text-[17px] font-bold leading-none text-white">
+                {yui.role}
+                <span className="font-dot ml-2 text-[15px]" style={{ color: yui.color }}>
+                  {yui.name}
+                </span>
+              </p>
+              {progress > 0 && (
+                <p className="ml-auto flex items-center gap-1.5 text-[13px] font-bold tracking-wide text-slate-300">
+                  {[1, 2, 3].map((k) => (
+                    <span
+                      key={k}
+                      className="h-2 w-6 rounded-full"
+                      style={{ background: progress >= k ? 'var(--accent)' : 'rgba(94,204,255,0.18)', boxShadow: progress >= k ? '0 0 6px var(--accent)' : undefined }}
+                    />
+                  ))}
+                  <span className="ml-1 text-[12px] text-slate-400">{progress === 1 ? '入場確認' : progress === 2 ? '連絡先' : progress === 3 ? 'パスワード' : '完了'}</span>
+                </p>
+              )}
+            </div>
 
-        {/* 名札 */}
-        <div className="flex items-center gap-3 border-b px-5 py-2.5" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
-          <div className="-my-1 shrink-0">
-            <PixelPerson look={yui.look} s={2.6} />
-          </div>
-          <span className="h-4 w-[2px]" style={{ background: yui.color, boxShadow: `0 0 8px ${yui.color}` }} />
-          <p className="text-[17px] font-bold leading-none text-white">
-            {yui.role}
-            <span className="font-dot ml-2 text-[15px]" style={{ color: yui.color }}>
-              {yui.name}
-            </span>
-          </p>
-          {progress > 0 && (
-            <p className="ml-auto flex items-center gap-1.5 text-[13px] font-bold tracking-wide text-slate-300">
-              <span className="mr-1">会員登録</span>
-              {[1, 2, 3].map((k) => (
-                <span
-                  key={k}
-                  className="h-2 w-6 rounded-full"
-                  style={{ background: progress >= k ? 'var(--accent)' : 'rgba(94,204,255,0.18)', boxShadow: progress >= k ? '0 0 6px var(--accent)' : undefined }}
-                />
-              ))}
-              <span className="ml-1 text-[12px] text-slate-400">{progress === 1 ? '入場確認' : progress === 2 ? '連絡先' : progress === 3 ? 'パスワード' : '完了'}</span>
-            </p>
-          )}
-          {step === 'login' && (
-            <p className="ml-auto rounded-[3px] border px-2.5 py-1 text-[13px] font-bold tracking-wide text-slate-200" style={{ borderColor: 'rgba(94,204,255,0.25)', background: 'rgba(94,204,255,0.06)' }}>
-              ログイン
-            </p>
-          )}
-        </div>
+            {/* 台詞 */}
+            <div className="min-h-[76px] cursor-pointer px-6 pb-3 pt-4" onClick={skip}>
+              <p className="text-[17px] font-bold leading-relaxed" style={{ color: tone === 'warn' ? RED : '#f1f5f9' }}>
+                {shown}
+                {typing && <span className="cursor-blink ml-0.5 inline-block h-4 w-2.5 bg-[var(--accent)] align-middle" />}
+                {!typing && !busy && step !== 'done' && (
+                  <span className="animate-bob ml-1 inline-block text-[13px] text-[var(--accent)]">▼</span>
+                )}
+              </p>
+            </div>
 
-        {/* 台詞 */}
-        <div className="min-h-[76px] cursor-pointer px-6 pb-3 pt-4" onClick={skip}>
-          <p className="text-[17px] font-bold leading-relaxed" style={{ color: tone === 'warn' ? RED : '#f1f5f9' }}>
-            {shown}
-            {typing && <span className="cursor-blink ml-0.5 inline-block h-4 w-2.5 bg-[var(--accent)] align-middle" />}
-            {!typing && !busy && step !== 'done' && (
-              <span className="animate-bob ml-1 inline-block text-[13px] text-[var(--accent)]">▼</span>
+            {/* 選択肢（RPG のように、真ん中に縦に並べる） */}
+            {step === 'welcome' && (
+              <div className="flex flex-col items-center gap-2.5 border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+                <Choice primary onClick={() => go('entry', RECEPTION.askEntry)}>
+                  ▶ {RECEPTION.choiceNew}
+                </Choice>
+                <Choice onClick={() => go('login', RECEPTION.askLogin)}>{RECEPTION.choiceMember}</Choice>
+              </div>
             )}
-          </p>
-        </div>
 
-        {/* 選択肢・入力 */}
-        {step === 'welcome' && (
-          <div className="flex flex-wrap gap-3 border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
-            <Choice primary onClick={() => go('entry', RECEPTION.askEntry)}>
-              ▶ {RECEPTION.choiceNew}
-            </Choice>
-            <Choice onClick={() => go('login', RECEPTION.askLogin)}>{RECEPTION.choiceMember}</Choice>
+            {/* 入力（真ん中に寄せる） */}
+            {step !== 'welcome' && step !== 'done' && (
+              <form onSubmit={onSubmit} className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+                <div className="mx-auto flex w-full max-w-[26rem] flex-col gap-3">
+                  {step === 'entry' && (
+                    <Field
+                      ref={firstInput}
+                      label={RECEPTION.labels.entry}
+                      type="password"
+                      value={entry}
+                      onChange={setEntry}
+                      autoComplete="off"
+                      disabled={busy}
+                    />
+                  )}
+                  {(step === 'email' || step === 'login') && (
+                    <Field
+                      ref={firstInput}
+                      label={RECEPTION.labels.email}
+                      type="email"
+                      value={email}
+                      onChange={setEmail}
+                      autoComplete="username"
+                      disabled={busy}
+                    />
+                  )}
+                  {step === 'login' && (
+                    <Field
+                      label={RECEPTION.labels.password}
+                      type="password"
+                      value={password}
+                      onChange={setPassword}
+                      autoComplete="current-password"
+                      disabled={busy}
+                    />
+                  )}
+                  {step === 'password' && (
+                    <>
+                      <Field
+                        ref={firstInput}
+                        label={RECEPTION.labels.newPassword}
+                        type="password"
+                        value={password}
+                        onChange={setPassword}
+                        autoComplete="new-password"
+                        disabled={busy}
+                      />
+                      <Field
+                        label={RECEPTION.labels.confirm}
+                        type="password"
+                        value={confirm}
+                        onChange={setConfirm}
+                        autoComplete="new-password"
+                        disabled={busy}
+                      />
+                    </>
+                  )}
+                </div>
+
+                <div className="mx-auto mt-4 flex w-full max-w-[26rem] flex-col items-center gap-2.5">
+                  <button
+                    type="submit"
+                    disabled={busy || !ready}
+                    className="h-12 w-full rounded-[5px] border px-6 text-[16px] font-bold transition hover:brightness-110 active:translate-y-px disabled:opacity-40"
+                    style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607', boxShadow: '0 0 14px rgba(250,204,21,0.3)' }}
+                  >
+                    {busy
+                      ? '…'
+                      : step === 'entry'
+                        ? `${RECEPTION.buttons.tell} ▶`
+                        : step === 'email'
+                          ? `${RECEPTION.buttons.next} ▶`
+                          : step === 'password'
+                            ? `${RECEPTION.buttons.register} ▶`
+                            : `${RECEPTION.buttons.login} ▶`}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={restart}
+                    className="h-11 rounded-[5px] px-4 text-[15px] font-bold text-slate-400 transition hover:text-slate-200 disabled:opacity-40"
+                  >
+                    {RECEPTION.back}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
-        )}
-
-        {step !== 'welcome' && step !== 'done' && (
-          <form onSubmit={onSubmit} className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
-            <div className="flex flex-col gap-3">
-              {step === 'entry' && (
-                <Field
-                  ref={firstInput}
-                  label={RECEPTION.labels.entry}
-                  type="password"
-                  value={entry}
-                  onChange={setEntry}
-                  autoComplete="off"
-                  disabled={busy}
-                />
-              )}
-              {(step === 'email' || step === 'login') && (
-                <Field
-                  ref={firstInput}
-                  label={RECEPTION.labels.email}
-                  type="email"
-                  value={email}
-                  onChange={setEmail}
-                  autoComplete="username"
-                  disabled={busy}
-                />
-              )}
-              {step === 'login' && (
-                <Field
-                  label={RECEPTION.labels.password}
-                  type="password"
-                  value={password}
-                  onChange={setPassword}
-                  autoComplete="current-password"
-                  disabled={busy}
-                />
-              )}
-              {step === 'password' && (
-                <>
-                  <Field
-                    ref={firstInput}
-                    label={RECEPTION.labels.newPassword}
-                    type="password"
-                    value={password}
-                    onChange={setPassword}
-                    autoComplete="new-password"
-                    disabled={busy}
-                  />
-                  <Field
-                    label={RECEPTION.labels.confirm}
-                    type="password"
-                    value={confirm}
-                    onChange={setConfirm}
-                    autoComplete="new-password"
-                    disabled={busy}
-                  />
-                </>
-              )}
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                disabled={busy || !ready}
-                className="h-12 rounded-[5px] border px-6 text-[16px] font-bold transition hover:brightness-110 active:translate-y-px disabled:opacity-40"
-                style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607', boxShadow: '0 0 14px rgba(250,204,21,0.3)' }}
-              >
-                {busy
-                  ? '…'
-                  : step === 'entry'
-                    ? `${RECEPTION.buttons.tell} ▶`
-                    : step === 'email'
-                      ? `${RECEPTION.buttons.next} ▶`
-                      : step === 'password'
-                        ? `${RECEPTION.buttons.register} ▶`
-                        : `${RECEPTION.buttons.login} ▶`}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={restart}
-                className="h-12 rounded-[5px] border px-4 text-[15px] font-bold text-slate-300 transition hover:brightness-125 disabled:opacity-40"
-                style={{ borderColor: 'rgba(148,163,184,0.3)', background: 'rgba(10,18,32,0.5)' }}
-              >
-                {RECEPTION.back}
-              </button>
-            </div>
-          </form>
-        )}
         </div>
       </div>
     </div>
@@ -429,7 +404,7 @@ function Choice({ children, onClick, primary }: { children: ReactNode; onClick: 
     <button
       type="button"
       onClick={onClick}
-      className="h-12 rounded-[5px] border px-5 text-[16px] font-bold transition hover:brightness-125 active:translate-y-px"
+      className="h-12 w-full max-w-[26rem] rounded-[5px] border px-5 text-[16px] font-bold transition hover:brightness-125 active:translate-y-px"
       style={
         primary
           ? { borderColor: '#a16207', background: 'rgba(250,204,21,0.92)', color: '#1c1607', boxShadow: '0 0 14px rgba(250,204,21,0.3)' }
