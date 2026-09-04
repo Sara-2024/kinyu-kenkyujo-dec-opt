@@ -5,41 +5,15 @@
 //    （揺れ幅は直近の値幅の数%以内。次の取得で必ず本物の値に戻る）
 // triggerShock() は「急変動シミュレート」ボタン用で、画面上の演出として
 // 直近の足だけを一時的に下げる。終わると本物の足に戻る。
-//
-// お客様が MT5 と連携しているあいだは、ブリッジ経由で MT5 の気配値と
-// ローソク足をそのまま使う（業者のレートと一致する）。取れないときは /api/market。
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  CHART_SYMBOLS,
-  TICKER_SYMBOLS,
-  loadChart,
-  loadQuotes,
-  mt5SymbolInfo,
-  type Candle,
-  type ChartData,
-  type MarketSource,
-  type Quote,
-  type SymbolInfo,
-} from '../data/market'
-import type { BridgeAck } from './useBridge'
+import { CHART_SYMBOLS, loadChart, loadQuotes, type Candle, type ChartData, type Quote } from '../data/market'
 
 export type { Candle }
 
 export const CANDLE_COUNT = 64
 const QUOTES_EVERY = 60_000
 const CHART_EVERY = 60_000
-const MT5_EVERY = 4_000
 const TICK_MS = 450
-
-
-/** MT5 側のデータ源。連携中の画面だけが渡す */
-export interface MarketBridge {
-  live: boolean
-  send: (command: string, extra?: Record<string, unknown>) => Promise<BridgeAck>
-}
-
-type Mt5Quote = Quote & { digits: number }
-type Mt5Ack = BridgeAck & { symbols?: string[]; quotes?: Mt5Quote[]; chart?: ChartData | null }
 
 function jitterAmount(candles: Candle[]): number {
   const tail = candles.slice(-12)
@@ -48,7 +22,7 @@ function jitterAmount(candles: Candle[]): number {
   return avgRange * 0.05
 }
 
-export function useMarket(bridge?: MarketBridge) {
+export function useMarket() {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [symbol, setSymbol] = useState(CHART_SYMBOLS[0].symbol)
   const [chart, setChart] = useState<ChartData | null>(null)
@@ -56,60 +30,9 @@ export function useMarket(bridge?: MarketBridge) {
   const [shocked, setShocked] = useState(false)
   const shockRef = useRef(0)
   const baseRef = useRef<Candle[]>([])
-  // MT5 から取れているあいだだけ 'mt5'
-  const [source, setSource] = useState<MarketSource>('web')
-  const [mt5Symbols, setMt5Symbols] = useState<SymbolInfo[]>([])
 
-  const bridgeLive = !!bridge?.live
-  const send = bridge?.send
-  const useMt5 = bridgeLive && source === 'mt5'
-
-  // 表示する銘柄一覧。MT5 から取れたらその気配値、そうでなければ既定
-  const chartSymbols = useMt5 && mt5Symbols.length > 0 ? mt5Symbols.slice(0, 6) : CHART_SYMBOLS
-  const tickerSymbols = useMt5 && mt5Symbols.length > 0 ? mt5Symbols : TICKER_SYMBOLS
-  const activeSymbol = chartSymbols.some((s) => s.symbol === symbol) ? symbol : chartSymbols[0].symbol
-  const activeRef = useRef(activeSymbol)
-  activeRef.current = activeSymbol
-
-  // ── MT5（連携中） ──
+  // ── ティッカー ──
   useEffect(() => {
-    if (!bridgeLive || !send) {
-      setSource('web')
-      return
-    }
-    let alive = true
-    let failures = 0
-    const pull = async () => {
-      const ack = (await send('get_market', { symbol: activeRef.current, interval: '15m', count: CANDLE_COUNT })) as Mt5Ack
-      if (!alive) return
-      if (!ack.ok || !ack.quotes || ack.quotes.length === 0) {
-        // 3回続けて取れなければ web に戻す（MT5 を閉じたときなど）
-        if (++failures >= 3) setSource('web')
-        return
-      }
-      failures = 0
-      const infos = ack.quotes.map((q) => mt5SymbolInfo(q.symbol, q.digits))
-      setMt5Symbols(infos)
-      setQuotes(ack.quotes)
-      if (ack.chart && ack.chart.candles.length > 0) {
-        const candles = ack.chart.candles.slice(-CANDLE_COUNT)
-        baseRef.current = candles
-        setChart(ack.chart)
-        setLive(candles)
-      }
-      setSource('mt5')
-    }
-    void pull()
-    const id = setInterval(pull, MT5_EVERY)
-    return () => {
-      alive = false
-      clearInterval(id)
-    }
-  }, [bridgeLive, send])
-
-  // ── ティッカー（web） ──
-  useEffect(() => {
-    if (useMt5) return
     let alive = true
     const pull = async () => {
       try {
@@ -125,15 +48,14 @@ export function useMarket(bridge?: MarketBridge) {
       alive = false
       clearInterval(id)
     }
-  }, [useMt5])
+  }, [])
 
-  // ── チャート（web） ──
+  // ── チャート ──
   useEffect(() => {
-    if (useMt5) return
     let alive = true
     const pull = async () => {
       try {
-        const data = await loadChart(activeSymbol)
+        const data = await loadChart(symbol)
         if (!alive) return
         const candles = data.candles.slice(-CANDLE_COUNT)
         baseRef.current = candles
@@ -149,27 +71,7 @@ export function useMarket(bridge?: MarketBridge) {
       alive = false
       clearInterval(id)
     }
-  }, [activeSymbol, useMt5])
-
-  // MT5 のときは銘柄を切り替えたらすぐ取り直す
-  useEffect(() => {
-    if (!useMt5 || !send) return
-    let alive = true
-    void send('get_market', { symbol: activeSymbol, interval: '15m', count: CANDLE_COUNT }).then((raw) => {
-      const ack = raw as Mt5Ack
-      if (!alive || !ack.ok || !ack.chart || ack.chart.candles.length === 0) return
-      const candles = ack.chart.candles.slice(-CANDLE_COUNT)
-      baseRef.current = candles
-      setChart(ack.chart)
-      setLive(candles)
-    })
-    return () => {
-      alive = false
-    }
-  }, [activeSymbol, useMt5, send])
-
-  const sourceRef = useRef<MarketSource>('web')
-  sourceRef.current = useMt5 ? 'mt5' : 'web'
+  }, [symbol])
 
   // ── 直近の足を小さく揺らす／急変動の演出 ──
   useEffect(() => {
@@ -185,8 +87,6 @@ export function useMarket(bridge?: MarketBridge) {
           return
         }
       }
-      // MT5 のときは数秒ごとに本物の値が来るので、揺らさない
-      if (!inShock && sourceRef.current === 'mt5') return
       const amp = jitterAmount(base)
       setLive((prev) => {
         const src = prev.length === base.length ? prev : base
@@ -224,12 +124,8 @@ export function useMarket(bridge?: MarketBridge) {
 
   return {
     candles,
-    symbol: activeSymbol,
+    symbol,
     setSymbol,
-    /** 'mt5' = お客様の MT5 のレート、'web' = 参考レート */
-    source: useMt5 ? ('mt5' as const) : ('web' as const),
-    chartSymbols,
-    tickerSymbols,
     interval: chart?.interval ?? '15m',
     digits: chart?.digits,
     price,

@@ -13,9 +13,6 @@
 import { createServer } from 'node:http'
 import { WebSocketServer } from 'ws'
 
-// 数秒ごとに飛び交う指令。記録すると読めなくなるので黙って通す
-const QUIET_COMMANDS = new Set(['get_market', 'market'])
-
 const PORT = Number(process.env.PORT) || 8080
 const TOKEN = (process.env.TRELAB_TOKEN || '').trim() // 空なら認証なし
 const ROOM_RE = /^[A-Za-z0-9._:-]{1,80}$/
@@ -167,11 +164,8 @@ function handleBridge(ws, roomId) {
     }
 
     if (payload.type === 'ack') {
-      // 相場の応答は大きく、数秒ごとに来るので、状態には混ぜず記録もしない
-      if (!QUIET_COMMANDS.has(payload.command)) {
-        room.status = { ...(room.status ?? {}), ...payload }
-        log(`ブリッジ ${roomId} 応答: ${payload.command} ok=${payload.ok} value=${payload.value}`)
-      }
+      room.status = { ...(room.status ?? {}), ...payload }
+      log(`ブリッジ ${roomId} 応答: ${payload.command} ok=${payload.ok} value=${payload.value}`)
     }
     broadcastToRoom(roomId, { ...payload, bridgeId: roomId })
   })
@@ -221,9 +215,7 @@ function handleApp(ws, roomId) {
       return
     }
 
-    if (!QUIET_COMMANDS.has(payload.command)) {
-      log(`画面 → 部屋 ${roomId}: ${payload.command} ${payload.name ?? ''} ${payload.value ?? ''}`)
-    }
+    log(`画面 → 部屋 ${roomId}: ${payload.command} ${payload.name ?? ''} ${payload.value ?? ''}`)
     send(target, { ...payload, bridgeId: roomId })
   })
 

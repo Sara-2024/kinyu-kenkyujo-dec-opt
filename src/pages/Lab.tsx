@@ -16,7 +16,7 @@ import { useAuth } from '../hooks/AuthContext'
 import { useBridge } from '../hooks/useBridge'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { useMarket } from '../hooks/useMarket'
-import { formatMarketPrice, type Quote, type SymbolInfo } from '../data/market'
+import { TICKER_SYMBOLS, formatMarketPrice, type Quote } from '../data/market'
 
 const STAGE_W = 1440
 const STAGE_H = 810
@@ -141,9 +141,9 @@ function Chara({
   )
 }
 
-function Ticker({ quotes, symbols }: { quotes: Quote[]; symbols: SymbolInfo[] }) {
+function Ticker({ quotes }: { quotes: Quote[] }) {
   const byId = new Map(quotes.map((q) => [q.symbol, q]))
-  const items = symbols.map((info) => ({ info, q: byId.get(info.symbol) })).filter((r) => r.q)
+  const items = TICKER_SYMBOLS.map((info) => ({ info, q: byId.get(info.symbol) })).filter((r) => r.q)
   const row = (key: string) => (
     <span key={key} className="flex shrink-0 items-center gap-7 pr-7">
       {items.map(({ info, q }) => {
@@ -195,10 +195,9 @@ export function Lab() {
   const tutorialKey = member ? `lab-tutorial-done:${member.id}` : 'lab-tutorial-done'
   // チュートリアルは会員ごとに初回だけ
   const [tutorial, setTutorial] = useState(() => !localStorage.getItem(tutorialKey))
-  const bridge = useBridge(member?.id)
-  // 連携中はお客様の MT5 のレートでチャートとティッカーを出す
-  const market = useMarket(bridge)
+  const market = useMarket()
   const { shocked, triggerShock } = market
+  const bridge = useBridge(member?.id)
   const [news, setNews] = useState<NewsItem | null>(null)
   const [dialogueId, setDialogueId] = useState<string | null>(null)
 
@@ -390,7 +389,7 @@ export function Lab() {
           MARKET RESEARCH LAB
         </h1>
         <span className="ml-3 hidden whitespace-nowrap text-[13px] font-bold text-slate-400 md:inline">トレード研究所</span>
-        <Ticker quotes={market.quotes} symbols={market.tickerSymbols} />
+        <Ticker quotes={market.quotes} />
         <button
           type="button"
           onClick={triggerShock}
@@ -599,9 +598,7 @@ export function Lab() {
           <BigChart
             candles={market.candles}
             symbol={market.symbol}
-            symbols={market.chartSymbols}
             onSymbol={market.setSymbol}
-            source={market.source}
             interval={market.interval}
             price={market.price}
             prevClose={market.prevClose}
