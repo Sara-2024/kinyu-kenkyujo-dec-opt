@@ -17,13 +17,10 @@ import {
   DeskScreen,
   Door,
   InfoCenter,
-  MarketBoard,
   MiniRates,
   NoticesList,
   Overlay,
   ReportsList,
-  RoleTag,
-  ScheduleList,
   Sparkline,
   SystemBoard,
   systemName,
@@ -286,7 +283,7 @@ function HudButton({
   )
 }
 
-type OverlayKind = 'chart' | 'reports' | 'notices' | 'market'
+type OverlayKind = 'chart' | 'reports' | 'notices'
 type Room = 'main' | 'system'
 
 export function Lab() {
@@ -632,9 +629,6 @@ export function Lab() {
           ⚡ 急変動シミュレート
         </button>
         <div className="ml-3 flex items-center gap-2">
-          <HudButton onClick={() => openOverlay('reports')} badge={unread} title={`${CHARACTERS.algo.name}の運用報告`}>
-            🔔 通知
-          </HudButton>
           <HudButton onClick={restartGuide} title="研究所の案内をもう一度見る">
             ？ 案内
           </HudButton>
@@ -782,12 +776,12 @@ export function Lab() {
                   className="absolute inset-0"
                   style={{
                     backgroundImage:
-                      'repeating-linear-gradient(0deg, transparent 0 78px, rgba(53,245,138,0.07) 78px 79px), repeating-linear-gradient(90deg, transparent 0 122px, rgba(53,245,138,0.05) 122px 123px)',
+                      'repeating-linear-gradient(0deg, transparent 0 78px, rgba(53,245,138,0.06) 78px 79px)',
                   }}
                 />
                 {/* 奥のサーバーラック（稼働中だけランプが点く） */}
-                <div className="absolute inset-x-[6%] bottom-0 flex items-end justify-between">
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div className="absolute inset-x-[12%] bottom-0 flex items-end justify-between">
+                  {[0, 1, 2, 3].map((i) => (
                     <ServerRack key={i} shocked={shocked} tall={i % 2 === 1} active={running || shocked} />
                   ))}
                 </div>
@@ -848,25 +842,20 @@ export function Lab() {
                 <ZoneHeader zone={ZONES.info} />
               </div>
 
-              {/* ===== 分析デスクの壁：リンのチャート、ジンの相場ボード ===== */}
-              <div style={dimStyle(0.45)}>
-                <RoleTag name={CHARACTERS.rin.name} role="チャート分析" color={CHARACTERS.rin.color} style={{ left: '2.5%', top: 44 }} />
-                <BigChart
-                  {...wallProps}
-                  compact
-                  onOpen={() => openOverlay('chart')}
-                  style={{ left: '2%', top: 68, width: '19.5%', height: 206 }}
-                />
-                <RoleTag name={CHARACTERS.jin.name} role="経済・金利分析" color={CHARACTERS.jin.color} style={{ left: '23%', top: 44 }} />
-                <MarketBoard quotes={market.quotes} color={CHARACTERS.jin.color} style={{ left: '22.5%', top: 68, width: '16%' }} />
-              </div>
+              {/* ===== 分析デスクの壁：リンのチャート（クリックで大きく） ===== */}
+              <BigChart
+                {...wallProps}
+                compact
+                onOpen={() => openOverlay('chart')}
+                style={{ left: '3%', top: 56, width: '34%', height: 290, ...dimStyle(0.45) }}
+              />
 
               {/* ===== 管制室の壁：稼働状況と成績のモニター ===== */}
               <ConsoleMonitors
                 bridge={bridge}
                 state={state}
                 reacting={reacting}
-                style={{ left: '43%', width: '30%', top: 48, ...dimStyle(0.45) }}
+                style={{ left: '42%', width: '30%', top: 48, ...dimStyle(0.45) }}
               />
 
               {/* ===== 情報センター（カード）と SYSTEM LAB への扉 ===== */}
@@ -874,9 +863,9 @@ export function Lab() {
                 bridge={bridge}
                 state={state}
                 reports={algoReports.reports}
-                quotes={market.quotes}
+                unread={unread}
                 onOpen={openOverlay}
-                style={{ left: '75.2%', top: 50, width: '18.3%', ...dimStyle(0.45) }}
+                style={{ left: '76%', top: 56, width: '17.5%', ...dimStyle(0.45) }}
               />
               <Door
                 label="SYSTEM LAB"
@@ -989,7 +978,7 @@ export function Lab() {
                       style={{ left: ring.left, bottom: `calc(${ring.bottom} - 20px)` }}
                     />
                   )}
-                  <div className="absolute z-50 w-[28rem] -translate-x-1/2" style={{ left: '50%', bottom: '38%' }}>
+                  <div className="absolute z-50 w-[25rem] -translate-x-1/2" style={{ left: '50%', bottom: '40%' }}>
                     <div
                       key={guideStep}
                       className="rise-in rounded-[5px] border px-6 py-4 text-left backdrop-blur-[2px]"
@@ -1053,9 +1042,7 @@ export function Lab() {
                 style={{ left: 8, right: 8, top: FLOOR_TOP + 1, background: SYSTEM_ZONE.color, opacity: 0.6, boxShadow: `0 0 14px ${SYSTEM_ZONE.color}` }}
               />
               <ZoneHeader zone={SYSTEM_ZONE} />
-              <RoleTag name={CHARACTERS.gantz.name} role="システム開発 ／ いまの構成" color={CHARACTERS.gantz.color} style={{ left: '8.5%', top: 44 }} />
               <SystemBoard bridge={bridge} state={state} part="system" color={SYSTEM_ZONE.color} style={{ left: '8%', top: 68, width: '24%' }} />
-              <RoleTag name={CHARACTERS.gantz.name} role="拡張機能" color={CHARACTERS.gantz.color} style={{ left: '68.5%', top: 44 }} />
               <SystemBoard bridge={bridge} state={state} part="extensions" color={SYSTEM_ZONE.color} style={{ left: '68%', top: 68, width: '26%' }} />
               <Door
                 label="研究所"
@@ -1176,12 +1163,6 @@ export function Lab() {
           <NoticesList />
         </Overlay>
       )}
-      {overlay === 'market' && (
-        <Overlay title="相場と経済指標" sub={`${CHARACTERS.jin.name} ─ 経済・金利分析`} onClose={() => setOverlay(null)} width="min(92vw, 860px)">
-          <ScheduleList quotes={market.quotes} />
-        </Overlay>
-      )}
-
       {/* ================= 会話ウィンドウ（オーバーレイ） ================= */}
       {dialogueId && CHARACTERS[dialogueId] && (
         <DialogueWindow character={CHARACTERS[dialogueId]} onClose={closeDialogue} bridge={bridge} />

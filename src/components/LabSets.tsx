@@ -5,7 +5,7 @@
 //  - SYSTEM LAB の設備、部屋をつなぐ扉、オーバーレイ
 // 数字はすべて useBridge / useMarket が持っている値をそのまま出す。ここでは作らない。
 import type { CSSProperties, ReactNode } from 'react'
-import { EXTENSIONS, MARKET_SCHEDULE, NOTICES, SCHEDULE_NOTE, type Notice } from '../data/infoCenter'
+import { EXTENSIONS, NOTICES, type Notice } from '../data/infoCenter'
 import { TICKER_SYMBOLS, formatMarketPrice, type Candle, type Quote } from '../data/market'
 import { formatSigned, formatStamp, winRate } from '../data/setupFlow'
 import type { AlgoReport } from '../hooks/useAlgoReports'
@@ -121,7 +121,7 @@ function Big({ value, color = '#e8edf5', sub }: { value: string; color?: string;
       <p className="font-dot whitespace-nowrap text-[20px] font-bold leading-none tabular-nums" style={{ color, textShadow: `0 0 10px ${color}55` }}>
         {value}
       </p>
-      {sub && <p className={`font-mono mt-1.5 ${T.xs} text-slate-500`}>{sub}</p>}
+      {sub && <p className={`font-mono mt-1.5 whitespace-nowrap ${T.xs} text-slate-500`}>{sub}</p>}
     </div>
   )
 }
@@ -155,7 +155,7 @@ export function ConsoleMonitors({
   return (
     <div className={`absolute ${reacting ? 'hop' : ''}`} style={style}>
       {/* 中央：稼働状況（いちばん目立つ） */}
-      <div className="absolute left-1/2 top-0 w-[44%] -translate-x-1/2">
+      <div className="absolute left-1/2 top-0 w-[62%] -translate-x-1/2">
         <div
           className={`relative overflow-hidden rounded-[5px] border px-4 py-3 text-center ${state.key === 'alert' ? 'anim-alarm-border' : ''}`}
           style={{ background: 'rgba(6,12,24,0.94)', borderColor: `${glow}88`, boxShadow: `0 0 26px ${glow}33, inset 0 0 24px rgba(0,0,0,0.5)` }}
@@ -177,39 +177,27 @@ export function ConsoleMonitors({
         <div className="mx-auto h-2 w-8" style={{ background: '#0a1220' }} />
       </div>
 
-      {/* 左：今日の損益 */}
-      <Monitor label="今日の損益" color={glow} style={{ left: 0, top: 26, width: '31%' }}>
+      {/* 左：今日の損益（決済回数と勝敗もここに） */}
+      <Monitor label="今日の損益" color={glow} style={{ left: 0, top: 118, width: '48%' }}>
         <Big
           value={today ? formatSigned(today.today_profit ?? 0, cur) : dash}
           color={today ? tone(today.today_profit ?? 0) : SLATE}
-          sub={today ? `決済 ${closed} 回` : state.jp}
+          sub={
+            today
+              ? closed > 0
+                ? `決済 ${closed} 回 ／ ${today.today_wins ?? 0}勝${today.today_losses ?? 0}敗${rate != null ? `（${rate}%）` : ''}`
+                : '本日の決済なし'
+              : state.jp
+          }
         />
       </Monitor>
 
-      {/* 左内：トレード */}
-      <Monitor label="トレード" color={glow} style={{ left: '25%', top: 116, width: '24%' }}>
-        <Big
-          value={today && closed > 0 ? `${today.today_wins ?? 0}勝${today.today_losses ?? 0}敗` : dash}
-          color={today && closed > 0 ? '#e8edf5' : SLATE}
-          sub={rate != null ? `勝率 ${rate}%` : today ? '本日の決済なし' : state.jp}
-        />
-      </Monitor>
-
-      {/* 右内：ポジション */}
-      <Monitor label="ポジション" color={glow} style={{ left: '51%', top: 116, width: '24%' }}>
+      {/* 右：ポジション */}
+      <Monitor label="ポジション" color={glow} style={{ left: '52%', top: 118, width: '48%' }}>
         <Big
           value={s ? `${openCount} 件` : dash}
           color={s ? '#e8edf5' : SLATE}
           sub={s ? (openCount > 0 ? `含み損益 ${formatSigned(floating, cur)}` : '待機中') : state.jp}
-        />
-      </Monitor>
-
-      {/* 右：口座 */}
-      <Monitor label="口座" color={glow} style={{ left: '69%', top: 26, width: '31%' }}>
-        <Big
-          value={s?.equity != null ? formatSigned(s.equity, cur).replace(/^\+/, '') : dash}
-          color={s?.equity != null ? '#e8edf5' : SLATE}
-          sub={s?.server ? String(s.server) : state.jp}
         />
       </Monitor>
     </div>
@@ -240,7 +228,7 @@ export function ConsoleDesk({ state, style }: { state: SystemState; style?: CSSP
       >
         <div className="absolute inset-x-[10%] top-3 h-px" style={{ background: `${state.color}66` }} />
         <div className="absolute inset-x-[14%] top-5 flex justify-between">
-          {Array.from({ length: 12 }).map((_, i) => (
+          {Array.from({ length: 8 }).map((_, i) => (
             <span
               key={i}
               className={`h-1.5 w-3 rounded-[2px] ${state.active ? 'soft-blink' : ''}`}
@@ -319,65 +307,6 @@ export function MiniRates({ quotes }: { quotes: Quote[] }) {
   )
 }
 
-/** ジンの壁：為替レートと、定例イベントの掲示板 */
-export function MarketBoard({ quotes, style, color = YELLOW }: { quotes: Quote[]; style?: CSSProperties; color?: string }) {
-  const byId = new Map(quotes.map((q) => [q.symbol, q]))
-  const rows = TICKER_SYMBOLS.slice(0, 5).map((info) => ({ info, q: byId.get(info.symbol) })).filter((r) => r.q)
-  const events = MARKET_SCHEDULE
-  return (
-    <Panel style={style}>
-      <div className="accent-line anim-neon absolute inset-x-4 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${color} 18%, ${color} 82%, transparent)`, boxShadow: `0 0 8px ${color}` }} />
-      <div className="px-4 pt-3">
-        <PanelLabel text="RATES ／ 為替レート" color={color} />
-      </div>
-      <div className="px-4 pt-2">
-        {rows.length === 0 && <p className={`font-mono ${T.xs} tracking-[0.3em] text-slate-500`}>LOADING</p>}
-        {rows.map(({ info, q }) => {
-          const up = q!.changePct >= 0
-          return (
-            <p key={info.symbol} className="font-mono flex items-baseline justify-between border-b py-1 text-[12px] last:border-b-0" style={{ borderColor: 'rgba(94,204,255,0.1)' }}>
-              <span className="text-slate-400">{info.label}</span>
-              <span className="tabular-nums font-bold text-slate-100">{formatMarketPrice(q!.price, info)}</span>
-              <span className="w-14 text-right tabular-nums text-[11px]" style={{ color: up ? GREEN : RED }}>
-                {up ? '▲' : '▼'} {Math.abs(q!.changePct).toFixed(2)}%
-              </span>
-            </p>
-          )
-        })}
-      </div>
-      <div className="mt-2 px-4">
-        <PanelLabel text="EVENTS ／ 定例の指標" color={color} />
-      </div>
-      <div className="relative mx-4 mt-1 h-[72px] overflow-hidden">
-        <div className="anim-vscroll">
-          {[...events, ...events].map((e, i) => (
-            <p key={i} className="flex items-baseline gap-2 py-1 text-[12px] leading-tight">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: e.impact === 'high' ? RED : color }} />
-              <span className="truncate font-bold text-slate-200">{e.name}</span>
-              <span className="font-mono ml-auto shrink-0 text-[11px] text-slate-500">{e.when}</span>
-            </p>
-          ))}
-        </div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5" style={{ background: 'linear-gradient(transparent, rgba(9,17,31,0.95))' }} />
-      </div>
-      <div className="h-3" />
-    </Panel>
-  )
-}
-
-/** 各研究員の担当を、機材の上に小さく掲げる札 */
-export function RoleTag({ name, role, color, style }: { name: string; role: string; color: string; style?: CSSProperties }) {
-  return (
-    <div className="absolute z-20 flex items-center gap-2" style={style}>
-      <span className="h-3.5 w-[2px]" style={{ background: color, boxShadow: `0 0 8px ${color}` }} />
-      <span className="font-dot whitespace-nowrap text-[13px] font-bold tracking-wider" style={{ color }}>
-        {name}
-      </span>
-      <span className={`whitespace-nowrap ${T.sm} font-bold text-slate-300`}>{role}</span>
-    </div>
-  )
-}
-
 // ────────────────────────────────
 // 情報センター（カード UI）
 // ────────────────────────────────
@@ -405,7 +334,7 @@ function Card({
     >
       <div className="flex items-center justify-between px-3 pt-2.5">
         <PanelLabel text={title} color={color} />
-        {onClick && <span className="font-mono text-[10px] tracking-[0.2em] text-slate-500">詳しく ▶</span>}
+        {onClick && <span className="font-mono whitespace-nowrap text-[10px] tracking-[0.2em] text-slate-500">詳しく ▶</span>}
       </div>
       <div className="px-3 pb-2.5 pt-1.5">{children}</div>
     </Tag>
@@ -418,90 +347,75 @@ export function InfoCenter({
   bridge,
   state,
   reports,
-  quotes,
+  unread = 0,
   onOpen,
   style,
 }: {
   bridge: Bridge
   state: SystemState
   reports: AlgoReport[]
-  quotes: Quote[]
-  onOpen: (what: 'reports' | 'notices' | 'market') => void
+  unread?: number
+  onOpen: (what: 'reports' | 'notices') => void
   style?: CSSProperties
 }) {
   const s = bridge.live ? bridge.status : null
   const positions = s?.positions ?? []
   const trades = reports.filter((r) => r.kind === 'trade').slice(0, 3)
-  const byId = new Map(quotes.map((q) => [q.symbol, q]))
-  const rates = TICKER_SYMBOLS.slice(0, 3).map((info) => ({ info, q: byId.get(info.symbol) })).filter((r) => r.q)
 
   return (
-    <div className="absolute flex flex-col gap-2" style={style}>
-      <Card title="SYSTEM STATUS" color={state.color}>
+    <div className="absolute flex flex-col gap-3" style={style}>
+      <Card title="TRADE LOG ／ 取引" color={state.color} onClick={() => onOpen('reports')}>
         <div className="flex items-center justify-between gap-2">
-          <p className={`${T.sm} font-bold text-slate-200`}>自動売買 {state.jp}</p>
-          <StateChip state={state} />
+          <p className={`${T.md} font-bold text-slate-100`}>自動売買 {state.jp}</p>
+          <span className="relative">
+            <StateChip state={state} />
+            {unread > 0 && (
+              <span
+                className="font-mono absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold text-[#1c1607]"
+                style={{ background: YELLOW, boxShadow: `0 0 8px ${YELLOW}` }}
+              >
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </span>
         </div>
-        {s?.account != null ? (
-          <p className={`font-mono mt-1 ${T.xs} text-slate-500`}>
-            口座 {s.account}{s.server ? ` ／ ${s.server}` : ''}
-            {s.version ? ` ／ 版 ${s.version}` : ''}
-          </p>
-        ) : (
-          <p className={`mt-1 ${T.xs} text-slate-500`}>アルゴの「自動売買をはじめる」で接続します</p>
-        )}
-      </Card>
-
-      <Card title="TRADE LOG" color={GREEN} onClick={() => onOpen('reports')}>
-        {trades.length === 0 && positions.length === 0 && (
-          <p className={`${T.xs} leading-relaxed text-slate-500`}>
-            {!s
-              ? 'MT5とつながると、取引がここに並びます。'
-              : (s.today?.today_closed ?? 0) > 0
-                ? `本日は決済 ${s.today?.today_closed} 回（${formatSigned(s.today?.today_profit ?? 0, s.currency)}）。次の決済からここに並びます。`
-                : '本日の決済はまだありません。決済があるとここに並びます。'}
-          </p>
-        )}
-        {positions.slice(0, 2).map((p) => (
-          <p key={p.ticket} className="font-mono flex items-baseline gap-2 py-0.5 text-[12px]">
-            <span className="text-slate-500">{p.opened_at ? formatStamp(p.opened_at).slice(-5) : '--:--'}</span>
-            <span className="font-bold text-slate-100">{p.symbol}</span>
-            <span style={{ color: p.side === 'buy' ? GREEN : RED }}>{p.side === 'buy' ? 'BUY' : 'SELL'}</span>
-            <span className="ml-auto tabular-nums font-bold" style={{ color: tone(p.profit) }}>
-              {formatSigned(p.profit, s?.currency)}
-            </span>
-          </p>
-        ))}
-        {trades.map((r) => (
-          <p key={r.id} className="flex items-baseline gap-2 py-0.5 text-[12px] leading-tight">
-            <span className="font-mono text-slate-500">{hhmm(r.at)}</span>
-            <span className="truncate font-bold" style={{ color: r.tone === 'good' ? GREEN : r.tone === 'bad' ? RED : '#e8edf5' }}>
-              {r.text}
-            </span>
-          </p>
-        ))}
-      </Card>
-
-      <Card title="MARKET" color={YELLOW} onClick={() => onOpen('market')}>
-        {rates.map(({ info, q }) => (
-          <p key={info.symbol} className="font-mono flex items-baseline justify-between py-0.5 text-[12px]">
-            <span className="text-slate-400">{info.label}</span>
-            <span className="tabular-nums font-bold text-slate-100">{formatMarketPrice(q!.price, info)}</span>
-            <span className="w-12 text-right text-[11px]" style={{ color: q!.changePct >= 0 ? GREEN : RED }}>
-              {q!.changePct >= 0 ? '▲' : '▼'}{Math.abs(q!.changePct).toFixed(2)}%
-            </span>
-          </p>
-        ))}
-        <p className={`mt-1 flex items-baseline gap-2 ${T.xs} text-slate-400`}>
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: RED }} />
-          <span className="truncate">{MARKET_SCHEDULE[0].name}</span>
-          <span className="font-mono ml-auto shrink-0 text-slate-500">{MARKET_SCHEDULE[0].when}</span>
+        <p className={`font-mono mt-1 ${T.xs} text-slate-500`}>
+          {s?.account != null ? `口座 ${s.account}${s.server ? ` ／ ${s.server}` : ''}` : 'アルゴの「自動売買をはじめる」で接続します'}
         </p>
+        <div className="mt-2 border-t pt-2" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
+          {trades.length === 0 && positions.length === 0 && (
+            <p className={`${T.sm} leading-relaxed text-slate-500`}>
+              {!s
+                ? 'MT5とつながると、取引がここに並びます。'
+                : (s.today?.today_closed ?? 0) > 0
+                  ? `本日は決済 ${s.today?.today_closed} 回（${formatSigned(s.today?.today_profit ?? 0, s.currency)}）。`
+                  : '本日の決済はまだありません。'}
+            </p>
+          )}
+          {positions.slice(0, 2).map((p) => (
+            <p key={p.ticket} className="font-mono flex items-baseline gap-2 py-0.5 text-[13px]">
+              <span className="text-slate-500">{p.opened_at ? formatStamp(p.opened_at).slice(-5) : '--:--'}</span>
+              <span className="font-bold text-slate-100">{p.symbol}</span>
+              <span style={{ color: p.side === 'buy' ? GREEN : RED }}>{p.side === 'buy' ? 'BUY' : 'SELL'}</span>
+              <span className="ml-auto tabular-nums font-bold" style={{ color: tone(p.profit) }}>
+                {formatSigned(p.profit, s?.currency)}
+              </span>
+            </p>
+          ))}
+          {trades.map((r) => (
+            <p key={r.id} className="flex items-baseline gap-2 py-0.5 text-[13px] leading-tight">
+              <span className="font-mono text-slate-500">{hhmm(r.at)}</span>
+              <span className="truncate font-bold" style={{ color: r.tone === 'good' ? GREEN : r.tone === 'bad' ? RED : '#e8edf5' }}>
+                {r.text}
+              </span>
+            </p>
+          ))}
+        </div>
       </Card>
 
-      <Card title="NOTICE" onClick={() => onOpen('notices')}>
+      <Card title="NOTICE ／ お知らせ" onClick={() => onOpen('notices')}>
         {NOTICES.slice(0, 3).map((n) => (
-          <p key={n.title} className="flex items-baseline gap-2 py-0.5 text-[12px] leading-tight">
+          <p key={n.title} className="flex items-baseline gap-2 py-1 text-[13px] leading-tight">
             <span className="font-mono shrink-0 text-[10px]" style={{ color: TAG_COLOR[n.tag] }}>
               {n.tag}
             </span>
@@ -738,44 +652,6 @@ export function NoticesList() {
           </section>
         )
       })}
-    </div>
-  )
-}
-
-export function ScheduleList({ quotes }: { quotes: Quote[] }) {
-  const byId = new Map(quotes.map((q) => [q.symbol, q]))
-  const rows = TICKER_SYMBOLS.map((info) => ({ info, q: byId.get(info.symbol) })).filter((r) => r.q)
-  return (
-    <div className="px-6 py-4">
-      <PanelLabel text="RATES ／ 為替・指数" color={YELLOW} />
-      <div className="mt-2 grid grid-cols-2 gap-x-8 md:grid-cols-3">
-        {rows.map(({ info, q }) => {
-          const up = q!.changePct >= 0
-          return (
-            <p key={info.symbol} className="font-mono flex items-baseline justify-between border-b py-2 text-[15px]" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
-              <span className="text-slate-400">{info.label}</span>
-              <span className="tabular-nums font-bold text-slate-100">{formatMarketPrice(q!.price, info)}</span>
-              <span className="w-16 text-right text-[13px]" style={{ color: up ? GREEN : RED }}>
-                {up ? '▲' : '▼'} {Math.abs(q!.changePct).toFixed(2)}%
-              </span>
-            </p>
-          )
-        })}
-      </div>
-      <div className="mt-5">
-        <PanelLabel text="EVENTS ／ 定例の経済指標" color={YELLOW} />
-      </div>
-      <ul className="mt-2">
-        {MARKET_SCHEDULE.map((e) => (
-          <li key={e.name} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b py-3 last:border-b-0" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: e.impact === 'high' ? RED : YELLOW }} />
-            <span className="text-[16px] font-bold text-white">{e.name}</span>
-            <span className="font-mono text-[14px] text-slate-400">{e.when}</span>
-            <span className="text-[14px] text-slate-500">{e.note}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-3 text-[13px] text-slate-500">{SCHEDULE_NOTE} 表示レートは配信の都合により実際と異なる場合があります。</p>
     </div>
   )
 }
