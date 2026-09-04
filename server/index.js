@@ -16,6 +16,8 @@ import { WebSocketServer } from 'ws'
 const PORT = Number(process.env.PORT) || 8080
 const TOKEN = (process.env.TRELAB_TOKEN || '').trim() // 空なら認証なし
 const ROOM_RE = /^[A-Za-z0-9._:-]{1,80}$/
+// 画面が入れる部屋は会員ID（UUID）だけ。名前を当てて他の部屋に入れないようにする。
+const MEMBER_ROOM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** roomId → { bridge, apps, status } */
 const rooms = new Map()
@@ -69,16 +71,18 @@ function roomIdFrom(req, url, isBridge) {
 
 const server = createServer((req, res) => {
   if (req.url?.startsWith('/health')) {
-    const liveRooms = [...rooms.entries()].filter(([, room]) => room.bridge)
+    // 部屋の一覧（＝会員ID）は外に出さない。知っている部屋についてだけ答える。
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const asked = url.searchParams.get('room')
+    const liveRooms = [...rooms.values()].filter((room) => room.bridge)
+    const body = {
+      ok: true,
+      bridges: liveRooms.length,
+      apps: [...rooms.values()].reduce((n, room) => n + room.apps.size, 0),
+    }
+    if (asked && ROOM_RE.test(asked)) body.room = { id: asked, bridge: Boolean(rooms.get(asked)?.bridge) }
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(
-      JSON.stringify({
-        ok: true,
-        bridges: liveRooms.length,
-        apps: [...rooms.values()].reduce((n, room) => n + room.apps.size, 0),
-        rooms: liveRooms.map(([id]) => id),
-      }),
-    )
+    res.end(JSON.stringify(body))
     return
   }
   res.writeHead(404)
@@ -109,6 +113,12 @@ server.on('upgrade', (req, socket, head) => {
 
   const isBridge = path === '/bridge'
   const roomId = roomIdFrom(req, url, isBridge)
+  if (!isBridge && !MEMBER_ROOM_RE.test(roomId)) {
+    log(`画面の部屋が会員IDではないので断りました: ${roomId}`)
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+    socket.destroy()
+    return
+  }
 
   wss.handleUpgrade(req, socket, head, (ws) => {
     if (isBridge) handleBridge(ws, roomId)

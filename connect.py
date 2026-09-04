@@ -611,13 +611,14 @@ def relay_http_origin(ws_url: str) -> str | None:
     return None
 
 
-def relay_health() -> dict | None:
+def relay_health(room: str = "") -> dict | None:
     url = relay_url()
     origin = "http://127.0.0.1:8080" if relay_is_local(url) else relay_http_origin(url)
     if not origin:
         return None
+    query = f"?room={urllib.parse.quote(room)}" if room else ""
     try:
-        with urllib.request.urlopen(f"{origin}/health", timeout=4) as res:
+        with urllib.request.urlopen(f"{origin}/health{query}", timeout=4) as res:
             return json.loads(res.read().decode("utf-8", errors="replace"))
     except Exception:  # noqa: BLE001
         return None
@@ -634,13 +635,14 @@ def relay_bridge_count() -> int | None:
 
 
 def relay_has_bridge(bridge_id: str) -> bool | None:
-    data = relay_health()
+    """その部屋にブリッジが居るか。中継は部屋の一覧を出さないので、名指しで聞く。"""
+    data = relay_health(bridge_id)
     if data is None:
         return None
-    rooms = data.get("rooms")
-    if not isinstance(rooms, list):
+    room = data.get("room")
+    if not isinstance(room, dict):
         return None
-    return bridge_id in rooms
+    return bool(room.get("bridge"))
 
 
 # 以前の版が使っていたロック名も見る。見落とすと古いブリッジを止められない。
@@ -1039,12 +1041,13 @@ def show_status() -> int:
     else:
         log("動いているブリッジ: 見つかりません")
     print()
-    health = relay_health()
+    our_id = env_value("BRIDGE_ID") or "vps-01"
+    health = relay_health(our_id)
     if health is None:
         log("中継 /health    : 応答なし（中継が動いていない、または届かない）")
     else:
-        rooms = health.get("rooms")
-        log(f"中継 /health    : 応答あり  ブリッジが居る部屋 = {rooms if rooms else 'なし'}")
+        here = (health.get("room") or {}).get("bridge")
+        log(f"中継 /health    : 応答あり  ブリッジ {health.get('bridges', '?')} 台 / この部屋（{our_id}）に居る = {'はい' if here else 'いいえ'}")
     cmd = _protocol_command()
     log(f"{PROTOCOL}:// の登録: {cmd or '未登録（サイトのボタンから起動できません）'}")
     print()

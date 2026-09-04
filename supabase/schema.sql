@@ -4,7 +4,7 @@
 -- 初回の入場パスワード: TRELAB-ENTRY
 -- 最初に登録した人は管理者になります。入場パスワードは管理者画面から変えてください。
 
-create extension if not exists pgcrypto;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ────────────────────────────────
 -- 設定（入場パスワード）
@@ -16,7 +16,7 @@ create table if not exists public.app_settings (
 );
 
 insert into public.app_settings (id, entry_password_hash)
-values (1, crypt('TRELAB-ENTRY', gen_salt('bf')))
+values (1, extensions.crypt('TRELAB-ENTRY', extensions.gen_salt('bf')))
 on conflict (id) do nothing;
 
 -- ────────────────────────────────
@@ -100,7 +100,7 @@ returns public.members
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_member public.members;
@@ -129,7 +129,7 @@ returns public.members
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_member public.members;
@@ -162,7 +162,7 @@ create or replace function public._issue_session(p_member_id uuid)
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_token uuid;
@@ -183,7 +183,7 @@ create or replace function public.auth_register(p_email text, p_password text, p
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_email text := lower(trim(p_email));
@@ -225,7 +225,7 @@ create or replace function public.auth_login(p_email text, p_password text)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_email text := lower(trim(p_email));
@@ -249,7 +249,7 @@ create or replace function public.auth_logout(p_token uuid)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   delete from public.sessions where token = p_token;
@@ -262,7 +262,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_member public.members;
@@ -280,7 +280,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   perform public._require_admin(p_token);
@@ -316,7 +316,7 @@ create or replace function public.admin_update_member(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_admin public.members;
@@ -369,7 +369,7 @@ create or replace function public.admin_set_password(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   perform public._require_admin(p_token);
@@ -391,7 +391,7 @@ create or replace function public.admin_set_entry_password(p_token uuid, p_entry
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   perform public._require_admin(p_token);
@@ -414,7 +414,7 @@ returns jsonb
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_member public.members;
@@ -442,7 +442,7 @@ create or replace function public.member_put_connection(p_token uuid, p_payload 
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_member public.members;
@@ -476,7 +476,7 @@ create or replace function public.member_clear_connection(p_token uuid)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_member public.members;
@@ -491,7 +491,7 @@ create or replace function public.member_save_lead(p_token uuid, p_email text, p
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_member public.members;
