@@ -16,6 +16,8 @@ interface SiteSettingsState {
   characters: Record<string, Character>
   /** 管理者が保存する。Supabase に書けなければ端末にだけ残す */
   save: (token: string | null, next: SiteSettings) => Promise<'remote' | 'local'>
+  /** 台詞の {{id}} をいまの名前にする */
+  t: (text: string) => string
 }
 
 const Ctx = createContext<SiteSettingsState | null>(null)
@@ -78,10 +80,11 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const value = useMemo(
-    () => ({ settings, characters: applyNames(settings.names), save }),
-    [settings, save],
-  )
+  const value = useMemo(() => {
+    const names = settings.names
+    const nameOf = (id: string) => names?.[id]?.trim() || CHARACTERS[id]?.name || id
+    return { settings, characters: applyNames(names), save, t: (text: string) => fill(text, nameOf) }
+  }, [settings, save])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 

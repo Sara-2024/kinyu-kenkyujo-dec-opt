@@ -84,6 +84,22 @@ export async function authRegister(email: string, password: string, entry: strin
   })
 }
 
+/**
+ * 入場パスワードだけ先に確かめる。
+ * データベースにまだこの関数が無いときは null（分からない）を返し、
+ * 本登録のときの確認に任せる。
+ */
+export async function authCheckEntry(entry: string): Promise<boolean | null> {
+  try {
+    const data = await rpc<{ ok: boolean }>('auth_check_entry', { p_entry: entry })
+    return !!data?.ok
+  } catch (err) {
+    const raw = err && typeof err === 'object' && 'message' in err ? String((err as { message: string }).message) : ''
+    if (/could not find the function|does not exist|PGRST202/i.test(raw)) return null
+    throw err
+  }
+}
+
 export async function authLogin(email: string, password: string): Promise<AuthSession> {
   return rpc<AuthSession>('auth_login', { p_email: email, p_password: password })
 }

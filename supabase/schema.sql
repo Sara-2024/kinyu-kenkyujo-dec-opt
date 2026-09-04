@@ -225,6 +225,29 @@ begin
 end;
 $$;
 
+-- 入場パスワードだけ先に確かめる（受付で「合ってますね」と言うため）。
+-- 本登録のときにもう一度確かめるので、ここは案内用。
+create or replace function public.auth_check_entry(p_entry text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+begin
+  -- 総当たりを遅らせる
+  perform pg_sleep(0.3);
+  return jsonb_build_object(
+    'ok',
+    p_entry is not null and exists (
+      select 1 from public.app_settings
+       where id = 1
+         and entry_password_hash = crypt(p_entry, entry_password_hash)
+    )
+  );
+end;
+$$;
+
 create or replace function public.auth_login(p_email text, p_password text)
 returns jsonb
 language plpgsql
@@ -545,6 +568,7 @@ revoke all on function public._member_json(public.members) from public, anon, au
 revoke all on function public._issue_session(uuid) from public, anon, authenticated;
 
 grant execute on function public.auth_register(text, text, text) to anon, authenticated;
+grant execute on function public.auth_check_entry(text) to anon, authenticated;
 grant execute on function public.auth_login(text, text) to anon, authenticated;
 grant execute on function public.auth_logout(uuid) to anon, authenticated;
 grant execute on function public.auth_me(uuid) to anon, authenticated;
