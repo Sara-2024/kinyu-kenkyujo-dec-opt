@@ -19,6 +19,10 @@ insert into public.app_settings (id, entry_password_hash)
 values (1, extensions.crypt('TRELAB-ENTRY', extensions.gen_salt('bf')))
 on conflict (id) do nothing;
 
+-- サイト全体の設定（研究員の名前など）。中身は {"names": {"rin": "…"}} の形
+alter table public.app_settings
+  add column if not exists site_settings jsonb not null default '{}'::jsonb;
+
 -- ────────────────────────────────
 -- 会員
 -- ────────────────────────────────
@@ -406,6 +410,35 @@ begin
 end;
 $$;
 
+-- サイト全体の設定。誰でも読めるが、書けるのは管理者だけ
+create or replace function public.site_settings_get()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select coalesce(site_settings, '{}'::jsonb) from public.app_settings where id = 1;
+$$;
+
+create or replace function public.admin_set_site_settings(p_token uuid, p_settings jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public._require_admin(p_token);
+  if p_settings is null or jsonb_typeof(p_settings) <> 'object' then
+    raise exception 'BAD_SETTINGS';
+  end if;
+  update public.app_settings
+     set site_settings = p_settings,
+         updated_at = now()
+   where id = 1;
+  return p_settings;
+end;
+$$;
+
 -- ────────────────────────────────
 -- 会員自身の接続データ
 -- ────────────────────────────────
@@ -519,6 +552,8 @@ grant execute on function public.admin_list_members(uuid) to anon, authenticated
 grant execute on function public.admin_update_member(uuid, uuid, text, text, boolean) to anon, authenticated;
 grant execute on function public.admin_set_password(uuid, uuid, text) to anon, authenticated;
 grant execute on function public.admin_set_entry_password(uuid, text) to anon, authenticated;
+grant execute on function public.site_settings_get() to anon, authenticated;
+grant execute on function public.admin_set_site_settings(uuid, jsonb) to anon, authenticated;
 grant execute on function public.member_get_connection(uuid) to anon, authenticated;
 grant execute on function public.member_put_connection(uuid, jsonb) to anon, authenticated;
 grant execute on function public.member_clear_connection(uuid) to anon, authenticated;

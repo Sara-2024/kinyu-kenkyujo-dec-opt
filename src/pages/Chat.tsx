@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PixelPerson } from '../components/PixelPerson'
-import { CHARACTERS } from '../data/characters'
+import { useSiteSettings } from '../hooks/SiteSettingsContext'
 
 interface Msg {
   from: 'ai' | 'user'
@@ -16,6 +16,7 @@ const CANNED_REPLY =
 export function Chat() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { characters: CHARACTERS } = useSiteSettings()
   const chara = id ? CHARACTERS[id] : undefined
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')

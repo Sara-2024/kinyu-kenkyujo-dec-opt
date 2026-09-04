@@ -11,6 +11,8 @@ import {
   type MemberStatus,
 } from '../data/auth'
 import { useAuth } from '../hooks/AuthContext'
+import { useSiteSettings } from '../hooks/SiteSettingsContext'
+import { CHARACTERS } from '../data/characters'
 
 export function Admin() {
   const { member, token, ready } = useAuth()
@@ -234,6 +236,8 @@ export function Admin() {
           </div>
         )}
 
+        <NamesSection token={token} />
+
         <div
           className="mt-5 rounded-[4px] border px-5 py-5"
           style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
@@ -258,6 +262,76 @@ export function Admin() {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** 研究員の名前。サイト全体に効く（台詞の中の呼び名もいっしょに変わる） */
+function NamesSection({ token }: { token: string | null }) {
+  const { settings, save } = useSiteSettings()
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    const next: Record<string, string> = {}
+    for (const id of Object.keys(CHARACTERS)) next[id] = settings.names?.[id] ?? ''
+    setNames(next)
+  }, [settings])
+
+  const submit = async () => {
+    setSaving(true)
+    setNote(null)
+    const cleaned: Record<string, string> = {}
+    for (const [id, v] of Object.entries(names)) if (v.trim()) cleaned[id] = v.trim()
+    const where = await save(token, { ...settings, names: cleaned })
+    setSaving(false)
+    setNote(
+      where === 'remote'
+        ? '保存しました。どの端末で開いても、この名前で表示されます。'
+        : 'この端末には反映しました。他の端末にも配るには、データベースの更新（schema.sql）が必要です。',
+    )
+  }
+
+  return (
+    <div
+      className="mt-8 rounded-[4px] border px-5 py-5"
+      style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
+    >
+      <p className="text-[17px] font-bold">研究員の名前</p>
+      <p className="mt-1 text-[14px] text-slate-400">
+        空のままなら元の名前を使います。名札だけでなく、台詞の中で呼び合う名前も変わります。
+      </p>
+      <div className="mt-4 flex flex-wrap gap-4">
+        {Object.values(CHARACTERS).map((c) => (
+          <label key={c.id} className="flex min-w-[200px] flex-1 flex-col gap-1.5 text-[14px] text-slate-300">
+            <span>
+              {c.role}
+              <span className="ml-2 text-slate-500">（元: {c.name}）</span>
+            </span>
+            <input
+              value={names[c.id] ?? ''}
+              onChange={(e) => setNames((n) => ({ ...n, [c.id]: e.target.value }))}
+              placeholder={c.name}
+              maxLength={12}
+              className="h-11 rounded-[4px] border px-3 text-[16px] font-bold text-white outline-none"
+              style={{ borderColor: 'var(--panel-border)', background: 'rgba(8,14,26,0.7)' }}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void submit()}
+          className="h-11 rounded-[4px] px-5 text-[15px] font-bold text-slate-900 disabled:opacity-40"
+          style={{ background: 'var(--accent)' }}
+        >
+          名前を反映する
+        </button>
+        {note && <p className="text-[14px] text-slate-300">{note}</p>}
       </div>
     </div>
   )

@@ -149,7 +149,7 @@ body {
 @keyframes marquee {
   to { transform: translateX(-50%); }
 }
-.anim-marquee { animation: marquee 26s linear infinite; }
+.anim-marquee { animation: marquee 60s linear infinite; }
 
 /* ───── ステージのパン・ズーム ───── */
 .stage-anim { transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.25, 1); }

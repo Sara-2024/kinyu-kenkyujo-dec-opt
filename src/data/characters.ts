@@ -1,15 +1,29 @@
 // 研究員の一覧。名前・担当・挨拶・ドット絵の配色はすべてここに置く。
+// 台詞の中で研究員の名前を呼ぶときは {{id}}（例: {{rin}}）と書く。
+// 管理者画面で名前を変えたとき、SiteSettingsContext がまとめて差し替える。
 // キャラ画像は後で本物のドット絵に差し替える前提なので、
 // 見た目の定義（look）は PixelPerson が読む簡易パレットにしてある。
 
 export interface Look {
   skin: string
   hair: string
-  hairStyle: 'short' | 'bob'
-  shirt: string
+  hairStyle: 'short' | 'bob' | 'ponytail' | 'slick' | 'bandana'
+  /** 上着の形 */
+  outfit: 'blazer' | 'suit' | 'vest' | 'work' | 'uniform'
+  /** 上着の色 */
+  clothes: string
+  /** 中のシャツ（vest のときは袖の色にもなる） */
+  inner?: string
+  /** ネクタイ・ブローチ・スカーフ・光る縁取り */
   accent?: string
-  accessory?: 'headphones' | 'headband'
-  item?: 'tablet' | 'chart'
+  pants: string
+  skirt?: boolean
+  accessory?: 'headset' | 'glasses' | 'goggles' | 'ribbon'
+  /** 小物と、bandana の色 */
+  accessoryColor?: string
+  item?: 'tablet' | 'clipboard' | 'wrench'
+  /** tablet の画面の色 */
+  screen?: string
 }
 
 export interface Character {
@@ -65,7 +79,7 @@ export const CHARACTERS: Record<string, Character> = {
     name: 'アルゴ',
     role: '自動売買',
     greeting:
-      'アルゴです。自動売買の担当をしています。設定から日々の運用まで、面倒なところはすべて私にお任せください。',
+      '{{algo}}です。自動売買の担当をしています。設定から日々の運用まで、面倒なところはすべて私にお任せください。',
     returningRunning:
       'おかえりなさい。設定を変えるか、私に相談するか、上のボタンでお選びください。',
     returningStopped: 'おかえりなさい。いまは停止中です。再開もこの画面からどうぞ。',
@@ -73,19 +87,25 @@ export const CHARACTERS: Record<string, Character> = {
       '接続が切れているようです。接続ツールを呼び出しています。つながったら、この画面から再開できます。',
     color: '#facc15',
     look: {
-      skin: '#f5c9a2',
+      skin: '#f3cfae',
       hair: '#1f2430',
       hairStyle: 'short',
-      shirt: '#2f6fdb',
-      accessory: 'headphones',
-      item: 'chart',
+      outfit: 'vest',
+      clothes: '#1d4fb8',
+      inner: '#eef3fb',
+      accent: '#35f58a',
+      pants: '#1b2230',
+      accessory: 'headset',
+      accessoryColor: '#e9eef7',
+      item: 'tablet',
+      screen: '#35f58a',
     },
   },
   rin: {
     id: 'rin',
     answers: {
       'トレードを添削して':
-        'お客様の口座の履歴を見ながらお話しします。まだつながっていないので、連携がすんでからにしましょう。アルゴのところで「自動売買をはじめる」を押していただければ、すぐです。',
+        'お客様の口座の履歴を見ながらお話しします。まだつながっていないので、連携がすんでからにしましょう。{{algo}}のところで「自動売買をはじめる」を押していただければ、すぐです。',
       'トレードのクセを教えて':
         '履歴があれば、勝ち負けの幅や持っている時間から、クセははっきり出ます。連携がすんでから見せてください。',
       '今日の注目ポイントは？':
@@ -103,14 +123,18 @@ export const CHARACTERS: Record<string, Character> = {
     name: 'リン',
     role: 'チャート分析',
     greeting:
-      'チャート分析のリンです。この大画面では、お客様のトレードの履歴も一緒に見られます。どこから見ていきましょうか。',
+      'チャート分析の{{rin}}です。この大画面では、お客様のトレードの履歴も一緒に見られます。どこから見ていきましょうか。',
     color: '#4dd8ff',
     look: {
-      skin: '#f5c9a2',
-      hair: '#20242e',
+      skin: '#f6d2b3',
+      hair: '#2a2136',
       hairStyle: 'bob',
-      shirt: '#8a4fd6',
+      outfit: 'blazer',
+      clothes: '#7d43cf',
+      inner: '#f4f1fb',
       accent: '#ffd23e',
+      pants: '#242a3a',
+      item: 'clipboard',
     },
   },
   jin: {
@@ -129,15 +153,21 @@ export const CHARACTERS: Record<string, Character> = {
     choices: ['今週の重要指標は？', '金利差ってなに？', '円安はまだ続く？'],
     name: 'ジン',
     role: '経済・金利',
-    greeting: '経済担当のジンです。金利や指標の背景でしたら、私が順を追ってご説明します。',
+    greeting: '経済担当の{{jin}}です。金利や指標の背景でしたら、私が順を追ってご説明します。',
     color: '#ffc83d',
     look: {
-      skin: '#f0bd93',
-      hair: '#3a2a1c',
-      hairStyle: 'short',
-      shirt: '#2f9e57',
-      accent: '#ffd23e',
+      skin: '#efc39d',
+      hair: '#8d8f95',
+      hairStyle: 'slick',
+      outfit: 'suit',
+      clothes: '#2b5a3c',
+      inner: '#f2f4f7',
+      accent: '#e0b23a',
+      pants: '#1f2a26',
+      accessory: 'glasses',
+      accessoryColor: '#3b3f4a',
       item: 'tablet',
+      screen: '#ffd23e',
     },
   },
   gantz: {
@@ -156,24 +186,28 @@ export const CHARACTERS: Record<string, Character> = {
     choices: ['おすすめのツールは？', 'インジケーターの使い方は？', 'MT4とMT5どっちがいい？'],
     name: 'ガンツ',
     role: 'ツール開発',
-    greeting: '開発のガンツだ。道具の選び方なら任せてくれ。先に言うが、どれも万能じゃあない。',
+    greeting: '開発の{{gantz}}だ。道具の選び方なら任せてくれ。先に言うが、どれも万能じゃあない。',
     color: '#ff9d4d',
     look: {
-      skin: '#e8b184',
+      skin: '#e4ad80',
       hair: '#242424',
-      hairStyle: 'short',
-      shirt: '#ef7d2a',
-      accessory: 'headband',
-      item: 'chart',
+      hairStyle: 'bandana',
+      outfit: 'work',
+      clothes: '#e8742a',
+      accent: '#ffd23e',
+      pants: '#3a3f4c',
+      accessory: 'goggles',
+      accessoryColor: '#b8302e',
+      item: 'wrench',
     },
   },
   yui: {
     id: 'yui',
     answers: {
       'この研究所について知りたい':
-        '4人の研究員がそれぞれの担当でお待ちしています。チャートのことならリン、経済や金利ならジン、道具のことならガンツ、自動売買のことならアルゴです。',
+        '4人の研究員がそれぞれの担当でお待ちしています。チャートのことなら{{rin}}、経済や金利なら{{jin}}、道具のことなら{{gantz}}、自動売買のことなら{{algo}}です。',
       '誰に相談すればいい？':
-        'お困りごとによります。「なぜ動いたのか知りたい」ならジン、「これからどう動きそうか」ならリン、「自分では見ていられない」ならアルゴがお役に立てます。',
+        'お困りごとによります。「なぜ動いたのか知りたい」なら{{jin}}、「これからどう動きそうか」なら{{rin}}、「自分では見ていられない」なら{{algo}}がお役に立てます。',
     },
     fallback:
       'ご案内いたします。どのようなことでお困りでしょうか。',
@@ -182,15 +216,19 @@ export const CHARACTERS: Record<string, Character> = {
     startsSetup: '初期設定をはじめる',
     name: 'ユイ',
     role: '受付案内',
-    greeting: 'ようこそ、トレード研究所へ。受付のユイと申します。どのフロアへご案内しましょうか。',
+    greeting: 'ようこそ、トレード研究所へ。受付の{{yui}}と申します。どのフロアへご案内しましょうか。',
     color: '#ff8fb0',
     look: {
-      skin: '#f7cda6',
+      skin: '#f7d3b3',
       hair: '#c96a2e',
-      hairStyle: 'bob',
-      shirt: '#f3f5f8',
-      accent: '#2f6fdb',
-      item: 'tablet',
+      hairStyle: 'ponytail',
+      outfit: 'uniform',
+      clothes: '#f3f5f8',
+      accent: '#e8557f',
+      pants: '#2a3350',
+      skirt: true,
+      accessory: 'ribbon',
+      accessoryColor: '#ff8fb0',
     },
   },
 }

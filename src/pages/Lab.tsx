@@ -11,15 +11,19 @@ import { Link } from 'react-router-dom'
 import { DialogueWindow } from '../components/DialogueWindow'
 import { PixelPerson } from '../components/PixelPerson'
 import { BigChart, CodePanel, Desk, DeskMonitor, ServerRack, StatusMonitor, ToolBox } from '../components/Panels'
-import { CHARACTERS, type Character } from '../data/characters'
+import type { Character } from '../data/characters'
 import { useAuth } from '../hooks/AuthContext'
 import { useBridge } from '../hooks/useBridge'
+import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { useMarket } from '../hooks/useMarket'
+import { TICKER_SYMBOLS, formatMarketPrice, type Quote } from '../data/market'
 
 const STAGE_W = 1440
 const STAGE_H = 810
 const HUD_H = 52
 const FLOOR_TOP = 470 // ステージ内の壁と床の境目(px)
+const MAX_ZOOM = 3
+const BLEED = 700 // ステージの外に描き足す壁と床（画面の余りを埋める）
 
 const ZONES = {
   analysis: { from: 0, to: 44.5, color: '#5eccff', en: 'ANALYSIS DESK', jp: '分析デスク' },
@@ -29,8 +33,8 @@ const ZONES = {
 
 /** キャラの立ち位置（ステージ%）。描画とズームインの両方で使う */
 const CHAR_POS: Record<string, { x: number; bottom: number; s: number }> = {
-  rin: { x: 16, bottom: 30, s: 5 },
-  jin: { x: 29, bottom: 30, s: 5.4 },
+  rin: { x: 16, bottom: 28, s: 5 },
+  jin: { x: 29, bottom: 28, s: 5.4 },
   algo: { x: 61.5, bottom: 30, s: 5.4 },
   gantz: { x: 87, bottom: 30, s: 5.4 },
   yui: { x: 50, bottom: 12, s: 5.6 },
@@ -128,44 +132,43 @@ function Chara({
           <p className="font-dot whitespace-nowrap text-[12px] leading-tight" style={{ color: character.color }}>
             {character.name}
           </p>
+          {/* 「話せる」ことを示すマイクロコピー（机の陰に隠れないよう名札の中に） */}
+          {!dimmed && <p className="font-mono text-[9px] tracking-[0.25em] text-slate-500">▶ CLICK</p>}
         </div>
         <PixelPerson look={character.look} s={s} surprised={surprised} />
-        {/* 「話せる」ことを示すマイクロコピー */}
-        {!dimmed && (
-          <p className="font-mono mt-1 text-[10px] tracking-[0.2em] text-slate-500">▶ CLICK</p>
-        )}
       </div>
     </button>
   )
 }
 
-function Ticker({ price, dir }: { price: number; dir: number }) {
-  const items: Array<[string, string, number]> = [
-    ['USD/JPY', price.toFixed(2), dir],
-    ['EUR/USD', '1.0842', -1],
-    ['GBP/JPY', '201.55', 1],
-    ['GOLD', '2,712.4', 1],
-    ['BTC/USD', '112,480', -1],
-    ['NIKKEI', '39,120', 1],
-  ]
+function Ticker({ quotes }: { quotes: Quote[] }) {
+  const byId = new Map(quotes.map((q) => [q.symbol, q]))
+  const items = TICKER_SYMBOLS.map((info) => ({ info, q: byId.get(info.symbol) })).filter((r) => r.q)
   const row = (key: string) => (
-    <span key={key} className="flex shrink-0 items-center gap-6 pr-6">
-      {items.map(([sym, val, d]) => (
-        <span key={sym} className="font-mono flex items-center gap-1.5 text-[13px] tracking-wide">
-          <span className="text-slate-400">{sym}</span>
-          <span style={{ color: d >= 0 ? '#2fbf62' : '#e04b4b' }}>
-            {d >= 0 ? '▲' : '▼'} {val}
+    <span key={key} className="flex shrink-0 items-center gap-7 pr-7">
+      {items.map(({ info, q }) => {
+        const up = q!.changePct >= 0
+        const color = up ? '#2fbf62' : '#e04b4b'
+        return (
+          <span key={info.symbol} className="font-mono flex items-baseline gap-2 text-[13px] tracking-wide">
+            <span className="text-slate-400">{info.label}</span>
+            <span className="tabular-nums font-bold text-slate-100">{formatMarketPrice(q!.price, info)}</span>
+            <span className="tabular-nums text-[12px]" style={{ color }}>
+              {up ? '▲' : '▼'} {Math.abs(q!.changePct).toFixed(2)}%
+            </span>
           </span>
-        </span>
-      ))}
+        )
+      })}
     </span>
   )
   return (
     <div className="relative mx-6 h-full min-w-0 flex-1 overflow-hidden">
-      <div className="anim-marquee flex h-full w-max items-center">
-        {row('a')}
-        {row('b')}
-      </div>
+      {items.length > 0 && (
+        <div className="anim-marquee flex h-full w-max items-center">
+          {row('a')}
+          {row('b')}
+        </div>
+      )}
       <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#080e1a] to-transparent" />
       <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#080e1a] to-transparent" />
     </div>
@@ -188,37 +191,67 @@ function ZoneHeader({ zone, extra }: { zone: (typeof ZONES)[keyof typeof ZONES];
 
 export function Lab() {
   const { member, logout } = useAuth()
+  const { characters: CHARACTERS } = useSiteSettings()
   const tutorialKey = member ? `lab-tutorial-done:${member.id}` : 'lab-tutorial-done'
   // チュートリアルは会員ごとに初回だけ
   const [tutorial, setTutorial] = useState(() => !localStorage.getItem(tutorialKey))
-  const { candles, price, dir, shocked, triggerShock } = useMarket()
+  const market = useMarket()
+  const { shocked, triggerShock } = market
   const bridge = useBridge(member?.id)
   const [news, setNews] = useState<NewsItem | null>(null)
   const [dialogueId, setDialogueId] = useState<string | null>(null)
 
   // ───── パン・ズーム ─────
+  //  - ズームの下限は「画面にぴったり収まる倍率」（zoom = 1）。それより縮めない
+  //  - 収まりきらない向きにだけ動かせる。ステージの外が見えるところまでは動かせない
+  //  - 画面の縦横比が 16:9 でないときの余りは、壁と床の続き（BLEED）で埋める
   const viewRef = useRef<HTMLDivElement>(null)
+  const viewSize = useRef({ w: 1, h: 1 })
   const [base, setBase] = useState(0.5)
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [animate, setAnimate] = useState(false)
+  const baseRef = useRef(base)
   const zoomRef = useRef(zoom)
   const panRef = useRef(pan)
+  baseRef.current = base
   zoomRef.current = zoom
   panRef.current = pan
   const dragState = useRef<{ sx: number; sy: number; px: number; py: number; moved: boolean } | null>(null)
   const suppressClick = useRef(false)
 
+  /** これより縮めない。base がフィット倍率なので 1 = 画面にぴったり */
+  const minZoom = useCallback(() => 1, [])
+
+  /** ズームと位置を許される範囲に収めて反映する */
+  const applyView = useCallback(
+    (nextZoom: number, nextPan: { x: number; y: number }, withAnim: boolean) => {
+      const { w, h } = viewSize.current
+      const z = Math.min(MAX_ZOOM, Math.max(minZoom(), nextZoom))
+      const scale = baseRef.current * z
+      const maxX = Math.max(0, (STAGE_W * scale - w) / 2)
+      const maxY = Math.max(0, (STAGE_H * scale - h) / 2)
+      setAnimate(withAnim)
+      setZoom(z)
+      setPan({ x: Math.min(maxX, Math.max(-maxX, nextPan.x)), y: Math.min(maxY, Math.max(-maxY, nextPan.y)) })
+    },
+    [minZoom],
+  )
+
   useEffect(() => {
     const fit = () => {
       const w = window.innerWidth
       const h = window.innerHeight - HUD_H
-      setBase(Math.min(w / STAGE_W, h / STAGE_H))
+      viewSize.current = { w, h }
+      const b = Math.min(w / STAGE_W, h / STAGE_H)
+      baseRef.current = b
+      setBase(b)
+      applyView(zoomRef.current, panRef.current, false)
     }
     fit()
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
-  }, [])
+  }, [applyView])
 
   // ホイールで拡大縮小（カーソル位置を中心に）
   useEffect(() => {
@@ -230,15 +263,13 @@ export function Lab() {
       const cx = e.clientX - rect.left - rect.width / 2 - panRef.current.x
       const cy = e.clientY - rect.top - rect.height / 2 - panRef.current.y
       const z0 = zoomRef.current
-      const z1 = Math.min(3, Math.max(0.6, z0 * Math.exp(-e.deltaY * 0.0014)))
+      const z1 = Math.min(MAX_ZOOM, Math.max(minZoom(), z0 * Math.exp(-e.deltaY * 0.0014)))
       const k = z1 / z0
-      setAnimate(false)
-      setPan({ x: panRef.current.x - cx * (k - 1), y: panRef.current.y - cy * (k - 1) })
-      setZoom(z1)
+      applyView(z1, { x: panRef.current.x - cx * (k - 1), y: panRef.current.y - cy * (k - 1) }, false)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [])
+  }, [applyView, minZoom])
 
   // ドラッグで移動
   const onPointerDown = (e: React.PointerEvent) => {
@@ -250,10 +281,7 @@ export function Lab() {
     const dx = e.clientX - d.sx
     const dy = e.clientY - d.sy
     if (!d.moved && Math.hypot(dx, dy) > 6) d.moved = true
-    if (d.moved) {
-      setAnimate(false)
-      setPan({ x: d.px + dx, y: d.py + dy })
-    }
+    if (d.moved) applyView(zoomRef.current, { x: d.px + dx, y: d.py + dy }, false)
   }
   const onPointerUp = () => {
     if (dragState.current?.moved) {
@@ -264,14 +292,18 @@ export function Lab() {
   }
 
   const resetView = useCallback(() => {
-    setAnimate(true)
-    setZoom(1)
-    setPan({ x: 0, y: 0 })
-  }, [])
-  const zoomBy = useCallback((k: number) => {
-    setAnimate(true)
-    setZoom((z) => Math.min(3, Math.max(0.6, z * k)))
-  }, [])
+    applyView(minZoom(), { x: 0, y: 0 }, true)
+  }, [applyView, minZoom])
+  const zoomBy = useCallback(
+    (k: number) => {
+      // 画面の中心を保ったまま倍率だけ変える
+      const z0 = zoomRef.current
+      const z1 = Math.min(MAX_ZOOM, Math.max(minZoom(), z0 * k))
+      const r = z1 / z0
+      applyView(z1, { x: panRef.current.x * r, y: panRef.current.y * r }, true)
+    },
+    [applyView, minZoom],
+  )
 
   /** キャラへズームインして、その場に会話ウィンドウを開く（画面遷移しない） */
   const select = useCallback(
@@ -280,22 +312,20 @@ export function Lab() {
       if (tutorial && id !== 'yui') return
       const pos = CHAR_POS[id]
       if (!pos) return
-      const targetZoom = 1.7
-      const vh = window.innerHeight - HUD_H
+      const targetZoom = Math.max(1.7, minZoom() * 1.5)
+      const vh = viewSize.current.h
       const cx = (pos.x / 100) * STAGE_W - STAGE_W / 2
       const footY = STAGE_H * (1 - pos.bottom / 100)
       const cy = footY - 70 - STAGE_H / 2
-      setAnimate(true)
-      setZoom(targetZoom)
       // キャラが会話ウィンドウの上（画面のやや上寄り）に来るようにずらす
-      setPan({ x: -cx * base * targetZoom, y: -cy * base * targetZoom - vh * 0.18 })
+      applyView(targetZoom, { x: -cx * base * targetZoom, y: -cy * base * targetZoom - vh * 0.18 }, true)
       setDialogueId(id)
       if (tutorial) {
         setTutorial(false)
         localStorage.setItem(tutorialKey, '1')
       }
     },
-    [tutorial, base, tutorialKey],
+    [tutorial, base, tutorialKey, applyView, minZoom],
   )
 
   const closeDialogue = useCallback(() => {
@@ -359,7 +389,7 @@ export function Lab() {
           MARKET RESEARCH LAB
         </h1>
         <span className="ml-3 hidden whitespace-nowrap text-[13px] font-bold text-slate-400 md:inline">トレード研究所</span>
-        <Ticker price={price} dir={dir} />
+        <Ticker quotes={market.quotes} />
         <button
           type="button"
           onClick={triggerShock}
@@ -418,6 +448,36 @@ export function Lab() {
             transformOrigin: 'center',
           }}
         >
+          {/* ===== 画面の余りを埋める壁と床の続き ===== */}
+          <div
+            className="pointer-events-none absolute"
+            style={{ left: -BLEED, right: -BLEED, top: -BLEED, height: FLOOR_TOP + BLEED, background: 'linear-gradient(#070d18, #0a1322 70%, #0e1930)' }}
+          />
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: -BLEED,
+              right: -BLEED,
+              top: FLOOR_TOP,
+              bottom: -BLEED,
+              background: 'linear-gradient(#33405f, #1e2842 30%, #141b30 60%, #0b1020)',
+              backgroundImage:
+                'linear-gradient(rgba(255,255,255,0.07), transparent 8%), repeating-linear-gradient(0deg, rgba(0,0,0,0.14) 0 2px, transparent 2px 56px)',
+            }}
+          />
+          <div className="pointer-events-none absolute h-[3px]" style={{ left: -BLEED, right: -BLEED, top: FLOOR_TOP - 3, background: '#05080f' }} />
+          <div className="pointer-events-none absolute h-px" style={{ left: -BLEED, right: -BLEED, top: FLOOR_TOP, background: 'rgba(255,255,255,0.18)' }} />
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: -BLEED,
+              right: -BLEED,
+              top: -BLEED,
+              bottom: -BLEED,
+              background: 'radial-gradient(ellipse 45% 45% at 50% 40%, transparent 60%, rgba(3,6,13,0.85) 100%)',
+            }}
+          />
+
           {/* ===== 壁 ===== */}
           <div
             className="absolute inset-x-0 top-0"
@@ -536,11 +596,16 @@ export function Lab() {
 
           {/* ===== パネル ===== */}
           <BigChart
-            candles={candles}
-            price={price}
-            dir={dir}
+            candles={market.candles}
+            symbol={market.symbol}
+            onSymbol={market.setSymbol}
+            interval={market.interval}
+            price={market.price}
+            prevClose={market.prevClose}
+            dir={market.dir}
+            ready={market.ready}
             shocked={shocked}
-            style={{ left: '3%', top: 64, width: '38.5%', height: 324, ...dimStyle(0.45) }}
+            style={{ left: '2.5%', top: 62, width: '40%', height: 322, ...dimStyle(0.45) }}
           />
           <CodePanel style={{ right: '3%', top: 64, width: '16%', ...dimStyle(0.45) }} />
 
@@ -581,6 +646,37 @@ export function Lab() {
             </div>
           </Desk>
 
+          {/* アルゴを照らすスポットライトと足元のリング。エンジンルームで埋もれないように */}
+          <div
+            className="pointer-events-none absolute -translate-x-1/2"
+            style={{
+              left: `${CHAR_POS.algo.x}%`,
+              top: 0,
+              width: 300,
+              height: STAGE_H * (1 - CHAR_POS.algo.bottom / 100) + 8,
+              clipPath: 'polygon(44% 0, 56% 0, 100% 100%, 0 100%)',
+              background: shocked
+                ? 'linear-gradient(rgba(224,75,75,0.02), rgba(224,75,75,0.16))'
+                : 'linear-gradient(rgba(53,245,138,0.02), rgba(53,245,138,0.13))',
+              ...dimStyle(0.5),
+            }}
+          />
+          <div
+            className="pointer-events-none absolute -translate-x-1/2 rounded-full border"
+            style={{
+              left: `${CHAR_POS.algo.x}%`,
+              bottom: `calc(${CHAR_POS.algo.bottom}% - 12px)`,
+              width: 150,
+              height: 34,
+              borderColor: shocked ? 'rgba(255,132,132,0.7)' : 'rgba(53,245,138,0.7)',
+              background: shocked
+                ? 'radial-gradient(ellipse at center, rgba(224,75,75,0.35), rgba(224,75,75,0.05) 70%)'
+                : 'radial-gradient(ellipse at center, rgba(53,245,138,0.35), rgba(53,245,138,0.05) 70%)',
+              boxShadow: shocked ? '0 0 24px rgba(224,75,75,0.5)' : '0 0 24px rgba(53,245,138,0.45)',
+              zIndex: 14,
+              ...dimStyle(0.5),
+            }}
+          />
           <Chara character={CHARACTERS.algo} {...CHAR_POS.algo} z={15} onSelect={select} dimmed={tutorial} bubble={bubbleFor('algo')} />
 
           <Chara character={CHARACTERS.gantz} {...CHAR_POS.gantz} onSelect={select} dimmed={tutorial} bubble={bubbleFor('gantz')} />
@@ -624,7 +720,7 @@ export function Lab() {
                   <p className="text-[18px] font-bold leading-relaxed text-white">
                     ようこそ、トレード研究所へ！
                     <br />
-                    まずは受付の<span className="text-yellow-300">ユイ</span>をクリックして
+                    まずは受付の<span className="text-yellow-300">{CHARACTERS.yui.name}</span>をクリックして
                     <br />
                     初期設定を始めましょう！
                   </p>

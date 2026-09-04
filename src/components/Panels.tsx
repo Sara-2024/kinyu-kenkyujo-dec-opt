@@ -1,7 +1,7 @@
 // 壁の大型ライブチャート、サーバーラック、コードモニター、机まわり。
 // パネルはすべて共通トークン（--panel-bg / --panel-border / --panel-glow）で統一。
 import type { CSSProperties, ReactNode } from 'react'
-import type { Candle } from '../hooks/useMarket'
+import { CHART_SYMBOLS, formatMarketPrice, symbolInfo, type Candle } from '../data/market'
 
 const GREEN = '#2fbf62'
 const RED = '#e04b4b'
@@ -42,129 +42,206 @@ export function PanelLabel({ text, color = 'var(--accent)' }: { text: string; co
   )
 }
 
-/** 壁の大型ライブチャート */
+/** 壁の大型ライブチャート。足は /api/market（Yahoo Finance）から来た本物 */
 export function BigChart({
   candles,
+  symbol,
+  onSymbol,
+  interval,
   price,
+  prevClose,
   dir,
+  ready,
   shocked,
   style,
 }: {
   candles: Candle[]
+  symbol: string
+  onSymbol: (symbol: string) => void
+  interval: string
   price: number
+  prevClose: number
   dir: number
+  ready: boolean
   shocked: boolean
   style?: CSSProperties
 }) {
-  const W = 480
-  const H = 210
-  const VH = 34
-  const lo = Math.min(...candles.map((k) => k.l)) - 0.1
-  const hi = Math.max(...candles.map((k) => k.h)) + 0.1
-  const x = (i: number) => (i / candles.length) * W
-  const y = (v: number) => H - ((v - lo) / (hi - lo)) * H
-  const cw = (W / candles.length) * 0.58
-
-  const ma = candles.map((_, i) => {
-    const from = Math.max(0, i - 19)
-    const slice = candles.slice(from, i + 1)
-    return slice.reduce((a, k) => a + k.c, 0) / slice.length
-  })
-  const ranges = candles.map((k) => k.h - k.l)
-  const maxRange = Math.max(...ranges, 0.001)
-  const labels = [0.85, 0.62, 0.38, 0.15].map((t) => lo + (hi - lo) * t)
+  const W = 520
+  const H = 200
+  const info = symbolInfo(symbol)
+  const fmt = (v: number) => formatMarketPrice(v, info)
   const priceColor = dir >= 0 ? GREEN : RED
+  const changePct = prevClose ? ((price - prevClose) / prevClose) * 100 : 0
+
+  const lows = candles.map((k) => k.l)
+  const highs = candles.map((k) => k.h)
+  const rawLo = lows.length ? Math.min(...lows) : 0
+  const rawHi = highs.length ? Math.max(...highs) : 1
+  const pad = Math.max((rawHi - rawLo) * 0.08, 1e-9)
+  const lo = rawLo - pad
+  const hi = rawHi + pad
+  const n = Math.max(candles.length, 1)
+  const slot = W / n
+  const cw = slot * 0.62
+  const x = (i: number) => i * slot + (slot - cw) / 2
+  const y = (v: number) => H - ((v - lo) / (hi - lo)) * H
+
+  const ma = (len: number) =>
+    candles.map((_, i) => {
+      const from = Math.max(0, i - (len - 1))
+      const slice = candles.slice(from, i + 1)
+      return slice.reduce((a, k) => a + k.c, 0) / slice.length
+    })
+  const ma20 = ma(20)
+  const ma5 = ma(5)
+  const labels = [0.85, 0.62, 0.38, 0.15].map((t) => lo + (hi - lo) * t)
+  const timeAt = (i: number) => {
+    const k = candles[i]
+    if (!k) return ''
+    return new Date(k.t * 1000).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' })
+  }
+  const timeIdx = n >= 8 ? [Math.floor(n * 0.1), Math.floor(n * 0.37), Math.floor(n * 0.64), Math.floor(n * 0.9)] : []
+  const intervalLabel = interval === '1h' ? 'H1' : interval === '5m' ? 'M5' : 'M15'
 
   return (
     <Panel style={style} className={shocked ? 'anim-alarm-border' : ''}>
       <div className="accent-line anim-neon absolute inset-x-4 top-0 h-px" />
-      {/* ヘッダー */}
+      {/* ヘッダー：銘柄・時間足・現在値 */}
       <div className="flex items-baseline gap-3 px-6 pt-3.5">
-        <span className="font-dot text-xl font-bold tracking-wider text-slate-100">USD/JPY</span>
-        <span className="font-mono text-[12px] text-slate-400">M15</span>
+        <span className="font-dot text-[22px] font-bold tracking-wider text-slate-100">{info.label}</span>
+        <span className="font-mono text-[12px] text-slate-400">{intervalLabel}</span>
         <span className="font-mono hidden text-[11px] tracking-[0.2em] lg:inline" style={{ color: '#ffd23e' }}>
           ─ MA20
         </span>
-        <span
-          className="font-dot ml-auto text-[24px] font-bold tabular-nums leading-none"
-          style={{ color: priceColor, textShadow: `0 0 10px ${priceColor}55` }}
-        >
-          {dir >= 0 ? '▲' : '▼'} {price.toFixed(2)}
+        <span className="font-mono hidden text-[11px] tracking-[0.2em] lg:inline" style={{ color: 'var(--accent)' }}>
+          ─ MA5
         </span>
+        {ready && (
+          <span className="ml-auto flex items-baseline gap-2.5">
+            <span
+              className="font-mono text-[13px] font-bold tabular-nums"
+              style={{ color: changePct >= 0 ? GREEN : RED }}
+            >
+              {changePct >= 0 ? '+' : ''}
+              {changePct.toFixed(2)}%
+            </span>
+            <span
+              className="font-dot text-[26px] font-bold tabular-nums leading-none"
+              style={{ color: priceColor, textShadow: `0 0 10px ${priceColor}55` }}
+            >
+              {dir >= 0 ? '▲' : '▼'} {fmt(price)}
+            </span>
+          </span>
+        )}
       </div>
 
-      <div className="absolute inset-x-6 bottom-4 top-[3.6rem] flex">
+      {/* 銘柄の切り替え */}
+      <div className="mt-2 flex gap-1.5 px-6">
+        {CHART_SYMBOLS.map((s) => {
+          const on = s.symbol === symbol
+          return (
+            <button
+              key={s.symbol}
+              type="button"
+              onClick={() => onSymbol(s.symbol)}
+              className="font-mono h-11 flex-1 rounded-[3px] border text-[13px] font-bold tracking-wide transition"
+              style={{
+                borderColor: on ? 'var(--accent)' : 'rgba(94,204,255,0.18)',
+                background: on ? 'rgba(94,204,255,0.16)' : 'rgba(8,14,26,0.5)',
+                color: on ? '#eaf6ff' : '#8aa0bf',
+                boxShadow: on ? '0 0 10px rgba(94,204,255,0.25)' : undefined,
+              }}
+            >
+              {s.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="absolute inset-x-6 bottom-8 top-[7.4rem] flex">
         <div className="relative flex-1">
-          <svg viewBox={`0 0 ${W} ${H + VH + 6}`} preserveAspectRatio="none" className="h-full w-full">
-            {[0.25, 0.5, 0.75].map((t) => (
-              <line key={t} x1={0} x2={W} y1={H * t} y2={H * t} stroke="rgba(94,204,255,0.1)" strokeWidth={1} />
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full">
+            {[0.15, 0.38, 0.62, 0.85].map((t) => (
+              <line key={t} x1={0} x2={W} y1={H * (1 - t)} y2={H * (1 - t)} stroke="rgba(94,204,255,0.1)" strokeWidth={1} />
             ))}
-            {[0.25, 0.5, 0.75].map((t) => (
-              <line key={t} x1={W * t} x2={W * t} y1={0} y2={H} stroke="rgba(94,204,255,0.07)" strokeWidth={1} />
+            {timeIdx.map((i) => (
+              <line key={i} x1={x(i) + cw / 2} x2={x(i) + cw / 2} y1={0} y2={H} stroke="rgba(94,204,255,0.07)" strokeWidth={1} />
             ))}
             {candles.map((k, i) => {
               const up = k.c >= k.o
               const color = up ? GREEN : RED
               const cx = x(i) + cw / 2
+              const top = y(Math.max(k.o, k.c))
+              const bodyH = Math.max(Math.abs(y(k.o) - y(k.c)), 1.5)
               return (
-                <g key={i}>
-                  <line x1={cx} x2={cx} y1={y(k.h)} y2={y(k.l)} stroke={color} strokeWidth={1.4} />
-                  <rect
-                    x={x(i)}
-                    y={y(Math.max(k.o, k.c))}
-                    width={cw}
-                    height={Math.max(Math.abs(y(k.o) - y(k.c)), 2)}
-                    fill={color}
-                  />
-                  <rect
-                    x={x(i)}
-                    y={H + 6 + VH * (1 - ranges[i] / maxRange)}
-                    width={cw}
-                    height={(VH * ranges[i]) / maxRange}
-                    fill={up ? 'rgba(47,191,98,0.4)' : 'rgba(224,75,75,0.4)'}
-                  />
+                <g key={k.t}>
+                  <line x1={cx} x2={cx} y1={y(k.h)} y2={y(k.l)} stroke={color} strokeWidth={1.2} />
+                  <rect x={x(i)} y={top} width={cw} height={bodyH} fill={up ? 'rgba(47,191,98,0.85)' : 'rgba(224,75,75,0.9)'} />
                 </g>
               )
             })}
-            <polyline
-              points={candles.map((_, i) => `${x(i) + cw / 2},${y(ma[i])}`).join(' ')}
-              fill="none"
-              stroke="#ffd23e"
-              strokeWidth={2.4}
-              strokeLinejoin="round"
-            />
-            <line
-              x1={0}
-              x2={W}
-              y1={y(price)}
-              y2={y(price)}
-              stroke={priceColor}
-              strokeWidth={1}
-              strokeDasharray="5 4"
-            />
+            {candles.length > 1 && (
+              <>
+                <polyline
+                  points={candles.map((_, i) => `${x(i) + cw / 2},${y(ma5[i])}`).join(' ')}
+                  fill="none"
+                  stroke="rgba(94,204,255,0.9)"
+                  strokeWidth={1.6}
+                  strokeLinejoin="round"
+                />
+                <polyline
+                  points={candles.map((_, i) => `${x(i) + cw / 2},${y(ma20[i])}`).join(' ')}
+                  fill="none"
+                  stroke="#ffd23e"
+                  strokeWidth={2.2}
+                  strokeLinejoin="round"
+                />
+              </>
+            )}
+            {ready && (
+              <line x1={0} x2={W} y1={y(price)} y2={y(price)} stroke={priceColor} strokeWidth={1} strokeDasharray="5 4" />
+            )}
           </svg>
-        </div>
-        {/* 価格軸 */}
-        <div className="relative w-[4.4rem]">
-          {labels.map((v, i) => (
+          {/* 時刻（日本時間） */}
+          {timeIdx.map((i) => (
             <span
               key={i}
-              className="font-mono absolute right-0 -translate-y-1/2 text-[13px] text-slate-400"
-              style={{ top: `${((1 - (v - lo) / (hi - lo)) * H * 100) / (H + VH + 6)}%` }}
+              className="font-mono absolute top-full mt-1 -translate-x-1/2 text-[12px] text-slate-500"
+              style={{ left: `${((x(i) + cw / 2) / W) * 100}%` }}
             >
-              {v.toFixed(2)}
+              {timeAt(i)}
             </span>
           ))}
-          <span
-            className="font-mono absolute right-0 -translate-y-1/2 rounded-[3px] px-1.5 py-0.5 text-[13px] font-bold tabular-nums"
-            style={{
-              top: `${((1 - (price - lo) / (hi - lo)) * H * 100) / (H + VH + 6)}%`,
-              color: '#081018',
-              background: priceColor,
-            }}
-          >
-            {price.toFixed(2)}
-          </span>
+          {!ready && (
+            <p className="font-mono absolute inset-0 flex items-center justify-center text-[13px] tracking-[0.3em] text-slate-500">
+              LOADING
+            </p>
+          )}
+        </div>
+        {/* 価格軸 */}
+        <div className="relative w-[5.2rem]">
+          {ready &&
+            labels.map((v, i) => (
+              <span
+                key={i}
+                className="font-mono absolute right-0 -translate-y-1/2 text-[13px] text-slate-400"
+                style={{ top: `${(1 - (v - lo) / (hi - lo)) * 100}%` }}
+              >
+                {fmt(v)}
+              </span>
+            ))}
+          {ready && (
+            <span
+              className="font-mono absolute right-0 -translate-y-1/2 rounded-[3px] px-1.5 py-0.5 text-[13px] font-bold tabular-nums"
+              style={{
+                top: `${(1 - (price - lo) / (hi - lo)) * 100}%`,
+                color: '#081018',
+                background: priceColor,
+              }}
+            >
+              {fmt(price)}
+            </span>
+          )}
         </div>
       </div>
     </Panel>
