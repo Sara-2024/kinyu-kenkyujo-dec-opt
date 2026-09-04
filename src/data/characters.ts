@@ -33,6 +33,8 @@ export interface Character {
   greeting: string
   /** いま何をしているか（会話ウィンドウの名札に「いま: 〇〇」と出す） */
   statusText: string
+  /** 研究所の名札に出す短い状態（英字）。アルゴだけは MT5 の状態で置き換わる */
+  statusEn: string
   /** 会話の選択肢。AIに送る質問文 */
   choices: string[]
   /** この選択肢が押されたら初期設定フローに入る */
@@ -74,6 +76,7 @@ export const CHARACTERS: Record<string, Character> = {
     fallback:
       'その点は、実際に稼働がはじまってからのデータを見ながらお答えするのが確実です。接続していただければ、毎日の稼働レポートでお知らせします。',
     statusText: 'EAの稼働を監視中',
+    statusEn: 'MONITORING',
     choices: ['自動売買をはじめる', '今日の成績は？', '過去の成績は？', 'いまのポジションは？', 'パスワードは教えなくて大丈夫？'],
     startsSetup: '自動売買をはじめる',
     name: 'アルゴ',
@@ -118,6 +121,7 @@ export const CHARACTERS: Record<string, Character> = {
     fallback:
       'チャートのことでしたら、この大画面を一緒に見ながらのほうが早いです。どのあたりが気になりますか。',
     statusText: '大画面でチャートを監視中',
+    statusEn: 'ANALYZING',
     choices: ['トレードを添削して', 'トレードのクセを教えて', '今日の注目ポイントは？', 'この形は買い？売り？', '初心者は何から見ればいい？'],
     connectedChoices: ['トレードを添削して', 'トレードのクセを教えて', '今日の注目ポイントは？', 'この形は買い？売り？'],
     name: 'リン',
@@ -150,6 +154,7 @@ export const CHARACTERS: Record<string, Character> = {
     fallback:
       '経済や金利のことでしたら、順を追ってご説明します。どのあたりから気になりますか。',
     statusText: '金利と経済指標をチェック中',
+    statusEn: 'CHECKING NEWS',
     choices: ['今週の重要指標は？', '金利差ってなに？', '円安はまだ続く？'],
     name: 'ジン',
     role: '経済・金利',
@@ -183,9 +188,10 @@ export const CHARACTERS: Record<string, Character> = {
     fallback:
       '道具のことなら任せてくれ。先に言っておくが、どれも万能じゃあない。何に困っている？',
     statusText: '新しいインジケーターを開発中',
+    statusEn: 'SYSTEM LAB',
     choices: ['おすすめのツールは？', 'インジケーターの使い方は？', 'MT4とMT5どっちがいい？'],
     name: 'ガンツ',
-    role: 'ツール開発',
+    role: 'システム開発',
     greeting: '開発の{{gantz}}だ。道具の選び方なら任せてくれ。先に言うが、どれも万能じゃあない。',
     color: '#ff9d4d',
     look: {
@@ -212,10 +218,11 @@ export const CHARACTERS: Record<string, Character> = {
     fallback:
       'ご案内いたします。どのようなことでお困りでしょうか。',
     statusText: 'ご案内できます',
+    statusEn: 'READY',
     choices: ['初期設定をはじめる', 'この研究所について知りたい', '誰に相談すればいい？'],
     startsSetup: '初期設定をはじめる',
     name: 'ユイ',
-    role: '受付案内',
+    role: 'ナビゲーター',
     greeting: 'ようこそ、トレード研究所へ。受付の{{yui}}と申します。どのフロアへご案内しましょうか。',
     color: '#ff8fb0',
     look: {
@@ -271,3 +278,44 @@ export const RECEPTION = {
   },
 } as const
 
+
+// ────────────────────────────────
+// 研究所に入ったあと、ユイが初回だけ順に案内すること（画面の見どころ）。
+// 「？ 案内」ボタンでいつでも見直せる。
+// ────────────────────────────────
+export const YUI_GUIDE: string[] = [
+  'ようこそ、研究所へ！ ここは、お客様専用のAIトレードチームが働いている部屋です。',
+  'まずは真ん中の管制室にいる{{algo}}に話しかけてみましょう。自動売買の中枢を任せている、いちばん大事なスタッフです。',
+  '{{algo}}からは、今日の損益・いまのポジション・稼働状況を、いつでも確認できます。頭の上に運用報告も出しますね。',
+  '左の壁のチャートは、クリックすると大きく表示できます。銘柄の切り替えもそこからどうぞ。',
+  '相場のことは、チャートなら{{rin}}、経済や金利なら{{jin}}に聞いてください。',
+  '右の情報センターには、取引の記録やお知らせが並びます。高度な設定は、右奥の SYSTEM LAB にいる{{gantz}}のところから変更できます。',
+  '困ったときは、受付の私に聞いてください。いつでもご案内します。',
+]
+
+/** ユイが、お客様の操作に合わせてひとこと添える */
+export const YUI_HINTS = {
+  chartOpened: 'チャートを大きくしました。上のボタンで銘柄を切り替えられます。閉じるときは右上の ✕ です。',
+  backFromLab: 'おかえりなさい。設定の変更は、いつでも SYSTEM LAB からできます。',
+  reportsOpened: '{{algo}}の運用報告は、ここにまとめて残しています。',
+} as const
+
+// ────────────────────────────────
+// アルゴの運用報告。数字はすべて MT5（ブリッジ）が返した値を当てはめるだけ。
+// {profit} {count} {wins} {losses} {rate} {positions} {floating} {account} {server}
+// ────────────────────────────────
+export const ALGO_REPORT = {
+  connected: 'MT5と接続しました。口座 {account}（{server}）を監視します。',
+  disconnected: 'MT5との接続が切れました。接続ツールの起動をご確認ください。',
+  resumed: '自動売買を再開しました。条件がそろい次第、取引をはじめます。',
+  stopped: '自動売買を停止しました。指示があるまで待機します。',
+  tradeClosed: '先ほどのトレードは {profit} でした。本日の損益は {today} です。',
+  tradesClosed: '{count}件のトレードが決済されました。本日の損益は {today} です。',
+  todayProfit: '本日の運用損益は {today} です（決済 {count} 回）。',
+  todayNone: '本日はまだ決済がありません。市場を監視中です。',
+  positions: '現在 {positions} ポジションを監視しています（含み損益 {floating}）。',
+  positionsNone: '現在、ポジションはありません。次の条件がそろうまで待機中です。',
+  winRate: '本日の勝率は {rate}% です（{wins}勝 {losses}敗）。',
+  watching: '現在、市場を監視中です。',
+  paused: 'いまは停止中です。再開は私の管理画面からどうぞ。',
+} as const

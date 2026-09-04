@@ -185,3 +185,56 @@ body {
   50% { opacity: 0.35; box-shadow: none; }
 }
 .live-dot { animation: live-dot 1.6s ease-in-out infinite; }
+
+/* ───── 研究所の演出（translateY / scale だけを使う） ───── */
+/* 頭上の報告・案内の登場（外側の -translate-x-1/2 と別の要素に付けること） */
+@keyframes rise-in {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.rise-in { animation: rise-in 0.28s ease-out; }
+
+/* オーバーレイの登場（中央からふくらむ） */
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.86); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.pop-in { animation: pop-in 0.32s cubic-bezier(0.2, 0.8, 0.25, 1); }
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.fade-in { animation: fade-in 0.25s ease-out; }
+
+/* データが届いたときの小さな跳ね（キャラの反応） */
+@keyframes hop {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
+}
+.hop { animation: hop 0.5s ease-out; }
+
+/* 管制室モニターの走査線（薄い帯が上から下へ） */
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(400%); }
+}
+.scan-line { animation: scan 3.2s linear infinite; }
+
+/* ジンの掲示板：見出しが下から上へ流れる */
+@keyframes vscroll {
+  to { transform: translateY(-50%); }
+}
+.anim-vscroll { animation: vscroll 22s linear infinite; }
+
+/* ランプの静かな点滅（稼働中の表示） */
+@keyframes soft-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.soft-blink { animation: soft-blink 1.8s ease-in-out infinite; }
+
+/* 情報センターのカード・扉のホバー */
+.info-card { transition: transform 0.18s ease-out, border-color 0.2s ease-out; }
+.info-card:hover { transform: translateY(-2px); border-color: var(--accent) !important; }
+.door { transition: transform 0.18s ease-out, filter 0.2s ease-out; }
+.door:hover { transform: translateY(-3px); filter: brightness(1.25); }

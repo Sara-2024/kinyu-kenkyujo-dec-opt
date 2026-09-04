@@ -2,17 +2,38 @@
 // 研究所のメイン画面。
 //  - 1440×810 の固定ステージを画面にフィットさせ、
 //    ホイールで拡大縮小・ドラッグで移動できる（40〜50代向けに大きなボタンも用意）
-//  - キャラをクリックするとズームインしてから /chat/:id へ遷移
-//  - 「…」の常時吹き出しは廃止。かわりに経済指標・要人発言などの
-//    AI通知が研究員の頭上に随時ポップアップする
+//  - キャラをクリックするとズームインして、その場に会話ウィンドウを開く
+//  - 部屋は2つ。研究所（分析デスク・アルゴ管制室・情報センター）と、
+//    右奥の扉の先にある SYSTEM LAB（ガンツの部屋）
+//  - アルゴは管制室のモニターに映る数字（MT5 の実データ）を頭上の吹き出しで報告する
+//  - 経済指標・要人発言などの AI 通知は研究員の頭上に随時ポップアップする
 // ---------------------------------------------------------------
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DialogueWindow } from '../components/DialogueWindow'
+import {
+  ConsoleDesk,
+  ConsoleMonitors,
+  DeskScreen,
+  Door,
+  InfoCenter,
+  MarketBoard,
+  MiniRates,
+  NoticesList,
+  Overlay,
+  ReportsList,
+  RoleTag,
+  ScheduleList,
+  Sparkline,
+  SystemBoard,
+  systemName,
+  systemStateOf,
+} from '../components/LabSets'
 import { PixelPerson } from '../components/PixelPerson'
-import { BigChart, CodePanel, Desk, DeskMonitor, ServerRack, StatusMonitor, ToolBox } from '../components/Panels'
-import type { Character } from '../data/characters'
+import { BigChart, Desk, ServerRack, ToolBox } from '../components/Panels'
+import { YUI_GUIDE, YUI_HINTS, type Character } from '../data/characters'
 import { useAuth } from '../hooks/AuthContext'
+import { useAlgoReports } from '../hooks/useAlgoReports'
 import { useBridge } from '../hooks/useBridge'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { useMarket } from '../hooks/useMarket'
@@ -26,18 +47,23 @@ const MAX_ZOOM = 3
 const BLEED = 700 // ステージの外に描き足す壁と床（画面の余りを埋める）
 
 const ZONES = {
-  analysis: { from: 0, to: 44.5, color: '#5eccff', en: 'ANALYSIS DESK', jp: '分析デスク' },
-  engine: { from: 44.5, to: 78.5, color: '#35f58a', en: 'CORE ENGINE ROOM', jp: 'コア・エンジンルーム' },
-  garage: { from: 78.5, to: 100, color: '#ff9d4d', en: 'DEV GARAGE', jp: '開発ガレージ' },
+  analysis: { from: 0, to: 40, color: '#5eccff', en: 'ANALYSIS DESK', jp: '分析デスク' },
+  control: { from: 40, to: 74, color: '#35f58a', en: 'ALGO CONTROL ROOM', jp: 'アルゴ管制室' },
+  info: { from: 74, to: 100, color: '#ffb454', en: 'INFO CENTER', jp: '情報センター' },
 } as const
+const SYSTEM_ZONE = { from: 0, to: 100, color: '#ff9d4d', en: 'SYSTEM LAB', jp: 'システム研究室' } as const
+const YELLOW = '#ffd23e'
 
 /** キャラの立ち位置（ステージ%）。描画とズームインの両方で使う */
 const CHAR_POS: Record<string, { x: number; bottom: number; s: number }> = {
-  rin: { x: 16, bottom: 28, s: 5 },
-  jin: { x: 29, bottom: 28, s: 5.4 },
-  algo: { x: 61.5, bottom: 30, s: 5.4 },
-  gantz: { x: 87, bottom: 30, s: 5.4 },
+  rin: { x: 12, bottom: 28, s: 5 },
+  jin: { x: 30, bottom: 28, s: 5.4 },
+  algo: { x: 63, bottom: 30, s: 5.4 },
   yui: { x: 50, bottom: 12, s: 5.6 },
+}
+/** SYSTEM LAB での立ち位置 */
+const SYSTEM_POS: Record<string, { x: number; bottom: number; s: number }> = {
+  gantz: { x: 50, bottom: 30, s: 5.4 },
 }
 
 const JIN_SHOCK_LINE = 'おや…？ 妙な動きだ。指標か、それとも──ちょっと金利を見てくる。'
@@ -53,15 +79,26 @@ const NEWS_POOL: NewsItem[] = [
   { charId: 'jin', tone: 'warn', label: '指標接近', text: '⏰ まもなく米・雇用統計の発表です（21:30）。値が飛びやすい時間帯ですよ。' },
   { charId: 'jin', tone: 'alert', label: '速報', text: '📢 速報：トランプ大統領の発言が伝わりました。ドル円が振れやすくなっています。' },
   { charId: 'rin', tone: 'info', label: '注目', text: '👀 USD/JPYが直近高値に接近中。ここを抜けるかどうかが今日のポイントです。' },
-  { charId: 'algo', tone: 'info', label: '稼働報告', text: '🤖 システムの状態は、チャート上の稼働表示で確認できます。' },
-  { charId: 'gantz', tone: 'info', label: '開発中', text: '🔧 新しいインジケーターのテストがもうすぐ終わる。近々ここで公開する。' },
+  { charId: 'algo', tone: 'info', label: '稼働報告', text: '🤖 稼働状況は、管制室のモニターと右の情報センターでいつでも確認できます。' },
+  { charId: 'yui', tone: 'info', label: '案内', text: '🔧 右奥の SYSTEM LAB では、新しいインジケーターのテストが進んでいます。' },
   { charId: 'jin', tone: 'warn', label: '指標接近', text: '⏰ 30分後に日銀総裁の会見があります。円絡みは値動きに注意です。' },
 ]
 
-const TONE_STYLE: Record<NewsItem['tone'], { border: string; glow: string; labelColor: string }> = {
+type BubbleTone = NewsItem['tone'] | 'good' | 'bad'
+const TONE_STYLE: Record<BubbleTone, { border: string; glow: string; labelColor: string }> = {
   alert: { border: 'rgba(255,107,107,0.8)', glow: '0 0 18px rgba(224,75,75,0.3)', labelColor: '#ff6b6b' },
   warn: { border: 'rgba(255,210,62,0.8)', glow: '0 0 18px rgba(255,210,62,0.25)', labelColor: '#ffd23e' },
   info: { border: 'rgba(94,204,255,0.8)', glow: '0 0 18px rgba(94,204,255,0.25)', labelColor: '#5eccff' },
+  good: { border: 'rgba(53,245,138,0.8)', glow: '0 0 18px rgba(53,245,138,0.25)', labelColor: '#35f58a' },
+  bad: { border: 'rgba(255,132,132,0.8)', glow: '0 0 18px rgba(255,132,132,0.25)', labelColor: '#ff8484' },
+}
+
+interface Bubble {
+  label: string
+  text: string
+  tone: BubbleTone
+  /** 吹き出し自体をクリックしたときの動き（詳細を開くなど） */
+  onClick?: () => void
 }
 
 function Chara({
@@ -75,6 +112,8 @@ function Chara({
   surprised = false,
   bubble,
   exclaim = false,
+  status,
+  react = false,
 }: {
   character: Character
   x: number
@@ -84,10 +123,15 @@ function Chara({
   z?: number
   dimmed?: boolean
   surprised?: boolean
-  bubble?: { label: string; text: string; tone: NewsItem['tone'] } | null
+  bubble?: Bubble | null
   exclaim?: boolean
+  /** 名札の3行目。指定がなければキャラ既定の statusEn */
+  status?: { text: string; color: string }
+  /** データが更新された瞬間に小さく跳ねる */
+  react?: boolean
 }) {
   const tone = bubble ? TONE_STYLE[bubble.tone] : null
+  const st = status ?? { text: character.statusEn, color: character.color }
   return (
     <button
       type="button"
@@ -99,26 +143,40 @@ function Chara({
       aria-label={`${character.role} ${character.name}と会話する`}
       title={`${character.name}と会話する`}
     >
-      {/* AI通知・イベント吹き出し */}
+      {/* AI通知・運用報告・イベント吹き出し */}
       {bubble && !dimmed && tone && (
-        <div className="news-in absolute bottom-full left-1/2 z-40 mb-3 w-64 -translate-x-1/2">
+        <div className="absolute bottom-full left-1/2 z-40 mb-3 w-64 -translate-x-1/2">
           <div
-            className="rounded-[5px] border px-4 py-3 text-left backdrop-blur-[2px]"
-            style={{ background: 'rgba(9,17,31,0.94)', borderColor: tone.border, boxShadow: tone.glow }}
+            className="rise-in"
+            onClick={
+              bubble.onClick
+                ? (e) => {
+                    e.stopPropagation()
+                    bubble.onClick?.()
+                  }
+                : undefined
+            }
+            role={bubble.onClick ? 'button' : undefined}
           >
-            <p className="font-mono mb-1 text-[10px] font-bold tracking-[0.3em]" style={{ color: tone.labelColor }}>
-              ▎{bubble.label}
-            </p>
-            <p className="text-[14px] font-bold leading-relaxed text-slate-100">{bubble.text}</p>
+            <div
+              className="rounded-[5px] border px-4 py-3 text-left backdrop-blur-[2px]"
+              style={{ background: 'rgba(9,17,31,0.94)', borderColor: tone.border, boxShadow: tone.glow }}
+            >
+              <p className="font-mono mb-1 flex justify-between text-[10px] font-bold tracking-[0.3em]" style={{ color: tone.labelColor }}>
+                <span>▎{bubble.label}</span>
+                {bubble.onClick && <span className="tracking-[0.15em] text-slate-500">詳しく ▶</span>}
+              </p>
+              <p className="text-[14px] font-bold leading-relaxed text-slate-100">{bubble.text}</p>
+            </div>
+            <div
+              className="mx-auto h-0 w-0 border-x-[8px] border-t-[8px] border-x-transparent"
+              style={{ borderTopColor: tone.border }}
+            />
           </div>
-          <div
-            className="mx-auto h-0 w-0 border-x-[8px] border-t-[8px] border-x-transparent"
-            style={{ borderTopColor: tone.border }}
-          />
         </div>
       )}
 
-      <div className="relative flex flex-col items-center">
+      <div className={`relative flex flex-col items-center ${react ? 'hop' : ''}`}>
         {exclaim && !bubble && !dimmed && (
           <span className="animate-bob absolute -top-9 left-1/2 z-20 -translate-x-1/2 text-2xl font-bold text-yellow-300 drop-shadow-[0_0_8px_rgba(253,224,71,0.95)]">
             ！
@@ -131,6 +189,10 @@ function Chara({
           <p className="whitespace-nowrap text-[15px] font-bold leading-tight text-white">{character.role}</p>
           <p className="font-dot whitespace-nowrap text-[12px] leading-tight" style={{ color: character.color }}>
             {character.name}
+          </p>
+          <p className="font-mono flex items-center justify-center gap-1 whitespace-nowrap text-[9px] tracking-[0.2em]" style={{ color: st.color }}>
+            <span className="soft-blink inline-block h-1.5 w-1.5 rounded-full" style={{ background: st.color, boxShadow: `0 0 5px ${st.color}` }} />
+            {st.text}
           </p>
           {/* 「話せる」ことを示すマイクロコピー（机の陰に隠れないよう名札の中に） */}
           {!dimmed && <p className="font-mono text-[9px] tracking-[0.25em] text-slate-500">▶ CLICK</p>}
@@ -162,7 +224,7 @@ function Ticker({ quotes }: { quotes: Quote[] }) {
     </span>
   )
   return (
-    <div className="relative mx-6 h-full min-w-0 flex-1 overflow-hidden">
+    <div className="relative mx-4 h-full min-w-0 flex-1 overflow-hidden">
       {items.length > 0 && (
         <div className="anim-marquee flex h-full w-max items-center">
           {row('a')}
@@ -175,7 +237,7 @@ function Ticker({ quotes }: { quotes: Quote[] }) {
   )
 }
 
-function ZoneHeader({ zone, extra }: { zone: (typeof ZONES)[keyof typeof ZONES]; extra?: React.ReactNode }) {
+function ZoneHeader({ zone, extra }: { zone: { from: number; to: number; color: string; en: string; jp: string }; extra?: React.ReactNode }) {
   const center = (zone.from + zone.to) / 2
   return (
     <div className="absolute z-20 flex -translate-x-1/2 items-center gap-3" style={{ left: `${center}%`, top: 16 }}>
@@ -189,10 +251,49 @@ function ZoneHeader({ zone, extra }: { zone: (typeof ZONES)[keyof typeof ZONES];
   )
 }
 
+/** HUD の小さなボタン（通知・案内・部屋の移動） */
+function HudButton({
+  onClick,
+  children,
+  color = 'var(--panel-border)',
+  badge = 0,
+  title,
+}: {
+  onClick: () => void
+  children: React.ReactNode
+  color?: string
+  badge?: number
+  title?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="relative flex h-11 items-center whitespace-nowrap rounded-[4px] border px-3 text-[13px] font-bold text-slate-100 transition hover:brightness-125 active:translate-y-px"
+      style={{ borderColor: color, background: 'rgba(8,14,26,0.8)' }}
+    >
+      {children}
+      {badge > 0 && (
+        <span
+          className="font-mono absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold text-[#1c1607]"
+          style={{ background: YELLOW, boxShadow: `0 0 8px ${YELLOW}` }}
+        >
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+type OverlayKind = 'chart' | 'reports' | 'notices' | 'market'
+type Room = 'main' | 'system'
+
 export function Lab() {
   const { member, logout } = useAuth()
-  const { characters: CHARACTERS } = useSiteSettings()
+  const { characters: CHARACTERS, t } = useSiteSettings()
   const tutorialKey = member ? `lab-tutorial-done:${member.id}` : 'lab-tutorial-done'
+  const guideKey = member ? `lab-guide-done:${member.id}` : 'lab-guide-done'
   // チュートリアルは会員ごとに初回だけ
   const [tutorial, setTutorial] = useState(() => !localStorage.getItem(tutorialKey))
   const market = useMarket()
@@ -200,6 +301,19 @@ export function Lab() {
   const bridge = useBridge(member?.id)
   const [news, setNews] = useState<NewsItem | null>(null)
   const [dialogueId, setDialogueId] = useState<string | null>(null)
+
+  // ───── 見せ方だけの状態（部屋・オーバーレイ・案内） ─────
+  const [room, setRoom] = useState<Room>('main')
+  const [overlay, setOverlay] = useState<OverlayKind | null>(null)
+  /** ユイの案内。-1 = 出していない */
+  const [guideStep, setGuideStep] = useState(() => (localStorage.getItem(guideKey) ? -1 : 0))
+  const [yuiHint, setYuiHint] = useState<string | null>(null)
+  const [seenReports, setSeenReports] = useState(0)
+  const [reacting, setReacting] = useState(false)
+
+  const state = systemStateOf(bridge, shocked)
+  const running = state.key === 'running'
+  const algoReports = useAlgoReports(bridge, !!dialogueId || tutorial || room === 'system' || overlay !== null)
 
   // ───── パン・ズーム ─────
   //  - ズームの下限は「画面にぴったり収まる倍率」（zoom = 1）。それより縮めない
@@ -310,7 +424,7 @@ export function Lab() {
     (id: string) => {
       if (suppressClick.current) return
       if (tutorial && id !== 'yui') return
-      const pos = CHAR_POS[id]
+      const pos = (room === 'system' ? SYSTEM_POS : CHAR_POS)[id]
       if (!pos) return
       const targetZoom = Math.max(1.7, minZoom() * 1.5)
       const vh = viewSize.current.h
@@ -325,7 +439,7 @@ export function Lab() {
         localStorage.setItem(tutorialKey, '1')
       }
     },
-    [tutorial, base, tutorialKey, applyView, minZoom],
+    [tutorial, base, tutorialKey, applyView, minZoom, room],
   )
 
   const closeDialogue = useCallback(() => {
@@ -367,21 +481,134 @@ export function Lab() {
     }
   }, [tutorial])
 
-  const bubbleFor = (id: string) => {
+  // オーバーレイは Esc でも閉じる（会話ウィンドウの Esc とは別に持つ）
+  useEffect(() => {
+    if (!overlay) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOverlay(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [overlay])
+
+  // ユイのひとこと案内（6秒で消える）
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sayHint = useCallback(
+    (text: string) => {
+      setYuiHint(t(text))
+      if (hintTimer.current) clearTimeout(hintTimer.current)
+      hintTimer.current = setTimeout(() => setYuiHint(null), 6000)
+    },
+    [t],
+  )
+  useEffect(
+    () => () => {
+      if (hintTimer.current) clearTimeout(hintTimer.current)
+    },
+    [],
+  )
+
+  const openOverlay = useCallback(
+    (kind: OverlayKind) => {
+      setOverlay(kind)
+      if (kind === 'reports') {
+        setSeenReports(algoReports.reports.length)
+        sayHint(YUI_HINTS.reportsOpened)
+      }
+      if (kind === 'chart') sayHint(YUI_HINTS.chartOpened)
+    },
+    [algoReports.reports.length, sayHint],
+  )
+
+  /** 部屋を移る。会話は閉じ、全体表示に戻す */
+  const goRoom = useCallback(
+    (next: Room) => {
+      if (next === room) return
+      setDialogueId(null)
+      setOverlay(null)
+      setRoom(next)
+      resetView()
+      if (next === 'main') sayHint(YUI_HINTS.backFromLab)
+    },
+    [room, resetView, sayHint],
+  )
+
+  const finishGuide = useCallback(() => {
+    setGuideStep(-1)
+    localStorage.setItem(guideKey, '1')
+  }, [guideKey])
+  const restartGuide = useCallback(() => {
+    setOverlay(null)
+    setDialogueId(null)
+    if (room !== 'main') goRoom('main')
+    setGuideStep(0)
+  }, [room, goRoom])
+
+  // 決済数やポジション数が変わった瞬間、アルゴが小さく跳ねる
+  const reactKey = `${bridge.status?.today?.today_closed ?? ''}|${bridge.status?.positions?.length ?? bridge.status?.today?.open_positions ?? ''}`
+  const prevReactKey = useRef(reactKey)
+  useEffect(() => {
+    if (prevReactKey.current === reactKey) return
+    prevReactKey.current = reactKey
+    if (!bridge.live) return
+    setReacting(true)
+    const timer = setTimeout(() => setReacting(false), 600)
+    return () => clearTimeout(timer)
+  }, [reactKey, bridge.live])
+
+  const unread = Math.max(0, algoReports.reports.length - seenReports)
+  const showGuide = guideStep >= 0 && !tutorial && !dialogueId && room === 'main' && !overlay
+  const guideLine = showGuide ? t(YUI_GUIDE[Math.min(guideStep, YUI_GUIDE.length - 1)]) : null
+  const guideLast = guideStep >= YUI_GUIDE.length - 1
+  /** 案内の各ステップで光らせる場所 */
+  const guideRing: Array<{ left: string; bottom: string } | null> = [
+    null,
+    { left: `${CHAR_POS.algo.x}%`, bottom: `${CHAR_POS.algo.bottom}%` },
+    { left: `${CHAR_POS.algo.x}%`, bottom: `${CHAR_POS.algo.bottom}%` },
+    null,
+    { left: '21%', bottom: `${CHAR_POS.rin.bottom}%` },
+    { left: '86%', bottom: '38%' },
+    null,
+  ]
+  const ring = showGuide ? guideRing[guideStep] ?? null : null
+
+  const bubbleFor = (id: string): Bubble | null => {
     if (dialogueId) return null
-    if (shocked && id === 'jin') return { label: '急変動', text: JIN_SHOCK_LINE, tone: 'alert' as const }
+    if (shocked && id === 'jin') return { label: '急変動', text: JIN_SHOCK_LINE, tone: 'alert' }
+    if (id === 'algo' && algoReports.current && !shocked) {
+      const r = algoReports.current
+      return {
+        label: r.kind === 'trade' ? '決済' : r.kind === 'system' ? 'システム' : '運用報告',
+        text: r.text,
+        tone: r.tone,
+        onClick: () => openOverlay('reports'),
+      }
+    }
+    if (id === 'yui' && yuiHint && !showGuide) return { label: '案内', text: yuiHint, tone: 'info' }
     if (!shocked && news && news.charId === id) return { label: news.label, text: news.text, tone: news.tone }
     return null
   }
 
   const dimStyle = (o: number) => ({ opacity: tutorial ? o : 1 })
   const scale = base * zoom
+  const wallProps = {
+    candles: market.candles,
+    symbol: market.symbol,
+    onSymbol: market.setSymbol,
+    interval: market.interval,
+    price: market.price,
+    prevClose: market.prevClose,
+    dir: market.dir,
+    ready: market.ready,
+    shocked,
+  }
+  const controlColor = shocked ? '#e04b4b' : ZONES.control.color
 
   return (
     <div className="relative h-screen w-full overflow-hidden" style={{ background: '#070b14' }}>
       {/* ================= HUD ================= */}
       <header
-        className="absolute inset-x-0 top-0 z-40 flex items-center border-b px-6"
+        className="absolute inset-x-0 top-0 z-40 flex items-center border-b px-5"
         style={{ height: HUD_H, background: 'rgba(8,14,26,0.95)', borderColor: 'var(--panel-border)' }}
       >
         <span className="h-4 w-[3px]" style={{ background: 'var(--accent)', boxShadow: '0 0 8px var(--accent)' }} />
@@ -405,7 +632,22 @@ export function Lab() {
           ⚡ 急変動シミュレート
         </button>
         <div className="ml-3 flex items-center gap-2">
-          <span className="hidden max-w-[12rem] truncate text-[13px] text-slate-400 lg:inline">{member?.email}</span>
+          <HudButton onClick={() => openOverlay('reports')} badge={unread} title={`${CHARACTERS.algo.name}の運用報告`}>
+            🔔 通知
+          </HudButton>
+          <HudButton onClick={restartGuide} title="研究所の案内をもう一度見る">
+            ？ 案内
+          </HudButton>
+          {room === 'main' ? (
+            <HudButton onClick={() => goRoom('system')} color={`${SYSTEM_ZONE.color}88`} title="SYSTEM LAB（システム設定・拡張機能）へ">
+              SYSTEM LAB ▶
+            </HudButton>
+          ) : (
+            <HudButton onClick={() => goRoom('main')} color="var(--panel-border)" title="研究所へ戻る">
+              ◀ 研究所
+            </HudButton>
+          )}
+          <span className="hidden max-w-[12rem] truncate text-[13px] text-slate-400 xl:inline">{member?.email}</span>
           {member?.role === 'admin' && (
             <Link
               to="/admin"
@@ -518,183 +760,335 @@ export function Lab() {
             style={{ background: 'radial-gradient(ellipse 75% 70% at 50% 42%, transparent 58%, rgba(3,6,13,0.5) 100%)' }}
           />
 
-          {/* ===== 中央ベイ＝エンジンルーム ===== */}
-          <div
-            className="absolute"
-            style={{
-              left: `${ZONES.engine.from}%`,
-              width: `${ZONES.engine.to - ZONES.engine.from}%`,
-              top: 0,
-              height: FLOOR_TOP,
-              background: shocked
-                ? 'rgba(224,75,75,0.06)'
-                : 'linear-gradient(rgba(53,245,138,0.05), rgba(53,245,138,0.015))',
-              boxShadow: shocked ? 'inset 0 0 60px rgba(224,75,75,0.15)' : 'inset 0 0 60px rgba(53,245,138,0.06)',
-              ...dimStyle(0.5),
-            }}
-          >
-            <div
-              className="absolute inset-0"
-              style={{
-                background: 'repeating-linear-gradient(115deg, transparent 0 90px, rgba(255,255,255,0.015) 90px 130px)',
-              }}
-            />
-            <div className="absolute inset-x-[8%] bottom-0 flex items-end justify-between">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <ServerRack key={i} shocked={shocked} tall={i % 2 === 0} />
-              ))}
-            </div>
-            {shocked && <div className="anim-alarm pointer-events-none absolute inset-0 opacity-25" />}
-          </div>
-
-          {/* ベイの区切り */}
-          {[ZONES.engine.from, ZONES.engine.to].map((l) => (
-            <div
-              key={l}
-              className="absolute top-0 w-px"
-              style={{
-                left: `${l}%`,
-                height: FLOOR_TOP,
-                background: 'linear-gradient(rgba(94,204,255,0.35), rgba(94,204,255,0.08))',
-                boxShadow: '0 0 8px rgba(94,204,255,0.25)',
-              }}
-            />
-          ))}
-
-          {/* 床のエッジライト */}
-          {(Object.keys(ZONES) as Array<keyof typeof ZONES>).map((k) => {
-            const z = ZONES[k]
-            const color = k === 'engine' && shocked ? '#e04b4b' : z.color
-            return (
+          {room === 'main' ? (
+            <>
+              {/* ===== 中央ベイ＝アルゴ管制室（壁の色を変えて、部屋として際立たせる） ===== */}
               <div
-                key={k}
-                className="absolute h-[3px]"
+                className="absolute"
                 style={{
-                  left: `calc(${z.from}% + 8px)`,
-                  width: `calc(${z.to - z.from}% - 16px)`,
-                  top: FLOOR_TOP + 1,
-                  background: color,
-                  opacity: 0.6,
-                  boxShadow: `0 0 14px ${color}`,
+                  left: `${ZONES.control.from}%`,
+                  width: `${ZONES.control.to - ZONES.control.from}%`,
+                  top: 0,
+                  height: FLOOR_TOP,
+                  background: shocked
+                    ? 'linear-gradient(rgba(224,75,75,0.1), rgba(224,75,75,0.03))'
+                    : 'linear-gradient(rgba(53,245,138,0.08), rgba(53,245,138,0.02) 70%, rgba(53,245,138,0.05))',
+                  boxShadow: shocked ? 'inset 0 0 80px rgba(224,75,75,0.18)' : 'inset 0 0 80px rgba(53,245,138,0.08)',
+                  ...dimStyle(0.5),
+                }}
+              >
+                {/* 壁面パネルの継ぎ目 */}
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage:
+                      'repeating-linear-gradient(0deg, transparent 0 78px, rgba(53,245,138,0.07) 78px 79px), repeating-linear-gradient(90deg, transparent 0 122px, rgba(53,245,138,0.05) 122px 123px)',
+                  }}
+                />
+                {/* 奥のサーバーラック（稼働中だけランプが点く） */}
+                <div className="absolute inset-x-[6%] bottom-0 flex items-end justify-between">
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <ServerRack key={i} shocked={shocked} tall={i % 2 === 1} active={running || shocked} />
+                  ))}
+                </div>
+                {shocked && <div className="anim-alarm pointer-events-none absolute inset-0 opacity-25" />}
+              </div>
+              {/* 管制室の床（一段暗い床材＋縁のライン） */}
+              <div
+                className="pointer-events-none absolute"
+                style={{
+                  left: `${ZONES.control.from}%`,
+                  width: `${ZONES.control.to - ZONES.control.from}%`,
+                  top: FLOOR_TOP,
+                  bottom: 0,
+                  background: shocked ? 'rgba(224,75,75,0.05)' : 'rgba(53,245,138,0.045)',
+                  boxShadow: `inset 3px 0 0 ${controlColor}33, inset -3px 0 0 ${controlColor}33`,
+                  ...dimStyle(0.5),
                 }}
               />
-            )
-          })}
 
-          {/* ゾーン見出し */}
-          <div style={dimStyle(0.5)}>
-            <ZoneHeader zone={ZONES.analysis} />
-            <ZoneHeader zone={ZONES.engine} extra={<StatusMonitor shocked={shocked} />} />
-            <ZoneHeader zone={ZONES.garage} />
-          </div>
-          <p
-            className="font-mono absolute z-10 -translate-x-1/2 text-[10px] tracking-[0.4em] text-slate-600"
-            style={{ left: '61.5%', top: 44, ...dimStyle(0.5) }}
-          >
-            AUTHORIZED PERSONNEL ONLY
-          </p>
+              {/* ベイの区切り */}
+              {[ZONES.control.from, ZONES.control.to].map((l) => (
+                <div
+                  key={l}
+                  className="absolute top-0 w-px"
+                  style={{
+                    left: `${l}%`,
+                    height: FLOOR_TOP,
+                    background: 'linear-gradient(rgba(94,204,255,0.35), rgba(94,204,255,0.08))',
+                    boxShadow: '0 0 8px rgba(94,204,255,0.25)',
+                  }}
+                />
+              ))}
 
-          {/* ===== パネル ===== */}
-          <BigChart
-            candles={market.candles}
-            symbol={market.symbol}
-            onSymbol={market.setSymbol}
-            interval={market.interval}
-            price={market.price}
-            prevClose={market.prevClose}
-            dir={market.dir}
-            ready={market.ready}
-            shocked={shocked}
-            style={{ left: '2.5%', top: 62, width: '40%', height: 322, ...dimStyle(0.45) }}
-          />
-          <CodePanel style={{ right: '3%', top: 64, width: '16%', ...dimStyle(0.45) }} />
+              {/* 床のエッジライト */}
+              {(Object.keys(ZONES) as Array<keyof typeof ZONES>).map((k) => {
+                const z = ZONES[k]
+                const color = k === 'control' ? controlColor : z.color
+                return (
+                  <div
+                    key={k}
+                    className="absolute h-[3px]"
+                    style={{
+                      left: `calc(${z.from}% + 8px)`,
+                      width: `calc(${z.to - z.from}% - 16px)`,
+                      top: FLOOR_TOP + 1,
+                      background: color,
+                      opacity: k === 'control' && !running && !shocked ? 0.3 : 0.6,
+                      boxShadow: `0 0 14px ${color}`,
+                    }}
+                  />
+                )
+              })}
 
-          {/* ===== 床の照明溜まり ===== */}
-          {[
-            { left: '22%', color: 'rgba(94,204,255,0.08)' },
-            { left: '61.5%', color: shocked ? 'rgba(224,75,75,0.1)' : 'rgba(53,245,138,0.08)' },
-            { left: '89%', color: 'rgba(255,157,77,0.08)' },
-            { left: '50%', color: 'rgba(255,190,120,0.12)', low: true },
-          ].map((p, i) => (
-            <div
-              key={i}
-              className="pointer-events-none absolute -translate-x-1/2"
-              style={{
-                left: p.left,
-                top: p.low ? '76%' : FLOOR_TOP,
-                width: '26%',
-                height: '22%',
-                background: `radial-gradient(ellipse 55% 60% at 50% 30%, ${p.color}, transparent 70%)`,
-              }}
-            />
-          ))}
+              {/* ゾーン見出し */}
+              <div style={dimStyle(0.5)}>
+                <ZoneHeader zone={ZONES.analysis} />
+                <ZoneHeader zone={{ ...ZONES.control, color: controlColor }} />
+                <ZoneHeader zone={ZONES.info} />
+              </div>
 
-          {/* ===== 家具とキャラ ===== */}
-          <Chara character={CHARACTERS.rin} {...CHAR_POS.rin} onSelect={select} dimmed={tutorial} bubble={bubbleFor('rin')} />
-          <Chara
-            character={CHARACTERS.jin}
-            {...CHAR_POS.jin}
-            onSelect={select}
-            dimmed={tutorial}
-            surprised={shocked}
-            bubble={bubbleFor('jin')}
-          />
-          <Desk style={{ left: '11%', bottom: '17%', width: '23%', zIndex: 12, ...dimStyle(0.5) }}>
-            <div className="flex items-end justify-center gap-8">
-              <DeskMonitor bars={[35, 55, 70, 45, 60, 40]} />
-              <DeskMonitor bars={[60, 42, 55, 68, 47, 62]} />
-            </div>
-          </Desk>
+              {/* ===== 分析デスクの壁：リンのチャート、ジンの相場ボード ===== */}
+              <div style={dimStyle(0.45)}>
+                <RoleTag name={CHARACTERS.rin.name} role="チャート分析" color={CHARACTERS.rin.color} style={{ left: '2.5%', top: 44 }} />
+                <BigChart
+                  {...wallProps}
+                  compact
+                  onOpen={() => openOverlay('chart')}
+                  style={{ left: '2%', top: 68, width: '19.5%', height: 206 }}
+                />
+                <RoleTag name={CHARACTERS.jin.name} role="経済・金利分析" color={CHARACTERS.jin.color} style={{ left: '23%', top: 44 }} />
+                <MarketBoard quotes={market.quotes} color={CHARACTERS.jin.color} style={{ left: '22.5%', top: 68, width: '16%' }} />
+              </div>
 
-          {/* アルゴを照らすスポットライトと足元のリング。エンジンルームで埋もれないように */}
-          <div
-            className="pointer-events-none absolute -translate-x-1/2"
-            style={{
-              left: `${CHAR_POS.algo.x}%`,
-              top: 0,
-              width: 300,
-              height: STAGE_H * (1 - CHAR_POS.algo.bottom / 100) + 8,
-              clipPath: 'polygon(44% 0, 56% 0, 100% 100%, 0 100%)',
-              background: shocked
-                ? 'linear-gradient(rgba(224,75,75,0.02), rgba(224,75,75,0.16))'
-                : 'linear-gradient(rgba(53,245,138,0.02), rgba(53,245,138,0.13))',
-              ...dimStyle(0.5),
-            }}
-          />
-          <div
-            className="pointer-events-none absolute -translate-x-1/2 rounded-full border"
-            style={{
-              left: `${CHAR_POS.algo.x}%`,
-              bottom: `calc(${CHAR_POS.algo.bottom}% - 12px)`,
-              width: 150,
-              height: 34,
-              borderColor: shocked ? 'rgba(255,132,132,0.7)' : 'rgba(53,245,138,0.7)',
-              background: shocked
-                ? 'radial-gradient(ellipse at center, rgba(224,75,75,0.35), rgba(224,75,75,0.05) 70%)'
-                : 'radial-gradient(ellipse at center, rgba(53,245,138,0.35), rgba(53,245,138,0.05) 70%)',
-              boxShadow: shocked ? '0 0 24px rgba(224,75,75,0.5)' : '0 0 24px rgba(53,245,138,0.45)',
-              zIndex: 14,
-              ...dimStyle(0.5),
-            }}
-          />
-          <Chara character={CHARACTERS.algo} {...CHAR_POS.algo} z={15} onSelect={select} dimmed={tutorial} bubble={bubbleFor('algo')} />
+              {/* ===== 管制室の壁：稼働状況と成績のモニター ===== */}
+              <ConsoleMonitors
+                bridge={bridge}
+                state={state}
+                reacting={reacting}
+                style={{ left: '43%', width: '30%', top: 48, ...dimStyle(0.45) }}
+              />
 
-          <Chara character={CHARACTERS.gantz} {...CHAR_POS.gantz} onSelect={select} dimmed={tutorial} bubble={bubbleFor('gantz')} />
-          <Desk style={{ left: '81%', bottom: '17%', width: '15%', zIndex: 12, ...dimStyle(0.5) }}>
-            <div className="flex items-end justify-center gap-5">
-              <ToolBox />
-              <DeskMonitor bars={[45, 62, 38, 70, 52, 44]} />
-            </div>
-          </Desk>
+              {/* ===== 情報センター（カード）と SYSTEM LAB への扉 ===== */}
+              <InfoCenter
+                bridge={bridge}
+                state={state}
+                reports={algoReports.reports}
+                quotes={market.quotes}
+                onOpen={openOverlay}
+                style={{ left: '75.2%', top: 50, width: '18.3%', ...dimStyle(0.45) }}
+              />
+              <Door
+                label="SYSTEM LAB"
+                sub={`${CHARACTERS.gantz.name}の部屋`}
+                color={SYSTEM_ZONE.color}
+                onClick={() => goRoom('system')}
+                style={{ left: '94.4%', top: 262, ...dimStyle(0.45) }}
+              />
 
-          {/* ===== エントランス ===== */}
-          <Chara character={CHARACTERS.yui} {...CHAR_POS.yui} z={35} onSelect={select} exclaim bubble={bubbleFor('yui')} />
-          <div className="absolute z-[36] -translate-x-1/2" style={{ left: '50%', bottom: '3%', width: 380 }}>
-            <div className="h-3.5 rounded-t-[4px] border border-b-0 border-[#2a1608] bg-[#8a5a2b]" />
-            <div className="rounded-b-[4px] border border-t-0 border-[#2a1608] bg-[#6e4520] px-4 py-2.5 text-center">
-              <p className="font-mono text-[14px] font-bold tracking-[0.35em] text-amber-100">RECEPTION</p>
-            </div>
-          </div>
+              {/* ===== 床の照明溜まり ===== */}
+              {[
+                { left: '20%', color: 'rgba(94,204,255,0.08)' },
+                { left: '63%', color: shocked ? 'rgba(224,75,75,0.1)' : running ? 'rgba(53,245,138,0.1)' : 'rgba(53,245,138,0.04)' },
+                { left: '86%', color: 'rgba(255,180,84,0.07)' },
+                { left: '50%', color: 'rgba(255,190,120,0.12)', low: true },
+              ].map((p, i) => (
+                <div
+                  key={i}
+                  className="pointer-events-none absolute -translate-x-1/2"
+                  style={{
+                    left: p.left,
+                    top: p.low ? '76%' : FLOOR_TOP,
+                    width: '26%',
+                    height: '22%',
+                    background: `radial-gradient(ellipse 55% 60% at 50% 30%, ${p.color}, transparent 70%)`,
+                  }}
+                />
+              ))}
+
+              {/* ===== 分析デスク：リンとジン ===== */}
+              <Chara character={CHARACTERS.rin} {...CHAR_POS.rin} onSelect={select} dimmed={tutorial} bubble={bubbleFor('rin')} />
+              <Chara
+                character={CHARACTERS.jin}
+                {...CHAR_POS.jin}
+                onSelect={select}
+                dimmed={tutorial}
+                surprised={shocked}
+                bubble={bubbleFor('jin')}
+              />
+              <Desk style={{ left: '4%', bottom: '17%', width: '34%', zIndex: 12, ...dimStyle(0.5) }}>
+                <div className="flex w-full items-end justify-between px-8">
+                  <DeskScreen label="CHART" color={CHARACTERS.rin.color}>
+                    <Sparkline candles={market.candles} color={market.dir < 0 ? '#ff8484' : CHARACTERS.rin.color} />
+                  </DeskScreen>
+                  <DeskScreen label="RATES" color={CHARACTERS.jin.color}>
+                    <MiniRates quotes={market.quotes} />
+                  </DeskScreen>
+                </div>
+              </Desk>
+
+              {/* ===== 管制室：アルゴと司令席 ===== */}
+              {/* アルゴを照らすスポットライトと足元のリング */}
+              <div
+                className="pointer-events-none absolute -translate-x-1/2"
+                style={{
+                  left: `${CHAR_POS.algo.x}%`,
+                  top: 0,
+                  width: 300,
+                  height: STAGE_H * (1 - CHAR_POS.algo.bottom / 100) + 8,
+                  clipPath: 'polygon(44% 0, 56% 0, 100% 100%, 0 100%)',
+                  background: shocked
+                    ? 'linear-gradient(rgba(224,75,75,0.02), rgba(224,75,75,0.16))'
+                    : `linear-gradient(rgba(53,245,138,0.02), rgba(53,245,138,${running ? 0.13 : 0.06}))`,
+                  ...dimStyle(0.5),
+                }}
+              />
+              <div
+                className="pointer-events-none absolute -translate-x-1/2 rounded-full border"
+                style={{
+                  left: `${CHAR_POS.algo.x}%`,
+                  bottom: `calc(${CHAR_POS.algo.bottom}% - 12px)`,
+                  width: 150,
+                  height: 34,
+                  borderColor: shocked ? 'rgba(255,132,132,0.7)' : `rgba(53,245,138,${running ? 0.7 : 0.35})`,
+                  background: shocked
+                    ? 'radial-gradient(ellipse at center, rgba(224,75,75,0.35), rgba(224,75,75,0.05) 70%)'
+                    : 'radial-gradient(ellipse at center, rgba(53,245,138,0.35), rgba(53,245,138,0.05) 70%)',
+                  boxShadow: shocked ? '0 0 24px rgba(224,75,75,0.5)' : '0 0 24px rgba(53,245,138,0.45)',
+                  zIndex: 14,
+                  ...dimStyle(0.5),
+                }}
+              />
+              <Chara
+                character={CHARACTERS.algo}
+                {...CHAR_POS.algo}
+                z={15}
+                onSelect={select}
+                dimmed={tutorial}
+                bubble={bubbleFor('algo')}
+                status={{ text: state.en, color: state.color }}
+                react={reacting}
+              />
+              <ConsoleDesk state={state} style={{ left: '52.5%', width: '21%', bottom: '17%', zIndex: 16, ...dimStyle(0.5) }} />
+
+              {/* ===== エントランス ===== */}
+              <Chara character={CHARACTERS.yui} {...CHAR_POS.yui} z={35} onSelect={select} exclaim bubble={bubbleFor('yui')} />
+              <div className="absolute z-[36] -translate-x-1/2" style={{ left: '50%', bottom: '3%', width: 380 }}>
+                <div className="h-3.5 rounded-t-[4px] border border-b-0 border-[#2a1608] bg-[#8a5a2b]" />
+                <div className="rounded-b-[4px] border border-t-0 border-[#2a1608] bg-[#6e4520] px-4 py-2.5 text-center">
+                  <p className="font-mono text-[14px] font-bold tracking-[0.35em] text-amber-100">RECEPTION</p>
+                </div>
+              </div>
+
+              {/* ===== ユイの案内（初回だけ。HUD の「案内」でいつでも） ===== */}
+              {showGuide && guideLine && (
+                <>
+                  {ring && (
+                    <div
+                      className="tutorial-ring pointer-events-none absolute z-30 h-44 w-44 -translate-x-1/2 rounded-full border-2 border-yellow-300/80"
+                      style={{ left: ring.left, bottom: `calc(${ring.bottom} - 20px)` }}
+                    />
+                  )}
+                  <div className="absolute z-50 w-[28rem] -translate-x-1/2" style={{ left: '50%', bottom: '38%' }}>
+                    <div
+                      key={guideStep}
+                      className="rise-in rounded-[5px] border px-6 py-4 text-left backdrop-blur-[2px]"
+                      style={{ background: 'rgba(9,17,31,0.95)', borderColor: 'rgba(253,224,71,0.85)', boxShadow: '0 0 24px rgba(253,224,71,0.2)' }}
+                    >
+                      <p className="font-mono mb-1.5 flex justify-between text-[11px] tracking-[0.35em] text-yellow-300">
+                        <span>▎GUIDE ／ {CHARACTERS.yui.name}</span>
+                        <span className="text-slate-500">
+                          {guideStep + 1} / {YUI_GUIDE.length}
+                        </span>
+                      </p>
+                      <p className="text-[16px] font-bold leading-relaxed text-white">{guideLine}</p>
+                      <div className="mt-3 flex justify-end gap-2">
+                        {!guideLast && (
+                          <button
+                            type="button"
+                            onClick={finishGuide}
+                            className="h-11 rounded-[4px] border px-4 text-[14px] font-bold text-slate-300"
+                            style={{ borderColor: 'rgba(148,163,184,0.4)' }}
+                          >
+                            閉じる
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => (guideLast ? finishGuide() : setGuideStep((n) => n + 1))}
+                          className="h-11 rounded-[4px] border px-5 text-[15px] font-bold text-[#1c1607]"
+                          style={{ background: 'rgba(253,224,71,0.92)', borderColor: '#a16207', boxShadow: '0 0 12px rgba(253,224,71,0.25)' }}
+                        >
+                          {guideLast ? 'わかりました' : '次へ ▶'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mx-auto h-0 w-0 border-x-[9px] border-t-[9px] border-x-transparent border-t-yellow-300/85" />
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {/* ===== SYSTEM LAB：ガンツの部屋 ===== */}
+              <div
+                className="absolute inset-x-0 top-0"
+                style={{
+                  height: FLOOR_TOP,
+                  background: 'linear-gradient(rgba(255,157,77,0.07), rgba(255,157,77,0.02) 60%, rgba(255,157,77,0.04))',
+                  boxShadow: 'inset 0 0 80px rgba(255,157,77,0.08)',
+                  backgroundImage:
+                    'repeating-linear-gradient(115deg, transparent 0 90px, rgba(255,255,255,0.015) 90px 130px), repeating-linear-gradient(0deg, transparent 0 78px, rgba(255,157,77,0.06) 78px 79px)',
+                }}
+              >
+                {/* ガンツの背後に並ぶラック（本体のサーバー群） */}
+                <div className="absolute bottom-0 left-[34%] flex w-[32%] items-end justify-between">
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <ServerRack key={i} shocked={shocked} tall={i % 2 === 1} active={running || shocked} />
+                  ))}
+                </div>
+              </div>
+              <div
+                className="absolute h-[3px]"
+                style={{ left: 8, right: 8, top: FLOOR_TOP + 1, background: SYSTEM_ZONE.color, opacity: 0.6, boxShadow: `0 0 14px ${SYSTEM_ZONE.color}` }}
+              />
+              <ZoneHeader zone={SYSTEM_ZONE} />
+              <RoleTag name={CHARACTERS.gantz.name} role="システム開発 ／ いまの構成" color={CHARACTERS.gantz.color} style={{ left: '8.5%', top: 44 }} />
+              <SystemBoard bridge={bridge} state={state} part="system" color={SYSTEM_ZONE.color} style={{ left: '8%', top: 68, width: '24%' }} />
+              <RoleTag name={CHARACTERS.gantz.name} role="拡張機能" color={CHARACTERS.gantz.color} style={{ left: '68.5%', top: 44 }} />
+              <SystemBoard bridge={bridge} state={state} part="extensions" color={SYSTEM_ZONE.color} style={{ left: '68%', top: 68, width: '26%' }} />
+              <Door
+                label="研究所"
+                sub="もどる"
+                color="var(--accent)"
+                arrow="left"
+                onClick={() => goRoom('main')}
+                style={{ left: '1.4%', top: 262 }}
+              />
+              <div
+                className="pointer-events-none absolute -translate-x-1/2"
+                style={{
+                  left: '50%',
+                  top: FLOOR_TOP,
+                  width: '30%',
+                  height: '22%',
+                  background: 'radial-gradient(ellipse 55% 60% at 50% 30%, rgba(255,157,77,0.1), transparent 70%)',
+                }}
+              />
+              <Chara character={CHARACTERS.gantz} {...SYSTEM_POS.gantz} onSelect={select} bubble={bubbleFor('gantz')} />
+              <Desk style={{ left: '38%', bottom: '17%', width: '24%', zIndex: 12 }}>
+                <div className="flex w-full items-end justify-between px-8">
+                  <ToolBox />
+                  <DeskScreen label="BUILD" color={CHARACTERS.gantz.color}>
+                    <p className="font-mono flex h-full flex-col justify-center text-[9px] leading-tight text-slate-300">
+                      <span className="truncate">{(bridge.live && systemName(bridge.status)) || 'SYSTEM'}</span>
+                      <span className="text-slate-500">{bridge.live && bridge.status?.build ? `MT5 build ${bridge.status.build}` : state.jp}</span>
+                    </p>
+                  </DeskScreen>
+                </div>
+              </Desk>
+            </>
+          )}
 
           {/* ===== チュートリアル（ステージ内でユイに追従） ===== */}
           {tutorial && (
@@ -732,7 +1126,9 @@ export function Lab() {
 
           {/* ===== 案内 ===== */}
           <p className="font-mono absolute inset-x-0 bottom-2 z-10 text-center text-[12px] tracking-[0.25em] text-[#5a6a88]">
-            研究員をクリックすると相談できます ── 表示レートは配信の都合により実際と異なる場合があります
+            {room === 'main'
+              ? '研究員をクリックすると相談できます ── 表示レートは配信の都合により実際と異なる場合があります'
+              : `${CHARACTERS.gantz.name}をクリックすると、ロットや同時保有数などの設定を変更できます`}
           </p>
         </div>
       </div>
@@ -761,6 +1157,30 @@ export function Lab() {
           ドラッグで移動 / ホイールで拡大
         </p>
       </div>
+
+      {/* ================= オーバーレイ（チャート拡大・通知・お知らせ・相場） ================= */}
+      {overlay === 'chart' && (
+        <Overlay title="チャート分析" sub={`${CHARACTERS.rin.name} ─ チャート分析`} onClose={() => setOverlay(null)}>
+          <div className="p-4">
+            <BigChart {...wallProps} style={{ position: 'relative', width: '100%', height: 'min(62vh, 560px)' }} />
+          </div>
+        </Overlay>
+      )}
+      {overlay === 'reports' && (
+        <Overlay title="運用報告" sub={`${CHARACTERS.algo.name} ─ 自動売買`} onClose={() => setOverlay(null)} width="min(92vw, 760px)">
+          <ReportsList reports={algoReports.reports} name={CHARACTERS.algo.name} />
+        </Overlay>
+      )}
+      {overlay === 'notices' && (
+        <Overlay title="お知らせ" sub="NOTICE ／ UPDATE ／ ROADMAP" onClose={() => setOverlay(null)} width="min(92vw, 760px)">
+          <NoticesList />
+        </Overlay>
+      )}
+      {overlay === 'market' && (
+        <Overlay title="相場と経済指標" sub={`${CHARACTERS.jin.name} ─ 経済・金利分析`} onClose={() => setOverlay(null)} width="min(92vw, 860px)">
+          <ScheduleList quotes={market.quotes} />
+        </Overlay>
+      )}
 
       {/* ================= 会話ウィンドウ（オーバーレイ） ================= */}
       {dialogueId && CHARACTERS[dialogueId] && (

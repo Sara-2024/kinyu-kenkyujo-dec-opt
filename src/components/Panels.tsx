@@ -1,4 +1,4 @@
-// 壁の大型ライブチャート、サーバーラック、コードモニター、机まわり。
+// 壁のライブチャート、サーバーラック、机まわり。
 // パネルはすべて共通トークン（--panel-bg / --panel-border / --panel-glow）で統一。
 import type { CSSProperties, ReactNode } from 'react'
 import { CHART_SYMBOLS, formatMarketPrice, symbolInfo, type Candle } from '../data/market'
@@ -42,7 +42,11 @@ export function PanelLabel({ text, color = 'var(--accent)' }: { text: string; co
   )
 }
 
-/** 壁の大型ライブチャート。足は /api/market（Yahoo Finance）から来た本物 */
+/**
+ * 壁のライブチャート。足は /api/market（Yahoo Finance）から来た本物。
+ * compact のときは壁掛けの小型表示（銘柄ボタンと凡例を畳む）。
+ * 描き方・移動平均・現在値の扱いは compact でも同じ。
+ */
 export function BigChart({
   candles,
   symbol,
@@ -54,6 +58,8 @@ export function BigChart({
   ready,
   shocked,
   style,
+  compact = false,
+  onOpen,
 }: {
   candles: Candle[]
   symbol: string
@@ -65,6 +71,9 @@ export function BigChart({
   ready: boolean
   shocked: boolean
   style?: CSSProperties
+  compact?: boolean
+  /** compact のとき、クリックで大きく表示する */
+  onOpen?: () => void
 }) {
   const W = 520
   const H = 200
@@ -107,15 +116,21 @@ export function BigChart({
     <Panel style={style} className={shocked ? 'anim-alarm-border' : ''}>
       <div className="accent-line anim-neon absolute inset-x-4 top-0 h-px" />
       {/* ヘッダー：銘柄・時間足・現在値 */}
-      <div className="flex items-baseline gap-3 px-6 pt-3.5">
-        <span className="font-dot text-[22px] font-bold tracking-wider text-slate-100">{info.label}</span>
+      <div className={`flex items-baseline gap-3 ${compact ? 'px-4 pt-2.5' : 'px-6 pt-3.5'}`}>
+        <span className={`font-dot font-bold tracking-wider text-slate-100 ${compact ? 'text-[18px]' : 'text-[22px]'}`}>
+          {info.label}
+        </span>
         <span className="font-mono text-[12px] text-slate-400">{intervalLabel}</span>
-        <span className="font-mono hidden text-[11px] tracking-[0.2em] lg:inline" style={{ color: '#ffd23e' }}>
-          ─ MA20
-        </span>
-        <span className="font-mono hidden text-[11px] tracking-[0.2em] lg:inline" style={{ color: 'var(--accent)' }}>
-          ─ MA5
-        </span>
+        {!compact && (
+          <>
+            <span className="font-mono hidden text-[11px] tracking-[0.2em] lg:inline" style={{ color: '#ffd23e' }}>
+              ─ MA20
+            </span>
+            <span className="font-mono hidden text-[11px] tracking-[0.2em] lg:inline" style={{ color: 'var(--accent)' }}>
+              ─ MA5
+            </span>
+          </>
+        )}
         {ready && (
           <span className="ml-auto flex items-baseline gap-2.5">
             <span
@@ -126,7 +141,7 @@ export function BigChart({
               {changePct.toFixed(2)}%
             </span>
             <span
-              className="font-dot text-[26px] font-bold tabular-nums leading-none"
+              className={`font-dot font-bold tabular-nums leading-none ${compact ? 'text-[20px]' : 'text-[26px]'}`}
               style={{ color: priceColor, textShadow: `0 0 10px ${priceColor}55` }}
             >
               {dir >= 0 ? '▲' : '▼'} {fmt(price)}
@@ -135,8 +150,8 @@ export function BigChart({
         )}
       </div>
 
-      {/* 銘柄の切り替え */}
-      <div className="mt-2 flex gap-1.5 px-6">
+      {/* 銘柄の切り替え（小型表示では畳む。大きくしたときに切り替えられる） */}
+      <div className={`mt-2 flex gap-1.5 px-6 ${compact ? 'hidden' : ''}`}>
         {CHART_SYMBOLS.map((s) => {
           const on = s.symbol === symbol
           return (
@@ -158,7 +173,7 @@ export function BigChart({
         })}
       </div>
 
-      <div className="absolute inset-x-6 bottom-8 top-[7.4rem] flex">
+      <div className={`absolute flex ${compact ? 'inset-x-4 bottom-6 top-[2.9rem]' : 'inset-x-6 bottom-8 top-[7.4rem]'}`}>
         <div className="relative flex-1">
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full">
             {[0.15, 0.38, 0.62, 0.85].map((t) => (
@@ -219,12 +234,12 @@ export function BigChart({
           )}
         </div>
         {/* 価格軸 */}
-        <div className="relative w-[5.2rem]">
+        <div className={`relative ${compact ? 'w-[4.4rem]' : 'w-[5.2rem]'}`}>
           {ready &&
             labels.map((v, i) => (
               <span
                 key={i}
-                className="font-mono absolute right-0 -translate-y-1/2 text-[13px] text-slate-400"
+                className={`font-mono absolute right-0 -translate-y-1/2 text-slate-400 ${compact ? 'text-[11px]' : 'text-[13px]'}`}
                 style={{ top: `${(1 - (v - lo) / (hi - lo)) * 100}%` }}
               >
                 {fmt(v)}
@@ -244,12 +259,28 @@ export function BigChart({
           )}
         </div>
       </div>
+      {compact && onOpen && (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label="チャートを大きく表示する"
+          title="クリックで大きく表示"
+          className="chart-open group absolute inset-0 z-10 flex items-end justify-end rounded-[4px] border-0 bg-transparent p-2"
+        >
+          <span
+            className="font-mono rounded-[3px] border px-2 py-1 text-[11px] font-bold tracking-[0.15em] text-slate-200 transition group-hover:brightness-150"
+            style={{ borderColor: 'var(--panel-border)', background: 'rgba(9,17,31,0.85)' }}
+          >
+            ⤢ 大きく表示
+          </span>
+        </button>
+      )}
     </Panel>
   )
 }
 
-/** スリムなサーバーラック。エンジンルームの背景に並べる */
-export function ServerRack({ shocked, tall }: { shocked: boolean; tall?: boolean }) {
+/** スリムなサーバーラック。管制室の背景に並べる。ランプは稼働状態に合わせる */
+export function ServerRack({ shocked, tall, active = true }: { shocked: boolean; tall?: boolean; active?: boolean }) {
   return (
     <div
       className={`relative rounded-[3px] border ${tall ? 'h-28' : 'h-24'} w-10`}
@@ -263,74 +294,13 @@ export function ServerRack({ shocked, tall }: { shocked: boolean; tall?: boolean
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="flex items-center gap-1">
             <div
-              className={`h-1.5 w-1.5 rounded-full ${shocked ? 'lamp-red' : 'lamp'}`}
-              style={{ background: shocked ? RED : '#4ade80', animationDelay: `${i * 0.3}s` }}
+              className={`h-1.5 w-1.5 rounded-full ${shocked ? 'lamp-red' : active ? 'lamp' : ''}`}
+              style={{ background: shocked ? RED : active ? '#4ade80' : '#3b4a66', animationDelay: `${i * 0.3}s` }}
             />
             <div className="h-px flex-1 bg-[rgba(94,204,255,0.15)]" />
           </div>
         ))}
       </div>
-    </div>
-  )
-}
-
-/** エンジンルームの状態チップ */
-export function StatusMonitor({ shocked }: { shocked: boolean }) {
-  return (
-    <span
-      className={`rounded-[3px] border px-2 py-0.5 font-mono text-[11px] font-bold tracking-[0.2em] ${
-        shocked ? 'anim-alarm' : ''
-      }`}
-      style={{
-        borderColor: shocked ? 'rgba(224,75,75,0.6)' : 'rgba(53,245,138,0.4)',
-        color: shocked ? '#ff8484' : '#35f58a',
-        background: shocked ? undefined : 'rgba(53,245,138,0.06)',
-      }}
-    >
-      {shocked ? '▼ ALERT' : '▲ RUNNING'}
-    </span>
-  )
-}
-
-/** ガレージのコードモニター */
-export function CodePanel({ style }: { style?: CSSProperties }) {
-  const lines = ['if (ma20 > ma75) {', '  signal = BUY;', '  alert("GOLDEN");', '}', 'plot(rsi, 14);']
-  return (
-    <Panel style={style}>
-      <div className="accent-line anim-neon absolute inset-x-4 top-0 h-px" />
-      <div className="px-5 pt-4">
-        <PanelLabel text="INDICATOR.SRC" color="#ff9d4d" />
-      </div>
-      <div className="px-5 pb-4 pt-2 font-mono text-[12px] leading-6 text-[#35f58a]">
-        {lines.map((l, i) => (
-          <p key={i} className="whitespace-pre">
-            <span className="mr-2 select-none text-[#31527a]">{i + 1}</span>
-            {l}
-          </p>
-        ))}
-        <span className="cursor-blink inline-block h-3.5 w-2 bg-[#35f58a] align-middle" />
-      </div>
-    </Panel>
-  )
-}
-
-/** 机の上の小型モニター */
-export function DeskMonitor({ bars }: { bars: number[] }) {
-  return (
-    <div className="flex flex-col items-center">
-      <div
-        className="flex h-14 w-28 items-end gap-1 rounded-[3px] border px-2 pb-1.5 pt-2"
-        style={{ background: 'var(--panel-bg)', borderColor: 'var(--panel-border)' }}
-      >
-        {bars.map((h, i) => (
-          <div
-            key={i}
-            className="flex-1"
-            style={{ height: `${h}%`, background: i % 3 === 1 ? 'rgba(47,191,98,0.8)' : 'rgba(224,75,75,0.8)' }}
-          />
-        ))}
-      </div>
-      <div className="h-2 w-3 bg-[#0a1220]" />
     </div>
   )
 }
