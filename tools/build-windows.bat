@@ -4,6 +4,8 @@ REM  お客様に配る接続ツール（AITrader.exe / 表示名 AIトレーダ
 REM
 REM  Windows で一度だけ実行する。できあがった exe は
 REM  Python も Node も入っていないPCで動き、黒い画面も出ない。
+REM  同梱するのはブリッジ本体と EA だけ（venv や .env は入れない。
+REM  接続先はクラウドの中継に固定されている）。
 REM
 REM    dist\AITrader.exe   … これをお客様にお渡しする
 REM ================================================================
@@ -30,7 +32,10 @@ echo [2/3] exe を作っています（数分かかります）...
 py -3 -m PyInstaller --noconfirm --clean ^
   --onefile --noconsole ^
   --name AITrader ^
-  --add-data "bridge;bridge" ^
+  --add-data "bridge\bridge.py;bridge" ^
+  --add-data "bridge\mt5_terminal.py;bridge" ^
+  --add-data "bridge\SiteTestEA.mq5;bridge" ^
+  --add-data "bridge\TradingGate.mqh;bridge" ^
   --hidden-import bridge ^
   --hidden-import mt5_terminal ^
   --hidden-import MetaTrader5 ^

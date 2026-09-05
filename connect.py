@@ -52,6 +52,11 @@ from mt5_terminal import (  # noqa: E402
 )
 
 MT5_SETUP_URL = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
+# お客様に配る exe が向かう中継。開発機（.py のまま動かすとき）はローカルの中継。
+# exe は開発機の bridge/.env を持ち込まない（127.0.0.1 が焼き込まれて、お客様のPCで
+# どこにも繋がらなくなった前例がある）。
+PRODUCTION_RELAY = "wss://kinyu-relay.onrender.com/bridge"
+LOCAL_RELAY = "ws://127.0.0.1:8080/bridge"
 
 EA_FILES = ("SiteTestEA.mq5",)
 # 以前に配っていたもの。1つに絞ったので、見つけたら片づける。
@@ -574,7 +579,8 @@ def env_value(key: str) -> str:
     """設定ファイルから1項目だけ読む（環境変数が優先）"""
     if os.environ.get(key):
         return os.environ[key].strip()
-    for path in (env_file(), BRIDGE_DIR / ".env"):
+    # exe 版はユーザーフォルダの bridge.env だけを見る（同梱物の .env は読まない）
+    for path in ((env_file(),) if FROZEN else (env_file(), BRIDGE_DIR / ".env")):
         if not path.is_file():
             continue
         try:
@@ -588,7 +594,7 @@ def env_value(key: str) -> str:
 
 def relay_url() -> str:
     """接続先の中継サーバー。本番はクラウド側にある。"""
-    return env_value("TRELAB_WS_URL") or "ws://127.0.0.1:8080/bridge"
+    return env_value("TRELAB_WS_URL") or (PRODUCTION_RELAY if FROZEN else LOCAL_RELAY)
 
 
 def relay_is_local(url: str) -> bool:
