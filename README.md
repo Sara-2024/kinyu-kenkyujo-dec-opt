@@ -4,6 +4,16 @@
 横視点の2Dゲーム風「サイバーラボ」に研究員（AIキャラクター）を配置し、
 クリックするとノベルゲーム風の会話ウィンドウが開く。
 
+研究員は5人。それぞれ担当が決まっていて、担当のデータだけを見て答える。
+
+| 研究員 | 担当 | 見ているもの |
+| --- | --- | --- |
+| ユイ | 受付・初期設定 | （定型文） |
+| リン | チャート分析 | 大画面の銘柄のローソク足・高値安値・移動平均 |
+| ジン | 経済指標・金利 | 経済指標カレンダー（`/api/calendar`）と主要レート。発表の1時間前・10分前に知らせる |
+| アルゴ | 自動売買システム | MT5 の状態・本日の成績・建玉・システムの取引 |
+| ミオ | トレード利益分析 | お客様の約定履歴の集計（7日・30日） |
+
 自動売買担当「アルゴ」からは、MT5との**おまかせ接続**フローと、
 接続後の**管理画面（停止・ロット等の設定変更）**に入れる。
 
@@ -46,11 +56,19 @@ src/
 │  └─ ControlPanel.tsx     接続後の管理画面（停止・EA設定）
 ├─ data/
 │  ├─ characters.ts        研究員の人格・台詞・選択肢と受け答え
+│  ├─ ai.ts                /api/chat の呼び出しと、研究員間の質問の引き継ぎ
+│  ├─ aiContext.ts         研究員ごとに AI へ渡す「手元のデータ」
+│  ├─ calendar.ts          経済指標カレンダーの読み込みと表示用の整形
 │  ├─ setupFlow.ts         おまかせ接続の工程定義
 │  ├─ eaSettings.ts        EA設定項目 ↔ MT5グローバル変数の対応
 │  └─ connection.ts        接続状態の保存（localStorage）
 └─ hooks/
-   └─ useMarket.ts         相場のライブ更新と急変動シミュレーション
+   ├─ useMarket.ts         相場のライブ更新と急変動シミュレーション
+   └─ useEconomicAlerts.ts 経済指標の発表前のお知らせ（ジン）
+api/
+├─ chat.ts / _lib/chat.ts        研究員の AI 回答（Gemini 2.5 Flash-Lite）
+├─ calendar.ts / _lib/calendar.ts 経済指標カレンダー（ForexFactory）
+└─ market.ts / _lib/market.ts     相場データ
 ```
 
 ## 画面の作り
@@ -72,12 +90,11 @@ src/
 
 ## いまの状態（重要）
 
-**画面は完成しているが、バックエンドは未接続。**
+**画面・中継・ブリッジ・AI までつながっている。**
 
 - 接続ツールは「接続ツールをダウンロード」ボタンで配る（`public/download/AITrader.exe`、Python 不要）
-- 口座番号・稼働状況・成績は**固定値**
-- AIの回答は `characters.ts` の**定型文**（LLM未接続）
-- 接続シーケンスは**時間経過で進む演出**
+- 口座番号・稼働状況・成績はブリッジが MT5 から返した値だけを表示する
+- 研究員の回答は Gemini（`GEMINI_API_KEY`）。鍵が無いときは `characters.ts` の定型文
 
 ## MT5ブリッジ
 
@@ -97,7 +114,7 @@ WebSocketで指令を待ち受け、MT5のグローバル変数を書き換え�
 ## これから必要なもの
 
 1. **WebSocketサーバー** — 画面とブリッジをつなぐ中継。未着手
-2. **AIの実接続** — 定型文を実際のLLM応答に置き換える
+2. **AI の鍵** — Vercel の環境変数に `GEMINI_API_KEY` を入れる（下の「研究員の AI」参照）
 3. **接続ツールの更新** — `connect.py` や `bridge/` を変えたら、Windows で `tools/build-windows.bat`
    を実行して `public/download/AITrader.exe` を置き直す
 
@@ -117,6 +134,19 @@ Cursor からはそのまま clone / push できます。Cloud Agent を使う�
 リポジトリを指定すれば動きます。
 
 ---
+
+## 研究員の AI（Gemini）
+
+リン・ジン・アルゴ・ミオの受け答えは Gemini 2.5 Flash-Lite（いちばん安いモデル）に聞く。
+費用を抑えるため、研究員ごとに担当を固定し、担当ぶんのデータだけを渡し、担当外の質問は
+調べずに「▶ ○○に聞く」ボタンで担当へ案内する。1回の質問はおおむね 0.05 円前後。
+
+1. [Google AI Studio](https://aistudio.google.com/apikey) で **Create API key**
+2. Vercel → Project → **Settings → Environment Variables** に `GEMINI_API_KEY` を追加（Production）
+3. **Deployments → Redeploy**（環境変数は再デプロイで効く）
+
+ローカルで試すときは `.env` に `GEMINI_API_KEY=` を書く（`npm run dev` が読む）。
+鍵が無い間は定型文で答え、画面に「準備中」は出ない。
 
 ## Supabase 連携（ログインに必須）
 

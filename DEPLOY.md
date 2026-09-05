@@ -32,10 +32,13 @@
 | `VITE_RELAY_URL` | `wss://kinyu-relay.onrender.com/app` |
 | `VITE_SUPABASE_URL` | Supabase Project URL（ログインに必須） |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key（ログインに必須） |
+| `GEMINI_API_KEY` | Google AI Studio の API キー（研究員の AI 回答。未設定なら定型文） |
 
 ```bash
 vercel env add VITE_RELAY_URL production
 # → wss://kinyu-relay.onrender.com/app
+vercel env add GEMINI_API_KEY production
+# → AIza... （https://aistudio.google.com/apikey で作る）
 
 vercel --prod
 ```

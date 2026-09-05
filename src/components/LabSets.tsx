@@ -6,6 +6,7 @@
 // 数字はすべて useBridge / useMarket が持っている値をそのまま出す。ここでは作らない。
 import type { CSSProperties, ReactNode } from 'react'
 import { EXTENSIONS, NOTICES, type Notice } from '../data/infoCenter'
+import { eventLabel, formatEventDate, formatEventTime, upcoming, type EconomicEvent } from '../data/calendar'
 import { TICKER_SYMBOLS, formatMarketPrice, type Candle, type Quote } from '../data/market'
 import { formatSigned, formatStamp, winRate } from '../data/setupFlow'
 import type { AlgoReport } from '../hooks/useAlgoReports'
@@ -347,6 +348,8 @@ export function InfoCenter({
   bridge,
   state,
   reports,
+  events,
+  eventsFailed,
   unread = 0,
   onOpen,
   style,
@@ -354,6 +357,9 @@ export function InfoCenter({
   bridge: Bridge
   state: SystemState
   reports: AlgoReport[]
+  /** 経済指標カレンダー（/api/calendar）。読めていなければ null */
+  events: EconomicEvent[] | null
+  eventsFailed?: boolean
   unread?: number
   onOpen: (what: 'reports' | 'notices') => void
   style?: CSSProperties
@@ -361,6 +367,7 @@ export function InfoCenter({
   const s = bridge.live ? bridge.status : null
   const positions = s?.positions ?? []
   const trades = reports.filter((r) => r.kind === 'trade').slice(0, 3)
+  const nextEvents = events ? upcoming(events).slice(0, 3) : []
 
   return (
     <div className="absolute flex flex-col gap-3" style={style}>
@@ -411,6 +418,22 @@ export function InfoCenter({
             </p>
           ))}
         </div>
+      </Card>
+
+      <Card title="CALENDAR ／ 経済指標" color={YELLOW}>
+        {events == null && <p className={`${T.sm} text-slate-500`}>{eventsFailed ? '予定を取得できませんでした。しばらくすると再表示します。' : '予定を読み込んでいます…'}</p>}
+        {events != null && nextEvents.length === 0 && <p className={`${T.sm} text-slate-500`}>この先の大きな予定はありません。次の週のぶんは週明けに更新されます。</p>}
+        {nextEvents.map((e) => (
+          <p key={e.id} className="flex items-baseline gap-2 py-0.5 text-[13px] leading-tight">
+            <span className="font-mono shrink-0 text-slate-500">
+              {formatEventDate(e.at)} {formatEventTime(e.at)}
+            </span>
+            <span className="truncate font-bold text-slate-100">{eventLabel(e)}</span>
+            <span className="font-mono ml-auto shrink-0 text-[10px]" style={{ color: e.impact === 'high' ? RED : YELLOW }}>
+              {e.impact === 'high' ? '重要' : '中'}
+            </span>
+          </p>
+        ))}
       </Card>
 
       <Card title="NOTICE ／ お知らせ" onClick={() => onOpen('notices')}>

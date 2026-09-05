@@ -42,6 +42,7 @@ export function applyNames(names: Record<string, string> | undefined): Record<st
       returningRunning: c.returningRunning && fill(c.returningRunning, nameOf),
       returningStopped: c.returningStopped && fill(c.returningStopped, nameOf),
       reconnecting: c.reconnecting && fill(c.reconnecting, nameOf),
+      ai: c.ai && { ...c.ai, noBridge: c.ai.noBridge && fill(c.ai.noBridge, nameOf) },
     }
   }
   return out

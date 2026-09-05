@@ -1,26 +1,7 @@
-// 情報センター（研究所の右側）に並べる、相場の予定とお知らせ。
+// 情報センター（研究所の右側）に並べる、お知らせと拡張機能の一覧。
 // 成績や建玉の数字はここには置かない（それらはブリッジが返した値だけを使う）。
 
-/** 定例の経済イベント。日付ではなく「いつも何時か」で持つ（日本時間） */
-export interface MarketEvent {
-  name: string
-  /** 発表のタイミング */
-  when: string
-  /** 何が動きやすいか */
-  note: string
-  impact: 'high' | 'mid'
-}
-
-export const MARKET_SCHEDULE: MarketEvent[] = [
-  { name: '米・雇用統計', when: '毎月第1金曜 21:30', note: 'ドル円が最も飛びやすい', impact: 'high' },
-  { name: '米・消費者物価指数（CPI）', when: '毎月中旬 21:30', note: '利下げ観測を左右', impact: 'high' },
-  { name: 'FOMC 政策金利', when: '年8回 03:00', note: 'ドル全般', impact: 'high' },
-  { name: '日銀 金融政策決定会合', when: '年8回 正午前後', note: '円絡み全般', impact: 'high' },
-  { name: 'ECB 理事会', when: '年8回 21:15', note: 'ユーロ', impact: 'mid' },
-  { name: '米・小売売上高', when: '毎月中旬 21:30', note: 'ドル', impact: 'mid' },
-]
-
-export const SCHEDULE_NOTE = '時刻は日本時間の夏時間。冬時間は1時間遅くなります。'
+// 経済指標の予定は /api/calendar（ForexFactory）から取る。ここには置かない。
 
 /** お知らせ・アップデート情報・今後の予定 */
 export interface Notice {
@@ -31,6 +12,12 @@ export interface Notice {
 }
 
 export const NOTICES: Notice[] = [
+  {
+    date: '2026-09-05',
+    tag: 'アップデート',
+    title: '研究員が手元のデータを見て答えるようになりました',
+    body: 'リンは大画面のチャート、ジンは経済指標カレンダー、アルゴはMT5の状態と取引、新しく加わったミオはお客様の取引履歴を見て答えます。担当外のことは、担当の研究員へ案内します。',
+  },
   {
     date: '2026-09-04',
     tag: 'アップデート',
@@ -47,7 +34,7 @@ export const NOTICES: Notice[] = [
     date: '2026-08-20',
     tag: 'アップデート',
     title: 'トレードの添削',
-    body: 'リンがMT5の約定履歴（既定180日）から、勝ち負けの幅・保有時間・時間帯のクセを読み取ります。',
+    body: 'MT5の約定履歴（既定180日）から、勝ち負けの幅・保有時間・時間帯のクセを読み取ります。',
   },
   {
     date: '2026-08-10',

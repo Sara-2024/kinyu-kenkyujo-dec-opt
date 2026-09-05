@@ -31,6 +31,7 @@ import { BigChart, Desk, ServerRack, ToolBox } from '../components/Panels'
 import { YUI_GUIDE, YUI_HINTS, type Character } from '../data/characters'
 import { useAuth } from '../hooks/AuthContext'
 import { useAlgoReports } from '../hooks/useAlgoReports'
+import { useEconomicAlerts } from '../hooks/useEconomicAlerts'
 import { useBridge } from '../hooks/useBridge'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { useMarket } from '../hooks/useMarket'
@@ -57,6 +58,7 @@ const CHAR_POS: Record<string, { x: number; bottom: number; s: number }> = {
   jin: { x: 30, bottom: 28, s: 5.4 },
   algo: { x: 63, bottom: 30, s: 5.4 },
   yui: { x: 50, bottom: 12, s: 5.6 },
+  mio: { x: 85, bottom: 21, s: 5 },
 }
 /** SYSTEM LAB での立ち位置 */
 const SYSTEM_POS: Record<string, { x: number; bottom: number; s: number }> = {
@@ -72,13 +74,12 @@ interface NewsItem {
   label: string
   text: string
 }
+// 相場や指標の中身はここに書かない（ジンの予定はカレンダー API、リンの形はチャートから）
 const NEWS_POOL: NewsItem[] = [
-  { charId: 'jin', tone: 'warn', label: '指標接近', text: '⏰ まもなく米・雇用統計の発表です（21:30）。値が飛びやすい時間帯ですよ。' },
-  { charId: 'jin', tone: 'alert', label: '速報', text: '📢 速報：トランプ大統領の発言が伝わりました。ドル円が振れやすくなっています。' },
-  { charId: 'rin', tone: 'info', label: '注目', text: '👀 USD/JPYが直近高値に接近中。ここを抜けるかどうかが今日のポイントです。' },
+  { charId: 'rin', tone: 'info', label: '案内', text: '👀 大画面の銘柄について、直近の高値・安値や移動平均との位置関係をお話しできます。' },
   { charId: 'algo', tone: 'info', label: '稼働報告', text: '🤖 稼働状況は、管制室のモニターと右の情報センターでいつでも確認できます。' },
+  { charId: 'mio', tone: 'info', label: '案内', text: '📋 取引履歴から、勝ち負けの幅・保有時間・時間帯のクセを読み取ります。' },
   { charId: 'yui', tone: 'info', label: '案内', text: '🔧 右奥の SYSTEM LAB では、新しいインジケーターのテストが進んでいます。' },
-  { charId: 'jin', tone: 'warn', label: '指標接近', text: '⏰ 30分後に日銀総裁の会見があります。円絡みは値動きに注意です。' },
 ]
 
 type BubbleTone = NewsItem['tone'] | 'good' | 'bad'
@@ -311,6 +312,7 @@ export function Lab() {
   const state = systemStateOf(bridge, shocked)
   const running = state.key === 'running'
   const algoReports = useAlgoReports(bridge, !!dialogueId || tutorial || room === 'system' || overlay !== null)
+  const econ = useEconomicAlerts(!!dialogueId || tutorial || room === 'system' || overlay !== null)
 
   // ───── パン・ズーム ─────
   //  - ズームの下限は「画面にぴったり収まる倍率」（zoom = 1）。それより縮めない
@@ -470,6 +472,8 @@ export function Lab() {
   }, [closeDialogue])
 
   // AI通知のスケジューラ（チュートリアル中と急変動中は出さない）
+  const econNextRef = useRef(econ.nextLine)
+  econNextRef.current = econ.nextLine
   useEffect(() => {
     if (tutorial) return
     let alive = true
@@ -479,7 +483,11 @@ export function Lab() {
     const schedule = (delay: number) => {
       timer = setTimeout(() => {
         if (!alive) return
-        const item = NEWS_POOL[idx % NEWS_POOL.length]
+        // ジンは本物のカレンダーから「次の指標」を挟む
+        const pool: NewsItem[] = econNextRef.current
+          ? [...NEWS_POOL, { charId: 'jin', tone: 'warn', label: '指標', text: `📅 ${econNextRef.current}` }]
+          : NEWS_POOL
+        const item = pool[idx % pool.length]
         idx++
         setNews(item)
         clearTimer = setTimeout(() => alive && setNews(null), 9000)
@@ -586,6 +594,7 @@ export function Lab() {
   const bubbleFor = (id: string): Bubble | null => {
     if (dialogueId) return null
     if (shocked && id === 'jin') return { label: '急変動', text: JIN_SHOCK_LINE, tone: 'alert' }
+    if (id === 'jin' && econ.current) return { label: '指標', text: econ.current.text, tone: econ.current.tone, onClick: econ.dismiss }
     if (id === 'algo' && algoReports.current && !shocked) {
       const r = algoReports.current
       return {
@@ -877,6 +886,8 @@ export function Lab() {
                 bridge={bridge}
                 state={state}
                 reports={algoReports.reports}
+                events={econ.events}
+                eventsFailed={econ.loadFailed}
                 unread={unread}
                 onOpen={openOverlay}
                 style={{ left: '76%', top: 56, width: '17.5%', ...dimStyle(0.45) }}
@@ -973,6 +984,9 @@ export function Lab() {
                 react={reacting}
               />
               <ConsoleDesk state={state} style={{ left: '52.5%', width: '21%', bottom: '17%', zIndex: 16, ...dimStyle(0.5) }} />
+
+              {/* ===== 情報センター：ミオ ===== */}
+              <Chara character={CHARACTERS.mio} {...CHAR_POS.mio} onSelect={select} dimmed={tutorial} bubble={bubbleFor('mio')} />
 
               {/* ===== エントランス ===== */}
               <Chara character={CHARACTERS.yui} {...CHAR_POS.yui} z={35} onSelect={select} exclaim bubble={bubbleFor('yui')} />
@@ -1179,7 +1193,7 @@ export function Lab() {
       )}
       {/* ================= 会話ウィンドウ（オーバーレイ） ================= */}
       {dialogueId && CHARACTERS[dialogueId] && (
-        <DialogueWindow character={CHARACTERS[dialogueId]} onClose={closeDialogue} bridge={bridge} onSelect={select} onFocus={focusFor} />
+        <DialogueWindow character={CHARACTERS[dialogueId]} onClose={closeDialogue} bridge={bridge} market={market} econ={econ} onSelect={select} onFocus={focusFor} />
       )}
 
       {/* ===== 急変動中の赤ビネット ===== */}

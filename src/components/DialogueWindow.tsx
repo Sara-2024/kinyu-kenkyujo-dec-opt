@@ -6,7 +6,7 @@
 // お客様にしていただくのは、接続ツールをダウンロードして一度開くことだけ。
 // 残りはユイが手順を案内し、つながったら管制室のアルゴに引き継ぐ。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { SETUP, TOUR, type Character } from '../data/characters'
+import { AI_TEXT, ECON_ALERT, SETUP, TOUR, type Character } from '../data/characters'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { clearConnection, loadConnection, newConnection, saveConnection, applyBridgeToConnection, connectionMatchesBridge, connectionAccountKey, type Connection } from '../data/connection'
 import { settingsFromGate } from '../data/eaSettings'
@@ -29,8 +29,13 @@ import {
 } from '../data/setupFlow'
 import { LiveReportView, type LiveReport } from './LiveReport'
 import { CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, downloadConnector, launchConnector } from '../data/connector'
-import { formatReviewAnswer, reviewTrades } from '../data/tradeReview'
+import { formatReviewAnswer, reviewTrades, type TradeHistory } from '../data/tradeReview'
 import { PixelPerson } from './PixelPerson'
+import { AI_FAILURE_TEXT, askAi, setPendingQuestion, takePendingQuestion, type AiRole } from '../data/ai'
+import { algoContext, jinContext, mioContext, rinContext } from '../data/aiContext'
+import type { useMarket } from '../hooks/useMarket'
+import type { useEconomicAlerts } from '../hooks/useEconomicAlerts'
+import { eventLabel, formatEventDate, formatEventTime, upcoming, type EconomicEvent } from '../data/calendar'
 
 type Phase = 'talk' | 'intro' | 'tour' | 'launching' | 'download' | 'waiting' | 'connecting' | 'mt5' | 'done' | 'control'
 
@@ -52,6 +57,14 @@ const HISTORY_DAYS = 30
 /** 添削はもう少し長く見る */
 const REVIEW_DAYS = 180
 
+/** AI に渡す取引履歴はこの日数ぶん（アルゴ・ミオ）。1分は取り直さない */
+const AI_TRADE_DAYS = 30
+const AI_TRADE_KEEP_MS = 60_000
+
+function fill(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+}
+
 /** 呼び出し中に見せる、接続ツールの仕事 */
 const CONNECTOR_STEPS = [
   'ログイン中のMT5を探しています',
@@ -64,12 +77,18 @@ export function DialogueWindow({
   character,
   onClose,
   bridge,
+  market,
+  econ,
   onSelect,
   onFocus,
 }: {
   character: Character
   onClose: () => void
   bridge: ReturnType<typeof useBridge>
+  /** 大画面のチャート（リンが読む） */
+  market: ReturnType<typeof useMarket>
+  /** 経済指標カレンダーと通知（ジンが読む） */
+  econ: ReturnType<typeof useEconomicAlerts>
   /** 別の研究員へ引き継ぐ（その研究員の会話を開く） */
   onSelect?: (id: string) => void
   /** メンバー紹介中、カメラをその研究員に向ける。null で受付に戻す */
@@ -98,6 +117,13 @@ export function DialogueWindow({
   const [tourDone, setTourDone] = useState(false)
   /** 直前に押した選択肢（引き継ぎボタンを出すため） */
   const [lastAsked, setLastAsked] = useState<string | null>(null)
+  /** AI が担当外と言った → 案内先と、そのまま持っていく質問 */
+  const [redirect, setRedirect] = useState<{ to: string; question: string } | null>(null)
+  /** AI に聞いている最中 */
+  const [thinking, setThinking] = useState(false)
+  /** AI 用の取引履歴（取り直しを減らす） */
+  const aiTrades = useRef<{ at: number; history: TradeHistory | null } | null>(null)
+  const askRef = useRef<(q: string, from?: string) => void>(() => {})
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
   const reconnectTried = useRef(false)
@@ -126,6 +152,17 @@ export function DialogueWindow({
     setTourIndex(0)
     setTourDone(false)
     setLastAsked(null)
+    setRedirect(null)
+    setThinking(false)
+
+    // 別の研究員から質問を引き継いできた → そのまま聞く
+    const handed = takePendingQuestion(character.id)
+    if (handed) {
+      setPhase('talk')
+      setAiText(character.greeting)
+      askRef.current(handed.question, handed.from)
+      return
+    }
 
     if (saved && character.id === 'algo') {
       setPhase('control')
@@ -281,7 +318,101 @@ export function DialogueWindow({
     localStorage.setItem(introKey, '1')
   }
 
-  const ask = (q: string) => {
+  /** AI に渡す取引履歴（アルゴ・ミオ）。1分以内なら前回のものを使う */
+  const loadAiTrades = async (): Promise<TradeHistory | null> => {
+    const cached = aiTrades.current
+    if (cached && Date.now() - cached.at < AI_TRADE_KEEP_MS) return cached.history
+    const ack = await bridge.send('get_trades', { days: AI_TRADE_DAYS })
+    const history = ack.ok && ack.trades ? ack.trades : null
+    aiTrades.current = { at: Date.now(), history }
+    return history
+  }
+
+  /**
+   * AI に聞く。担当ぶんのデータだけを添える。担当外なら案内ボタンを出す。
+   * @param from 引き継ぎ元の研究員（引き継がれた質問のとき）
+   */
+  // 手元のデータを読むだけで答えられる質問は AI に聞かない（費用ゼロ）。
+  //   リン: 直近の高値と安値は？   ジン: 次の指標はいつ？ / 今週の重要指標は？
+  const localAnswer = (question: string): string | null => {
+    if (character.id === 'rin' && question === '直近の高値と安値は？') {
+      const c = rinContext(market)
+      if (!c) return null
+      const maLine = c.ma20 ? fill(c.ma20.priceIs === 'above' ? AI_TEXT.maAbove : AI_TEXT.maBelow, { ma: c.ma20.value }) : ''
+      return fill(AI_TEXT.highLow, {
+        symbol: c.symbol,
+        period: c.period,
+        high: c.high.price,
+        highAt: c.high.at,
+        low: c.low.price,
+        lowAt: c.low.at,
+        price: c.price,
+        toHigh: c.high.distance,
+        toLow: c.low.distance,
+        maLine,
+      })
+    }
+    if (character.id !== 'jin' || !econ.events) return null
+    const when = (e: EconomicEvent) => `${formatEventDate(e.at)}${formatEventTime(e.at)}`
+    if (question === '次の指標はいつ？') {
+      const e = econ.next
+      return e ? fill(ECON_ALERT.nextAnswer, { day: when(e), country: e.countryJa || e.country, title: e.titleJa }) : ECON_ALERT.none
+    }
+    if (question === '今週の重要指標は？') {
+      const all = upcoming(econ.events)
+      const high = all.filter((e) => e.impact === 'high')
+      const list = (high.length >= 3 ? high : all).slice(0, 6)
+      return list.length ? fill(ECON_ALERT.weekAnswer, { list: list.map((e) => `${when(e)} ${eventLabel(e)}`).join('、') }) : ECON_ALERT.none
+    }
+    return null
+  }
+
+  const askViaAi = async (role: AiRole, question: string, from?: string) => {
+    setRedirect(null)
+    if (character.ai?.needsBridge && !bridge.live) {
+      setAiText(character.ai.noBridge ?? character.fallback)
+      setBusy(false)
+      return
+    }
+    let context: unknown = null
+    let dataError: string | null = null
+    if (role === 'rin') {
+      context = rinContext(market)
+      if (!context) dataError = AI_TEXT.noData
+    } else if (role === 'jin') {
+      context = jinContext(econ.events, market.quoteMap)
+      if (!context) dataError = AI_TEXT.noData
+    } else {
+      const history = await loadAiTrades()
+      context = role === 'algo' ? algoContext(bridge.status ?? null, history) : mioContext(bridge.status ?? null, history)
+      if (!context) dataError = '口座の数字を読み取れませんでした。接続ツールが起動しているか見てください。'
+    }
+    if (dataError) {
+      setAiText(dataError)
+      setBusy(false)
+      return
+    }
+    const intro = from && characters[from] ? fill(AI_TEXT.handoffIntro, { from: characters[from].name, question }) : ''
+    if (intro) setAiText(intro)
+    setThinking(true)
+    const names: Record<string, string> = {}
+    for (const c of Object.values(characters)) names[c.id] = c.name
+    const res = await askAi({ role, question, context, names })
+    setThinking(false)
+    if (!res.ok) {
+      // まだ AI の鍵が入っていないときは、用意した受け答えで返す（画面を止めない）
+      setAiText(res.why === 'unavailable' ? (character.answers[question] ?? character.fallback) : AI_FAILURE_TEXT[res.why])
+    } else if (res.reply.redirect && characters[res.reply.redirect] && res.reply.redirect !== character.id) {
+      const to = characters[res.reply.redirect]
+      setAiText(fill(AI_TEXT.redirect, { name: to.name, role: to.role }))
+      setRedirect({ to: to.id, question })
+    } else {
+      setAiText(intro ? `${intro} ${res.reply.answer}` : res.reply.answer)
+    }
+    setBusy(false)
+  }
+
+  const ask = (q: string, from?: string) => {
     if (busy || !q.trim()) return
     if (character.startsSetup && q.trim() === character.startsSetup) {
       startSetup()
@@ -333,6 +464,19 @@ export function DialogueWindow({
       return
     }
 
+    // AI が答える研究員（リン・ジン・アルゴ・ミオ）。それ以外は用意した受け答え
+    const local = localAnswer(question)
+    if (local) {
+      setRedirect(null)
+      setAiText(local)
+      setBusy(false)
+      return
+    }
+    if (character.ai) {
+      void askViaAi(character.id as AiRole, question, from)
+      return
+    }
+
     timers.current.push(
       setTimeout(() => {
         setAiText(character.answers[question] ?? character.fallback)
@@ -340,6 +484,7 @@ export function DialogueWindow({
       }, 700),
     )
   }
+  askRef.current = ask
 
   // 「初期設定をはじめる」→ 接続ツールを呼び出したあと。
   // ツールが入っていれば数秒でブリッジが名乗り出る。無ければダウンロードの案内に切り替える。
@@ -653,6 +798,30 @@ export function DialogueWindow({
         {/* ══════ 通常会話 ══════ */}
         {phase === 'talk' && (
           <>
+            {thinking && (
+              <div className="flex items-center gap-3 px-6 pb-3">
+                <span className="spin h-4 w-4 shrink-0 rounded-full" style={{ border: '2px solid rgba(94,204,255,0.2)', borderTopColor: 'var(--accent)' }} />
+                <p className="font-mono text-[13px] text-slate-400">{fill(AI_TEXT.thinking, { name: character.name })}</p>
+              </div>
+            )}
+            {/* 担当外だった → 担当の研究員へ、質問ごと引き継ぐ */}
+            {redirect && characters[redirect.to] && !typing && !busy && (
+              <div className="px-6 pb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingQuestion({ to: redirect.to, from: character.id, question: redirect.question })
+                    handoffTo(redirect.to)
+                  }}
+                  className="flex h-12 items-center gap-3 rounded-[5px] border px-5 text-[15px] font-bold transition hover:brightness-110 active:translate-y-px"
+                  style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607', boxShadow: '0 0 14px rgba(250,204,21,0.3)' }}
+                >
+                  <PixelPerson look={characters[redirect.to].look} s={1.6} />
+                  ▶ {fill(AI_TEXT.redirectButton, { name: characters[redirect.to].name })}
+                  <span className="font-mono text-[12px] font-bold opacity-70">{characters[redirect.to].role}</span>
+                </button>
+              </div>
+            )}
             {report && !typing && (
               <div className="px-6 pb-3">
                 <LiveReportView report={report} updatedAt={reportAt} />
@@ -690,6 +859,31 @@ export function DialogueWindow({
                 >
                   {SETUP.tourDoneLater}
                 </SetupButton>
+              </div>
+            )}
+            {/* ジン：発表前のブラウザ通知 */}
+            {character.id === 'jin' && !typing && !busy && econ.permission !== 'unsupported' && (
+              <div className="flex flex-wrap items-center gap-3 px-6 pb-3">
+                {econ.permission === 'default' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void econ.requestPermission().then((got) => {
+                        if (got === 'granted') setAiText(ECON_ALERT.notifyOn)
+                        else if (got === 'denied') setAiText(ECON_ALERT.notifyDenied)
+                      })
+                    }}
+                    className="h-11 rounded-[5px] border px-4 text-[14px] font-bold text-slate-100 transition hover:brightness-125 active:translate-y-px"
+                    style={{ borderColor: 'rgba(255,200,61,0.5)', background: 'rgba(255,200,61,0.1)' }}
+                  >
+                    {ECON_ALERT.notifyButton}
+                  </button>
+                ) : (
+                  <span className="font-mono text-[12px] text-slate-400">
+                    {econ.permission === 'granted' ? '🔔 発表前のブラウザ通知: オン' : '🔕 ブラウザの通知は許可されていません'}
+                  </span>
+                )}
+                {econ.nextLine && <span className="font-mono text-[12px] text-slate-500">{econ.nextLine}</span>}
               </div>
             )}
             {!tourDone && (
