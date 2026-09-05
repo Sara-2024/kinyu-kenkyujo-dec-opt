@@ -86,7 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 開発中に Supabase を用意せず見た目だけ確認したいとき（npm run dev かつ .env.local に
     // VITE_PREVIEW_MEMBER=1）。本番ビルドには入らない
     if (import.meta.env.DEV && import.meta.env.VITE_PREVIEW_MEMBER === '1') {
-      setMember({ id: '00000000-0000-4000-8000-000000000000', email: 'preview@example.com', role: 'admin', status: 'active', can_trade: true })
+      const preview = { id: '00000000-0000-4000-8000-000000000000', email: 'preview@example.com', role: 'admin', status: 'active', can_trade: true } as Member
+      setMember(preview)
+      // 連携の保存先（localStorage）は会員IDごと。プレビューでも同じ動きにする
+      setConnectionOwner(preview.id)
       setToken(null)
       setReady(true)
       return

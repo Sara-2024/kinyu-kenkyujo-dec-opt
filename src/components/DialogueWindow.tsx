@@ -1,35 +1,38 @@
 // ノベルゲーム風の会話ウィンドウ（SPEC R-08-11 / R-08-12 / R-08-13 準拠）。
 // 画面遷移せず、研究所の画面の上にオーバーレイで開く。
 //
-// 「おまかせ接続」モードを併せ持つ。
+// 「初期設定（MT5との連携）」モードを併せ持つ。担当は受付のユイ。
 // 売りたいのは “設定はAIが代わりに全部やる” という体験なので、
-// お客様に入力していただくのは連絡先だけ。残りはAIが順に片づける様子を見せる。
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Character } from '../data/characters'
+// お客様にしていただくのは、接続ツールをダウンロードして一度開くことだけ。
+// 残りはユイが手順を案内し、つながったら管制室のアルゴに引き継ぐ。
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { SETUP, TOUR, type Character } from '../data/characters'
+import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { clearConnection, loadConnection, newConnection, saveConnection, applyBridgeToConnection, connectionMatchesBridge, connectionAccountKey, type Connection } from '../data/connection'
 import { settingsFromGate } from '../data/eaSettings'
 import { BridgeStatusBar } from './BridgeStatusBar'
 import { ControlPanel } from './ControlPanel'
 import type { useBridge } from '../hooks/useBridge'
-import { saveLead } from '../data/leads'
 import { useAuth } from '../hooks/AuthContext'
 import { formatBridgeError } from '../data/bridgeErrors'
 import {
   CONNECT_WAIT,
-  USER_STEPS,
+  installSteps,
   connectChecksFromStatus,
   formatHistoryAnswer,
   formatPositionsAnswer,
   formatTodayAnswer,
-  validateEmail,
   type ConnectCheck,
 } from '../data/setupFlow'
 import { LiveReportView, type LiveReport } from './LiveReport'
-import { CONNECTOR_WAIT_MS, launchConnector } from '../data/connector'
+import { CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, downloadConnector, launchConnector } from '../data/connector'
 import { formatReviewAnswer, reviewTrades } from '../data/tradeReview'
 import { PixelPerson } from './PixelPerson'
 
-type Phase = 'talk' | 'launching' | 'email' | 'sent' | 'connecting' | 'done' | 'control'
+type Phase = 'talk' | 'intro' | 'tour' | 'launching' | 'download' | 'waiting' | 'connecting' | 'done' | 'control'
+
+/** ダウンロード後の手順（exe か zip かで変わる） */
+const INSTALL_STEPS = installSteps(CONNECTOR_DOWNLOAD.kind)
 
 /** この選択肢は、答えを作らずに MT5 から取ってきた数字をそのまま出す */
 const LIVE_QUESTIONS: Record<string, LiveReport['kind']> = {
@@ -58,12 +61,21 @@ export function DialogueWindow({
   character,
   onClose,
   bridge,
+  onSelect,
+  onFocus,
 }: {
   character: Character
   onClose: () => void
   bridge: ReturnType<typeof useBridge>
+  /** 別の研究員へ引き継ぐ（その研究員の会話を開く） */
+  onSelect?: (id: string) => void
+  /** メンバー紹介中、カメラをその研究員に向ける。null で受付に戻す */
+  onFocus?: (id: string | null) => void
 }) {
   const { member } = useAuth()
+  const { characters, t } = useSiteSettings()
+  // はじめての方には、ユイが最初にメンバー紹介から入る（会員ごとに一度だけ）
+  const introKey = member ? `lab-intro-done:${member.id}` : 'lab-intro-done'
   const [aiText, setAiText] = useState(character.greeting)
   const [shown, setShown] = useState(0)
   const [input, setInput] = useState('')
@@ -77,10 +89,14 @@ export function DialogueWindow({
   const [conn, setConn] = useState<Connection | null>(() => loadConnection())
   const [report, setReport] = useState<LiveReport | null>(null)
   const [reportAt, setReportAt] = useState<Date | null>(null)
+  /** メンバー紹介で、いま誰を紹介しているか */
+  const [tourIndex, setTourIndex] = useState(0)
+  /** 紹介を見終わった直後（「初期設定をはじめる」を大きく出す） */
+  const [tourDone, setTourDone] = useState(false)
+  /** 直前に押した選択肢（引き継ぎボタンを出すため） */
+  const [lastAsked, setLastAsked] = useState<string | null>(null)
 
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
-  const inputRef = useRef<HTMLInputElement>(null)
-  const emailRef = useRef('')
   const reconnectTried = useRef(false)
   // この画面でブリッジが一度でも動いていたか（キャラを切り替えても覚えておく）
   const bridgeSeenLive = useRef(false)
@@ -104,13 +120,31 @@ export function DialogueWindow({
     setReport(null)
     reconnectTried.current = false
 
+    setTourIndex(0)
+    setTourDone(false)
+    setLastAsked(null)
+
     if (saved && character.id === 'algo') {
       setPhase('control')
       setAiText(saved.running ? (character.returningRunning ?? character.greeting) : (character.returningStopped ?? character.greeting))
       return
     }
+    if (character.id === 'yui') {
+      if (saved) {
+        setPhase('talk')
+        setAiText(t(SETUP.already))
+        return
+      }
+      if (!localStorage.getItem(introKey)) {
+        setPhase('intro')
+        setAiText(t(SETUP.intro))
+        return
+      }
+    }
     setPhase('talk')
-    setAiText(saved && character.id === 'yui' ? '設定はもうお済みですね。ご用があれば何なりと。' : character.greeting)
+    setAiText(character.greeting)
+    // t は名前の設定が変わったときだけ変わる。ここではキャラの切り替えだけを見る
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character])
 
   useEffect(() => () => clearTimers(), [])
@@ -130,12 +164,18 @@ export function DialogueWindow({
     return () => clearInterval(id)
   }, [aiText])
 
+  // 紹介中はカメラをその研究員へ。紹介を抜けたら話し相手に戻す
+  const tourFocus = useRef(false)
   useEffect(() => {
-    if (phase === 'email') {
-      if (member?.email && !input) setInput(member.email)
-      inputRef.current?.focus()
+    if (!onFocus) return
+    if (phase === 'tour') {
+      tourFocus.current = true
+      onFocus(TOUR[tourIndex]?.id ?? null)
+    } else if (tourFocus.current) {
+      tourFocus.current = false
+      onFocus(null)
     }
-  }, [phase, member?.email, input])
+  }, [phase, tourIndex, onFocus])
 
   const typing = shown < aiText.length
 
@@ -195,30 +235,56 @@ export function DialogueWindow({
   }, [bridge.status, shownKind])
 
   // ── 通常会話 ──
+  /** 初期設定のはじまり。接続ツールを呼び出し、入っていなければダウンロードの案内へ */
+  const startSetup = () => {
+    clearTimers()
+    setInput('')
+    setError(null)
+    setReport(null)
+    setChecks([])
+    setStepIndex(0)
+    if (member && !member.can_trade) {
+      setPhase('talk')
+      setAiText('このアカウントでは自動売買の操作が許可されていません。運営に確認してください。')
+      return
+    }
+    // すでにつながっているPCなら、そのまま接続の確認へ進む
+    if (bridge.live) {
+      setPhase('connecting')
+      setAiText(CONNECT_WAIT)
+      return
+    }
+    setPhase('launching')
+    setAiText(t(SETUP.checking))
+    launchConnector(member?.id)
+  }
+
+  const startTour = () => {
+    clearTimers()
+    setInput('')
+    setReport(null)
+    setTourIndex(0)
+    setPhase('tour')
+    setAiText(t(TOUR[0].text))
+  }
+
+  const finishIntro = () => {
+    localStorage.setItem(introKey, '1')
+  }
+
   const ask = (q: string) => {
     if (busy || !q.trim()) return
     if (character.startsSetup && q.trim() === character.startsSetup) {
-      clearTimers()
-      setInput('')
-      setError(null)
-      setReport(null)
-      if (member && !member.can_trade) {
-        setAiText('このアカウントでは自動売買の操作が許可されていません。運営に確認してください。')
-        return
-      }
-      emailRef.current = member?.email ?? emailRef.current
-      // すでにつながっているPCなら、そのまま接続の確認へ進む
-      if (bridge.live) {
-        setPhase('connecting')
-        setAiText(CONNECT_WAIT)
-        return
-      }
-      setPhase('launching')
-      setAiText('お使いのパソコンの接続ツールを呼び出しています。画面は出ません。裏側でMT5とつなぎます。')
-      launchConnector(member?.id)
+      startSetup()
+      return
+    }
+    if (character.startsTour && q.trim() === character.startsTour) {
+      startTour()
       return
     }
     const question = q.trim()
+    setTourDone(false)
+    setLastAsked(question)
     setBusy(true)
     setAiText('…')
     setReport(null)
@@ -266,26 +332,8 @@ export function DialogueWindow({
     )
   }
 
-  // ── メール送信 → ツールの起動を待つ ──
-  const sendTool = () => {
-    const message = validateEmail(input)
-    if (message) {
-      setError(message)
-      return
-    }
-    setError(null)
-    emailRef.current = input.trim()
-    void saveLead(input.trim())
-    setPhase('sent')
-    setChecks([])
-    setStepIndex(0)
-    setAiText(
-      `${input.trim()} 宛に接続ツールをお送りしました。ダウンロードして開いていただければ、あとは私が引き継ぎます。`,
-    )
-  }
-
-  // 「自動売買をはじめる」→ 接続ツールを呼び出したあと。
-  // ツールが入っていれば数秒でブリッジが名乗り出る。無ければメール送付に切り替える。
+  // 「初期設定をはじめる」→ 接続ツールを呼び出したあと。
+  // ツールが入っていれば数秒でブリッジが名乗り出る。無ければダウンロードの案内に切り替える。
   useEffect(() => {
     if (phase !== 'launching') return
     if (bridge.live) {
@@ -294,17 +342,26 @@ export function DialogueWindow({
       return
     }
     const id = setTimeout(() => {
-      setPhase('email')
-      setAiText(
-        'このパソコンには、まだ接続ツールが入っていないようです。お送りしますので、一度だけ開いてください。次からはこのボタン1つでつながります。',
-      )
+      setPhase('download')
+      setAiText(t(SETUP.needDownload))
     }, CONNECTOR_WAIT_MS)
     return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, bridge.live])
+
+  // ダウンロードを始めたら、ツールの起動を待つ（起動すると実応答で接続に進む）
+  const startDownload = () => {
+    downloadConnector()
+    setError(null)
+    setChecks([])
+    setStepIndex(0)
+    setPhase('waiting')
+    setAiText(t(SETUP.waiting))
+  }
 
   // 接続ツール（ブリッジ）が生きたら、タイマーではなく実応答で接続を進める
   useEffect(() => {
-    if (phase !== 'sent') return
+    if (phase !== 'waiting' && phase !== 'download') return
     if (!bridge.live) return
     setError(null)
     setPhase('connecting')
@@ -312,20 +369,6 @@ export function DialogueWindow({
     setChecks([])
     setAiText(CONNECT_WAIT)
   }, [phase, bridge.live])
-
-  useEffect(() => {
-    if (phase !== 'sent') return
-    if (bridge.live) return
-    const id = setTimeout(() => {
-      setError(
-        bridge.error
-          ? formatBridgeError(bridge.error)
-          : 'E008: MT5 連携なしでは接続を完了できません',
-      )
-      setAiText('接続ツールからの応答がありません。中継サーバーとブリッジが起動しているか確認してください。')
-    }, 90_000)
-    return () => clearTimeout(id)
-  }, [phase, bridge.live, bridge.error])
 
   useEffect(() => {
     if (phase !== 'connecting') return
@@ -359,27 +402,24 @@ export function DialogueWindow({
       const lines = connectChecksFromStatus(ack)
       setChecks(lines)
       setStepIndex(lines.length)
-      // ここが「動かしてよい」という唯一の意思表示。
-      // お客様が「自動売買をはじめる」を押したときだけ稼働に入る。
-      // （ブリッジ側は、これが無いかぎり自分から稼働にはしない）
-      const started = await bridge.send('start_trading')
-      if (cancelled) return
-      const running = typeof started.value === 'number' ? Number(started.value) !== 0 : started.ok
-      const created = newConnection(emailRef.current, account, String(ack.server ?? ''), {
+      // 初期設定は「つなぐ」まで。稼働に入れるのは、お客様がアルゴの管理画面で
+      // 「自動売買をはじめる」を押したときだけ（ブリッジは自分から稼働にはしない）。
+      const running = typeof ack.value === 'number' ? Number(ack.value) !== 0 : false
+      const created = newConnection(member?.email ?? '', account, String(ack.server ?? ''), {
         settings: settingsFromGate(ack.gate),
         running,
       })
       saveConnection(created)
       setConn(created)
       setError(null)
+      finishIntro()
       setPhase('done')
-      setAiText(
-        '接続が完了しました。もう設定は終わっています。次からはこの画面を開くだけで、止めたり設定を変えたりできます。',
-      )
+      setAiText(t(SETUP.done))
     })()
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, bridge.live, bridge.send, bridge.error])
 
   // MT5 が返した口座を常に正とする（保存済み口座よりブリッジを優先）
@@ -417,8 +457,22 @@ export function DialogueWindow({
   }, [character, phase, conn, bridge.live, bridge.phase, member?.id])
 
   // 管理画面は ControlPanel 側で出すので、ここでは出さない（二重表示になる）
-  const showBridgeBar =
-    character.id === 'algo' && (phase === 'sent' || phase === 'connecting' || phase === 'done')
+  const showBridgeBar = phase === 'waiting' || phase === 'connecting' || phase === 'done'
+
+  /** 別の研究員に引き継ぐ。カメラは受付から離れるので、紹介のフォーカスも外す */
+  const handoffTo = (id: string) => {
+    if (onSelect) onSelect(id)
+    else onClose()
+  }
+
+  /** 設定の途中でやめて、通常会話に戻る */
+  const backToTalk = () => {
+    clearTimers()
+    setError(null)
+    setChecks([])
+    setPhase('talk')
+    setAiText(character.greeting)
+  }
 
   const reconnect = () => {
     launchConnector(member?.id)
@@ -473,17 +527,21 @@ export function DialogueWindow({
               className="font-mono ml-2 rounded-[3px] border px-2 py-1 text-[11px] font-bold tracking-wide"
               style={{ borderColor: 'rgba(250,204,21,0.5)', background: 'rgba(250,204,21,0.1)', color: '#ffd23e' }}
             >
-              {phase === 'launching'
-                ? '呼び出し中…'
-                : phase === 'email'
-                ? 'おまかせ接続'
-                : phase === 'sent'
-                  ? 'ツール送信ずみ'
-                  : phase === 'connecting'
-                    ? '接続中…'
-                    : phase === 'control'
-                      ? '管理画面'
-                      : '接続完了'}
+              {phase === 'intro'
+                ? 'はじめまして'
+                : phase === 'tour'
+                  ? `メンバー紹介 ${tourIndex + 1}/${TOUR.length}`
+                  : phase === 'launching'
+                    ? '呼び出し中…'
+                    : phase === 'download'
+                      ? '初期設定'
+                      : phase === 'waiting'
+                        ? '起動を待っています'
+                        : phase === 'connecting'
+                          ? '接続中…'
+                          : phase === 'control'
+                            ? '管理画面'
+                            : '連携完了'}
             </p>
           ) : (
             character.statusText && (
@@ -560,9 +618,45 @@ export function DialogueWindow({
                 <LiveReportView report={report} updatedAt={reportAt} />
               </div>
             )}
+            {/* 別の担当へ案内する（例: アルゴ →「初期設定は受付のユイ」） */}
+            {character.handoff && !conn && !typing && !busy && lastAsked === character.handoff.choice && (
+              <div className="px-6 pb-3">
+                <button
+                  type="button"
+                  onClick={() => handoffTo(character.handoff!.to)}
+                  className="h-12 rounded-[5px] border px-6 text-[15px] font-bold transition hover:brightness-110 active:translate-y-px"
+                  style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607', boxShadow: '0 0 14px rgba(250,204,21,0.3)' }}
+                >
+                  ▶ {t(character.handoff.button)}
+                </button>
+              </div>
+            )}
+            {tourDone && !typing && (
+              <div className="flex flex-wrap items-center gap-3 px-6 pb-3">
+                <SetupButton
+                  primary
+                  onClick={() => {
+                    setTourDone(false)
+                    startSetup()
+                  }}
+                >
+                  ▶ {SETUP.tourDoneNext}
+                </SetupButton>
+                <SetupButton
+                  onClick={() => {
+                    setTourDone(false)
+                    setAiText(character.greeting)
+                  }}
+                >
+                  {SETUP.tourDoneLater}
+                </SetupButton>
+              </div>
+            )}
+            {!tourDone && (
+            <>
             <div className="flex flex-wrap gap-2.5 px-6 pb-3">
               {(conn && character.connectedChoices ? character.connectedChoices : character.choices).map((c) => {
-                const isSetup = character.startsSetup === c
+                const isSetup = character.startsSetup === c || character.handoff?.choice === c
                 return (
                   <button
                     key={c}
@@ -615,10 +709,99 @@ export function DialogueWindow({
                 送信（はなす）▶
               </button>
             </div>
+            </>
+            )}
           </>
         )}
 
-        {/* ══════ サイトのボタンから接続ツールを呼び出している間 ══════ */}
+        {/* ══════ はじめまして：紹介を見るか、すぐ初期設定へ ══════ */}
+        {phase === 'intro' && (
+          <div className="flex flex-wrap items-center gap-3 border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+            <SetupButton primary onClick={startTour}>
+              ▶ {SETUP.introTour}
+            </SetupButton>
+            <SetupButton
+              onClick={() => {
+                finishIntro()
+                startSetup()
+              }}
+            >
+              {SETUP.introSkip}
+            </SetupButton>
+          </div>
+        )}
+
+        {/* ══════ メンバー紹介：一人ずつ ══════ */}
+        {phase === 'tour' && (() => {
+          const step = TOUR[tourIndex]
+          const who = characters[step.id]
+          const last = tourIndex >= TOUR.length - 1
+          return (
+            <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+              <div className="flex items-center gap-5">
+                <div
+                  className="flex h-[92px] w-[92px] shrink-0 items-center justify-center rounded-[6px] border"
+                  style={{ borderColor: `${who.color}66`, background: `${who.color}14`, boxShadow: `0 0 18px ${who.color}33` }}
+                >
+                  <PixelPerson look={who.look} s={3.4} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[17px] font-bold text-white">
+                    {who.role}
+                    <span className="font-dot ml-2 text-[16px]" style={{ color: who.color }}>
+                      {who.name}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-[13px] font-bold text-slate-400">こんなことをお願いできます</p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {step.can.map((c) => (
+                      <span
+                        key={c}
+                        className="rounded-[4px] border px-2.5 py-1 text-[13px] font-bold text-slate-200"
+                        style={{ borderColor: 'rgba(94,204,255,0.35)', background: 'rgba(94,204,255,0.07)' }}
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                {tourIndex > 0 && (
+                  <SetupButton
+                    onClick={() => {
+                      setTourIndex((i) => i - 1)
+                      setAiText(t(TOUR[tourIndex - 1].text))
+                    }}
+                  >
+                    ◀ 前へ
+                  </SetupButton>
+                )}
+                <SetupButton
+                  primary
+                  onClick={() => {
+                    if (last) {
+                      finishIntro()
+                      setPhase('talk')
+                      setAiText(t(SETUP.tourDone))
+                      setTourDone(true)
+                      return
+                    }
+                    setTourIndex((i) => i + 1)
+                    setAiText(t(TOUR[tourIndex + 1].text))
+                  }}
+                >
+                  {last ? '紹介はここまで ▶' : '次へ ▶'}
+                </SetupButton>
+                <span className="font-mono ml-auto text-[12px] text-slate-500">
+                  {tourIndex + 1} / {TOUR.length}
+                </span>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* ══════ 接続ツールを呼び出している間 ══════ */}
         {phase === 'launching' && (
           <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
             <div
@@ -629,11 +812,11 @@ export function DialogueWindow({
                 className="spin h-5 w-5 shrink-0 rounded-full"
                 style={{ border: '2px solid rgba(94,204,255,0.2)', borderTopColor: 'var(--accent)' }}
               />
-              <p className="text-[15px] font-bold text-slate-200">接続ツールを呼び出しています…</p>
+              <p className="text-[15px] font-bold text-slate-200">{SETUP.checkingLabel}</p>
               <span className="font-mono ml-auto text-[12px] tracking-wide text-slate-500">画面は出ません</span>
             </div>
 
-            <p className="mb-2 text-[13px] font-bold text-slate-400">いま、お客様のパソコンで進んでいること</p>
+            <p className="mb-2 text-[13px] font-bold text-slate-400">入っていれば、お客様のパソコンでこう進みます</p>
             <ol className="space-y-2">
               {CONNECTOR_STEPS.map((step) => (
                 <li key={step} className="flex items-start gap-3">
@@ -649,121 +832,80 @@ export function DialogueWindow({
             </ol>
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
+              <SetupButton
                 onClick={() => {
-                  setPhase('email')
-                  setAiText('かしこまりました。接続ツールをメールでお送りします。一度だけ開いていただければ、あとは私が引き継ぎます。')
+                  setPhase('download')
+                  setAiText(t(SETUP.needDownload))
                 }}
-                className="rounded-[5px] border px-5 py-3 text-[15px] font-bold text-slate-100 transition hover:brightness-125"
-                style={{ borderColor: 'rgba(148,163,184,0.4)', background: 'rgba(10,18,32,0.6)' }}
               >
-                まだ入れていないので、メールで受け取る
-              </button>
-              <span className="font-mono text-[12px] text-slate-500">初回だけ、ツールを一度開いていただきます</span>
-            </div>
-          </div>
-        )}
-
-        {/* ══════ 唯一の入力：連絡先 ══════ */}
-        {phase === 'email' && (
-          <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
-            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-              <span className="rounded-[4px] border px-2.5 py-1 text-[12px] font-bold text-[#35f58a]"
-                    style={{ borderColor: 'rgba(53,245,138,0.4)', background: 'rgba(53,245,138,0.08)' }}>
-                ✓ MT5のパスワードは不要
-              </span>
-              <span className="rounded-[4px] border px-2.5 py-1 text-[12px] font-bold text-[#35f58a]"
-                    style={{ borderColor: 'rgba(53,245,138,0.4)', background: 'rgba(53,245,138,0.08)' }}>
-                ✓ 口座番号の入力も不要
-              </span>
-              <span className="rounded-[4px] border px-2.5 py-1 text-[12px] font-bold text-[#35f58a]"
-                    style={{ borderColor: 'rgba(53,245,138,0.4)', background: 'rgba(53,245,138,0.08)' }}>
-                ✓ 設定画面はありません
-              </span>
-            </div>
-
-            <div className="mb-2 flex items-baseline gap-3">
-              <span className="h-3 w-[2px]" style={{ background: 'var(--accent)', boxShadow: '0 0 6px var(--accent)' }} />
-              <label className="text-[14px] font-bold text-slate-200">メールアドレス</label>
-              <span className="text-[12px] text-slate-400">このアドレスに接続ツールをお送りします。</span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <input
-                ref={inputRef}
-                value={input}
-                inputMode="email"
-                onChange={(e) => {
-                  setInput(e.target.value)
-                  setError(null)
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && sendTool()}
-                placeholder="example@gmail.com"
-                className="min-w-0 flex-1 rounded-[5px] border px-4 py-3 text-[16px] font-bold text-slate-100 outline-none placeholder:text-slate-500 focus:border-[var(--accent)]"
-                style={{
-                  background: 'rgba(9,17,31,0.85)',
-                  borderColor: error ? 'rgba(224,75,75,0.8)' : 'rgba(148,163,184,0.35)',
-                }}
-              />
-              <button
-                type="button"
-                onClick={sendTool}
-                className="whitespace-nowrap rounded-[5px] border px-6 py-3 text-[15px] font-bold transition hover:brightness-110 active:translate-y-px"
-                style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607' }}
-              >
-                ツールを受け取る ▶
-              </button>
-            </div>
-
-            <div className="mt-2.5 flex items-center gap-4">
-              {error && <p className="text-[13px] font-bold leading-relaxed text-[#ff8484]">⚠ {error}</p>}
-              <button
-                type="button"
-                onClick={() => setPhase('talk')}
-                className="font-mono ml-auto text-[12px] text-slate-400 underline-offset-4 hover:underline"
-              >
-                ← もどる
+                {SETUP.notYet}
+              </SetupButton>
+              <button type="button" onClick={backToTalk} className="font-mono ml-auto text-[12px] text-slate-400 underline-offset-4 hover:underline">
+                {SETUP.back}
               </button>
             </div>
           </div>
         )}
 
-        {/* ══════ ツールを送った直後：お客様の手順を見せる ══════ */}
-        {phase === 'sent' && (
+        {/* ══════ 接続ツールのダウンロード ══════ */}
+        {phase === 'download' && (
           <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
-            <p className="mb-3 text-[13px] font-bold text-slate-400">お客様にしていただくのは、この3つだけです。</p>
-            <ol className="mb-4 space-y-2.5">
-              {USER_STEPS.map((u) => (
-                <li key={u.no} className="flex items-start gap-3">
-                  <span
-                    className="font-mono mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
-                    style={{
-                      background: u.no === 3 ? 'rgba(53,245,138,0.15)' : 'rgba(94,204,255,0.12)',
-                      color: u.no === 3 ? '#35f58a' : 'var(--accent)',
-                      border: `1px solid ${u.no === 3 ? 'rgba(53,245,138,0.5)' : 'rgba(94,204,255,0.4)'}`,
-                    }}
-                  >
-                    {u.no}
-                  </span>
-                  <span>
-                    <span className="text-[15px] font-bold text-white">{u.title}</span>
-                    <span className="ml-2 text-[13px] text-slate-400">{u.detail}</span>
-                  </span>
-                </li>
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              {['MT5のパスワードは不要', '口座番号の入力も不要', '設定画面はありません'].map((m) => (
+                <span
+                  key={m}
+                  className="rounded-[4px] border px-2.5 py-1 text-[12px] font-bold text-[#35f58a]"
+                  style={{ borderColor: 'rgba(53,245,138,0.4)', background: 'rgba(53,245,138,0.08)' }}
+                >
+                  ✓ {m}
+                </span>
               ))}
-            </ol>
+            </div>
+
+            <button
+              type="button"
+              onClick={startDownload}
+              className="flex h-14 w-full items-center justify-center gap-3 rounded-[6px] border text-[17px] font-bold transition hover:brightness-110 active:translate-y-px"
+              style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607', boxShadow: '0 0 18px rgba(250,204,21,0.3)' }}
+            >
+              ⬇ {SETUP.downloadButton}
+              <span className="font-mono text-[12px] font-bold opacity-70">{CONNECTOR_DOWNLOAD.filename}</span>
+            </button>
+            <p className="font-mono mt-2 text-center text-[12px] text-slate-500">{SETUP.downloadNote}</p>
+
+            <p className="mb-2 mt-4 text-[13px] font-bold text-slate-400">ダウンロードしたあとの手順（私が順にご案内します）</p>
+            <InstallSteps active={0} />
+
+            <div className="mt-3 flex">
+              <button type="button" onClick={backToTalk} className="font-mono ml-auto text-[12px] text-slate-400 underline-offset-4 hover:underline">
+                {SETUP.back}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ══════ ダウンロードしたあと：起動を待つ ══════ */}
+        {phase === 'waiting' && (
+          <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+            <InstallSteps active={1} />
 
             <div
-              className="flex flex-wrap items-center gap-4 rounded-[6px] border px-5 py-4"
+              className="mt-4 flex flex-wrap items-center gap-4 rounded-[6px] border px-5 py-4"
               style={{ borderColor: 'rgba(250,204,21,0.4)', background: 'rgba(250,204,21,0.06)' }}
             >
-              <span className="spin h-5 w-5 shrink-0 rounded-full"
-                    style={{ border: '2px solid rgba(250,204,21,0.25)', borderTopColor: '#ffd23e' }} />
-              <p className="text-[15px] font-bold text-slate-200">ツールが起動されるのを待っています…</p>
-              <span className="font-mono ml-auto text-[12px] tracking-wide text-slate-500">
-                起動を検知すると自動ではじまります
-              </span>
+              <span className="spin h-5 w-5 shrink-0 rounded-full" style={{ border: '2px solid rgba(250,204,21,0.25)', borderTopColor: '#ffd23e' }} />
+              <p className="text-[15px] font-bold text-slate-200">{SETUP.waitingLabel}</p>
+              <span className="font-mono ml-auto text-[12px] tracking-wide text-slate-500">{SETUP.waitingNote}</span>
+            </div>
+
+            {error && <p className="mt-3 text-[13px] font-bold leading-relaxed text-[#ff8484]">⚠ {error}</p>}
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <SetupButton onClick={startDownload}>⬇ {SETUP.redownload}</SetupButton>
+              <SetupButton onClick={() => launchConnector(member?.id)}>{SETUP.retry}</SetupButton>
+              <button type="button" onClick={backToTalk} className="font-mono ml-auto text-[12px] text-slate-400 underline-offset-4 hover:underline">
+                {SETUP.back}
+              </button>
             </div>
           </div>
         )}
@@ -817,39 +959,34 @@ export function DialogueWindow({
             </div>
 
             {error && phase === 'connecting' && (
-              <p className="mt-3 text-[13px] font-bold leading-relaxed text-[#ff8484]">⚠ {error}</p>
+              <>
+                <p className="mt-3 text-[13px] font-bold leading-relaxed text-[#ff8484]">⚠ {error}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <SetupButton primary onClick={startSetup}>
+                    {SETUP.retry}
+                  </SetupButton>
+                  <SetupButton
+                    onClick={() => {
+                      setPhase('download')
+                      setAiText(t(SETUP.needDownload))
+                    }}
+                  >
+                    ⬇ {SETUP.downloadButton}
+                  </SetupButton>
+                  <button type="button" onClick={backToTalk} className="font-mono ml-auto text-[12px] text-slate-400 underline-offset-4 hover:underline">
+                    {SETUP.back}
+                  </button>
+                </div>
+              </>
             )}
 
-            {/* 完了後：そのまま管理画面へ進める */}
+            {/* 連携できた：稼働やロットの操作はアルゴへ引き継ぐ */}
             {phase === 'done' && (
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPhase('control')
-                    setAiText('こちらが管理画面です。停止も、ロットなどの設定変更も、すべてここから行えます。')
-                  }}
-                  className="rounded-[5px] border px-6 py-3 text-[15px] font-bold transition hover:brightness-110 active:translate-y-px"
-                  style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607' }}
-                >
-                  管理画面をひらく ▶
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchTo('talk')}
-                  className="rounded-[5px] border px-5 py-3 text-[15px] font-bold text-slate-100 transition hover:brightness-125"
-                  style={{ borderColor: 'rgba(148,163,184,0.4)', background: 'rgba(10,18,32,0.6)' }}
-                >
-                  💬 相談する
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-[5px] border px-5 py-3 text-[15px] font-bold text-slate-100 transition hover:brightness-125"
-                  style={{ borderColor: 'rgba(148,163,184,0.4)', background: 'rgba(10,18,32,0.6)' }}
-                >
-                  研究所にもどる
-                </button>
+                <SetupButton primary onClick={() => handoffTo('algo')}>
+                  ▶ {t(SETUP.doneAlgo)}
+                </SetupButton>
+                <SetupButton onClick={onClose}>{SETUP.doneBack}</SetupButton>
               </div>
             )}
           </div>
@@ -878,5 +1015,51 @@ export function DialogueWindow({
         </div>
       </div>
     </div>
+  )
+}
+
+/** 初期設定の流れで使うボタン（高さ 48px、黄色が主・暗色が従） */
+function SetupButton({ primary, onClick, children }: { primary?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-12 rounded-[5px] border px-5 text-[15px] font-bold transition hover:brightness-110 active:translate-y-px"
+      style={
+        primary
+          ? { background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607', boxShadow: '0 0 14px rgba(250,204,21,0.3)' }
+          : { borderColor: 'rgba(148,163,184,0.4)', background: 'rgba(10,18,32,0.6)', color: '#e8edf5' }
+      }
+    >
+      {children}
+    </button>
+  )
+}
+
+/** ダウンロード後にお客様がすること。active より前は済み、active はいま、あとは待ち */
+function InstallSteps({ active }: { active: number }) {
+  return (
+    <ol className="space-y-2.5">
+      {INSTALL_STEPS.map((u, i) => {
+        const done = i < active
+        const now = i === active
+        const last = i === INSTALL_STEPS.length - 1
+        const color = done ? '#35f58a' : now ? '#ffd23e' : last ? '#35f58a' : 'var(--accent)'
+        return (
+          <li key={u.no} className="flex items-start gap-3" style={{ opacity: done ? 0.55 : 1 }}>
+            <span
+              className="font-mono mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
+              style={{ color, border: `1px solid ${color}`, background: now ? 'rgba(250,204,21,0.15)' : 'rgba(94,204,255,0.08)' }}
+            >
+              {done ? '✓' : u.no}
+            </span>
+            <span>
+              <span className="text-[15px] font-bold text-white">{u.title}</span>
+              <span className="ml-2 text-[13px] text-slate-400">{u.detail}</span>
+            </span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }

@@ -416,27 +416,43 @@ export function Lab() {
     [applyView, minZoom],
   )
 
-  /** キャラへズームインして、その場に会話ウィンドウを開く（画面遷移しない） */
-  const select = useCallback(
-    (id: string) => {
-      if (suppressClick.current) return
-      if (tutorial && id !== 'yui') return
+  /** キャラが会話ウィンドウの上（画面のやや上寄り）に来るようにカメラを寄せる */
+  const focusOn = useCallback(
+    (id: string): boolean => {
       const pos = (room === 'system' ? SYSTEM_POS : CHAR_POS)[id]
-      if (!pos) return
+      if (!pos) return false
       const targetZoom = Math.max(1.7, minZoom() * 1.5)
       const vh = viewSize.current.h
       const cx = (pos.x / 100) * STAGE_W - STAGE_W / 2
       const footY = STAGE_H * (1 - pos.bottom / 100)
       const cy = footY - 70 - STAGE_H / 2
-      // キャラが会話ウィンドウの上（画面のやや上寄り）に来るようにずらす
       applyView(targetZoom, { x: -cx * base * targetZoom, y: -cy * base * targetZoom - vh * 0.18 }, true)
+      return true
+    },
+    [base, applyView, minZoom, room],
+  )
+
+  /** キャラへズームインして、その場に会話ウィンドウを開く（画面遷移しない） */
+  const select = useCallback(
+    (id: string) => {
+      if (suppressClick.current) return
+      if (tutorial && id !== 'yui') return
+      if (!focusOn(id)) return
       setDialogueId(id)
       if (tutorial) {
         setTutorial(false)
         localStorage.setItem(tutorialKey, '1')
       }
     },
-    [tutorial, base, tutorialKey, applyView, minZoom, room],
+    [tutorial, tutorialKey, focusOn],
+  )
+
+  /** メンバー紹介中、ユイが話している研究員へカメラを向ける。null で話し相手に戻す */
+  const focusFor = useCallback(
+    (id: string | null) => {
+      focusOn(id ?? dialogueId ?? 'yui')
+    },
+    [focusOn, dialogueId],
   )
 
   const closeDialogue = useCallback(() => {
@@ -560,10 +576,8 @@ export function Lab() {
   /** 案内の各ステップで光らせる場所 */
   const guideRing: Array<{ left: string; bottom: string } | null> = [
     null,
+    { left: '20%', bottom: '66%' },
     { left: `${CHAR_POS.algo.x}%`, bottom: `${CHAR_POS.algo.bottom}%` },
-    { left: `${CHAR_POS.algo.x}%`, bottom: `${CHAR_POS.algo.bottom}%` },
-    null,
-    { left: '21%', bottom: `${CHAR_POS.rin.bottom}%` },
     { left: '86%', bottom: '38%' },
     null,
   ]
@@ -1165,7 +1179,7 @@ export function Lab() {
       )}
       {/* ================= 会話ウィンドウ（オーバーレイ） ================= */}
       {dialogueId && CHARACTERS[dialogueId] && (
-        <DialogueWindow character={CHARACTERS[dialogueId]} onClose={closeDialogue} bridge={bridge} />
+        <DialogueWindow character={CHARACTERS[dialogueId]} onClose={closeDialogue} bridge={bridge} onSelect={select} onFocus={focusFor} />
       )}
 
       {/* ===== 急変動中の赤ビネット ===== */}

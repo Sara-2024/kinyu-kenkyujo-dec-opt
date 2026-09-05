@@ -6,11 +6,25 @@ export interface UserStep {
   detail: string
 }
 
-export const USER_STEPS: UserStep[] = [
-  { no: 1, title: 'メールを受け取る', detail: '接続ツールのリンクをお送りします' },
-  { no: 2, title: 'ツールを起動する', detail: 'ダウンロードして開くだけです' },
-  { no: 3, title: 'MT5にログインする', detail: 'いつも通り、MT5の画面で口座に入るだけです' },
-]
+/**
+ * ダウンロードしたあと、お客様にしていただくこと。
+ * exe（1本にまとめた版）は「開くだけ」。zip はいったん展開して はじめる.bat を開く。
+ */
+export function installSteps(kind: 'exe' | 'zip'): UserStep[] {
+  if (kind === 'exe') {
+    return [
+      { no: 1, title: 'ダウンロードしたファイルを開く', detail: 'AITrader.exe をダブルクリック。黒い画面は出ません' },
+      { no: 2, title: 'MT5はログインしたままに', detail: 'いつも通り口座に入っていれば、そのままで大丈夫です' },
+      { no: 3, title: 'あとは待つだけ', detail: 'ツールが起動すると、この画面が自動で先へ進みます' },
+    ]
+  }
+  return [
+    { no: 1, title: 'ZIPを展開する', detail: 'ダウンロードした AITrader.zip を右クリック →「すべて展開」' },
+    { no: 2, title: '「はじめる.bat」を開く', detail: '展開したフォルダの中にあります。画面の案内どおり Enter を押すだけ（初回は数分かかります）' },
+    { no: 3, title: 'MT5はログインしたままに', detail: 'いつも通り口座に入っていれば、そのままで大丈夫です' },
+    { no: 4, title: 'あとは待つだけ', detail: 'ツールが起動すると、この画面が自動で先へ進みます' },
+  ]
+}
 
 export const CONNECT_WAIT = 'MT5の状態を読み取っています'
 

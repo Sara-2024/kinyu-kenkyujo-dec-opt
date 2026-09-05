@@ -85,7 +85,7 @@ export function ControlPanel({
     if (!bridge.live) return 'MT5との接続を確認できません'
     if (bridge.status?.terminal_connected === false) return 'ターミナルが相場サーバーとつながっていません'
     if (bridge.status?.terminal_trade_allowed === false) return 'MT5の自動売買ボタンがオフです'
-    return running ? 'MT5は取引可能な状態です' : '停止中です。再開はボタンから行えます'
+    return running ? 'MT5は取引可能な状態です' : '停止中です。はじめるのも再開もボタンから行えます'
   })()
 
   const engineLabel =
@@ -146,7 +146,7 @@ export function ControlPanel({
               : { background: 'rgba(53,245,138,0.9)', borderColor: '#166534', color: '#04120a' }
           }
         >
-          {running ? '■ いますぐ停止' : '▶ 再開する'}
+          {running ? '■ いますぐ停止' : '▶ 自動売買をはじめる'}
         </button>
       </div>
 

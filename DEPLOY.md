@@ -67,22 +67,25 @@ TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
 渡すものは2つだけ。
 
 1. 本番サイトのURL（ログイン用アカウントも渡す）
-2. `AITrader.exe`
+2. `AITrader.exe`（サイトの「接続ツールをダウンロード」ボタンで配る）
 
-GitHub のZIPや `はじめる.bat` は渡さない。
+`bash tools/pack-connector.sh` で `public/download/AITrader.zip` ができる（Python 版）。
+Windows で `tools/build-windows.bat` を実行して `dist/AITrader.exe` ができたら、
+同じスクリプトが `public/download/AITrader.exe` にもコピーするので、Vercel の環境変数に
+`VITE_CONNECTOR_URL=/download/AITrader.exe` を足して再デプロイする。
 
 お客様側の手順:
 
 1. サイトにログイン
-2. `AITrader.exe` を一度開く（初回だけ）
-3. アルゴ → 自動売買をはじめる（または つなぎ直す）
+2. 受付のユイ → 初期設定 → 「接続ツールをダウンロード」→ 一度開く（初回だけ）
    → その会員の部屋で MT5 とつながる
+3. アルゴ → 管理画面 → 「自動売買をはじめる」
 
 中継は **Render を再デプロイ** して、部屋分けのコードが入っていることを確認する。
 
 ## 動作確認
 
 1. https://kinyu-kenkyujo-dec-opt.vercel.app を開く
-2. アルゴ → 接続フロー
+2. ユイ → 初期設定 → 接続フロー → 「アルゴのところへ」
 3. 画面上部に **● MT5と接続中** と **口座番号**（MT5 と同じ）が出る
 4. 管理画面で停止 → MT5 パネルが赤になる

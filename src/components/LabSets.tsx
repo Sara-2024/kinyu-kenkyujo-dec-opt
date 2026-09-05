@@ -380,7 +380,7 @@ export function InfoCenter({
           </span>
         </div>
         <p className={`font-mono mt-1 ${T.xs} text-slate-500`}>
-          {s?.account != null ? `口座 ${s.account}${s.server ? ` ／ ${s.server}` : ''}` : 'アルゴの「自動売買をはじめる」で接続します'}
+          {s?.account != null ? `口座 ${s.account}${s.server ? ` ／ ${s.server}` : ''}` : '受付の「初期設定をはじめる」で接続します'}
         </p>
         <div className="mt-2 border-t pt-2" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
           {trades.length === 0 && positions.length === 0 && (
