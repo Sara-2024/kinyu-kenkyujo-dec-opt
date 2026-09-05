@@ -8,7 +8,7 @@
 #
 #  Mac / Linux で:  bash tools/pack-connector.sh
 #  作ったファイルはコミットする（Vercel が public/ をそのまま配る）。
-#  exe を配るときは VITE_CONNECTOR_URL=/download/AITrader.exe にする。
+#  サイトの既定は exe。ZIP を配るときは VITE_CONNECTOR_URL=/download/AITrader.zip にする。
 # ================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."

@@ -69,10 +69,11 @@ TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
 1. 本番サイトのURL（ログイン用アカウントも渡す）
 2. `AITrader.exe`（サイトの「接続ツールをダウンロード」ボタンで配る）
 
-`bash tools/pack-connector.sh` で `public/download/AITrader.zip` ができる（Python 版）。
 Windows で `tools/build-windows.bat` を実行して `dist/AITrader.exe` ができたら、
-同じスクリプトが `public/download/AITrader.exe` にもコピーするので、Vercel の環境変数に
-`VITE_CONNECTOR_URL=/download/AITrader.exe` を足して再デプロイする。
+`public/download/AITrader.exe` に置いてコミットする（サイトの既定はこれ）。
+`connect.py` や `bridge/` を変えたら作り直す。
+Python 版の ZIP は `bash tools/pack-connector.sh` で `public/download/AITrader.zip` にできる
+（`VITE_CONNECTOR_URL=/download/AITrader.zip` で差し替え）。
 
 お客様側の手順:
 

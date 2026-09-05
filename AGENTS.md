@@ -73,9 +73,10 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   呼び出し時に会員ID（部屋）を渡し、中継はその部屋以外へ指令を流さない。
   ブラウザは登録なしにPCのソフトを起動できないので、**初回だけツールを一度開いてもらう**
   導線は残しておく。配り方はサイトの「接続ツールをダウンロード」ボタン
-  （`public/download/AITrader.zip`、`tools/pack-connector.sh` で作って**コミットする**）。
-  Windows で `tools/build-windows.bat` から exe を作ったら `public/download/AITrader.exe` に置き、
-  `VITE_CONNECTOR_URL=/download/AITrader.exe` に切り替える（ユイの手順が「開くだけ」に変わる）。
+  （既定は `public/download/AITrader.exe`。Windows で `tools/build-windows.bat` を実行して
+  できたものを置いて**コミットする**。Python 不要で、ユイの手順は「開くだけ」）。
+  Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/AITrader.zip`
+  で差し替えられる。`connect.py` や `bridge/` を変えたら exe を作り直して置き直すこと。
   メールで送る導線は廃止した。
 - **役割分担。** MT5との連携（初期設定・ダウンロード案内・メンバー紹介）は受付のユイ、
   稼働・停止・ロット変更（管理画面）はアルゴ。アルゴの「自動売買をはじめる」は

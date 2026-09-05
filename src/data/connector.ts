@@ -27,9 +27,9 @@ export function launchConnector(roomId?: string | null): void {
 
 // ────────────────────────────────
 // 接続ツールのダウンロード
-//   既定は public/download/AITrader.zip（tools/pack-connector.sh で作る）。
-//   Windows で tools/build-windows.bat から exe を作ったら、それを
-//   public/download/AITrader.exe に置いて VITE_CONNECTOR_URL で差し替える。
+//   既定は public/download/AITrader.exe（Windows で tools/build-windows.bat を実行して
+//   できたもの。Python 不要で開くだけ）。Python 版の ZIP（tools/pack-connector.sh）も
+//   同じ場所にあり、VITE_CONNECTOR_URL=/download/AITrader.zip で差し替えられる。
 //   .exe なら「開くだけ」、.zip なら「展開して はじめる.bat を開く」と案内が変わる。
 // ────────────────────────────────
 export type ConnectorKind = 'exe' | 'zip'
@@ -41,7 +41,7 @@ export interface ConnectorDownload {
 }
 
 export const CONNECTOR_DOWNLOAD: ConnectorDownload = (() => {
-  const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/AITrader.zip'
+  const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/AITrader.exe'
   const filename = url.split('?')[0].split('/').pop() || 'AITrader.zip'
   const kind: ConnectorKind = /\.exe$/i.test(filename) ? 'exe' : 'zip'
   return { url, filename, kind }

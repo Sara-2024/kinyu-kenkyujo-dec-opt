@@ -74,7 +74,7 @@ src/
 
 **画面は完成しているが、バックエンドは未接続。**
 
-- 接続ツールは「接続ツールをダウンロード」ボタンで配る（`public/download/AITrader.zip`）
+- 接続ツールは「接続ツールをダウンロード」ボタンで配る（`public/download/AITrader.exe`、Python 不要）
 - 口座番号・稼働状況・成績は**固定値**
 - AIの回答は `characters.ts` の**定型文**（LLM未接続）
 - 接続シーケンスは**時間経過で進む演出**
@@ -98,8 +98,8 @@ WebSocketで指令を待ち受け、MT5のグローバル変数を書き換え�
 
 1. **WebSocketサーバー** — 画面とブリッジをつなぐ中継。未着手
 2. **AIの実接続** — 定型文を実際のLLM応答に置き換える
-3. **接続ツールの配布形態** — いまは Python 版の ZIP。Windows で `tools/build-windows.bat` から
-   `AITrader.exe` を作って `public/download/` に置き、`VITE_CONNECTOR_URL` で差し替える
+3. **接続ツールの更新** — `connect.py` や `bridge/` を変えたら、Windows で `tools/build-windows.bat`
+   を実行して `public/download/AITrader.exe` を置き直す
 
 ---
 
