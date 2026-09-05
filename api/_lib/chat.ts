@@ -221,7 +221,10 @@ export async function handleChat(req: ChatRequest, token: string | null, env: Ch
     if (out.redirect === role) out.redirect = null
     return { status: 200, body: out }
   } catch (err) {
-    return { status: 502, body: { error: err instanceof Error ? err.message : String(err) } }
+    const message = err instanceof Error ? err.message : String(err)
+    // Vercel のログで原因が追えるように残す（鍵そのものは出さない）
+    console.error(`[chat] role=${role} gemini failed: ${message}`)
+    return { status: 502, body: { error: message } }
   }
 }
 
