@@ -156,40 +156,70 @@ interface GeminiResponse {
   error?: { message?: string }
 }
 
+/**
+ * generationConfig の書き方はモデルの版で変わる（思考の指定・JSON スキーマの扱い）。
+ * 上から順に試し、通った形を覚えておく。400 で弾かれたときだけ次を試すので、ふだんは 1 回で済む。
+ */
+const RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    answer: { type: 'STRING' },
+    redirect: { type: 'STRING', enum: ['none', ...ROLES] },
+  },
+  required: ['answer', 'redirect'],
+}
+const CONFIG_VARIANTS: Array<{ name: string; config: Record<string, unknown> }> = [
+  {
+    name: 'schema+budget0',
+    config: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, thinkingConfig: { thinkingBudget: 0 } },
+  },
+  {
+    name: 'schema+minimal',
+    config: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, thinkingConfig: { thinkingLevel: 'minimal' } },
+  },
+  { name: 'schema', config: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA } },
+  { name: 'json', config: { responseMimeType: 'application/json' } },
+  { name: 'plain', config: {} },
+]
+let workingVariant = 0
+
 export async function callGemini(
   env: ChatEnv,
   system: string,
   user: string,
 ): Promise<{ answer: string; redirect: Role | null }> {
   const base = env.geminiBase || GEMINI_BASE
-  const res = await fetch(`${base}/models/${MODEL}:generateContent?key=${encodeURIComponent(env.geminiKey ?? '')}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            answer: { type: 'STRING' },
-            redirect: { type: 'STRING', enum: ['none', ...ROLES] },
-          },
-          required: ['answer', 'redirect'],
-        },
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }),
-  })
-  const data = (await res.json().catch(() => null)) as GeminiResponse | null
-  if (!res.ok) throw new Error(`gemini ${res.status}: ${data?.error?.message ?? ''}`)
-  const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  const url = `${base}/models/${MODEL}:generateContent?key=${encodeURIComponent(env.geminiKey ?? '')}`
+  let data: GeminiResponse | null = null
+  let lastError = ''
+  for (let i = workingVariant; i < CONFIG_VARIANTS.length; i++) {
+    const variant = CONFIG_VARIANTS[i]
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: MAX_OUTPUT_TOKENS, ...variant.config },
+      }),
+    })
+    data = (await res.json().catch(() => null)) as GeminiResponse | null
+    if (res.ok) {
+      if (i !== workingVariant) console.log(`[chat] gemini config -> ${variant.name}`)
+      workingVariant = i
+      break
+    }
+    lastError = `gemini ${res.status}: ${data?.error?.message ?? ''}`
+    // 形が合わない（400）ときだけ次の形を試す。鍵や上限のエラーは試しても変わらない
+    if (res.status !== 400) throw new Error(lastError)
+    console.warn(`[chat] ${variant.name} rejected: ${lastError}`)
+    data = null
+  }
+  if (!data) throw new Error(lastError || 'gemini: no response')
+  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
   let parsed: { answer?: unknown; redirect?: unknown } = {}
   try {
-    parsed = JSON.parse(text) as { answer?: unknown; redirect?: unknown }
+    parsed = JSON.parse(stripFence(text)) as { answer?: unknown; redirect?: unknown }
   } catch {
     // JSON で返ってこなかったときは本文をそのまま答えにする
     parsed = { answer: text, redirect: 'none' }
@@ -197,6 +227,12 @@ export async function callGemini(
   const redirect = ROLES.includes(parsed.redirect as Role) ? (parsed.redirect as Role) : null
   const answer = typeof parsed.answer === 'string' ? parsed.answer.trim() : ''
   return { answer, redirect }
+}
+
+/** ```json … ``` で包んで返ってきたときに中身だけにする */
+function stripFence(text: string): string {
+  const m = /^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/.exec(text)
+  return m ? m[1] : text
 }
 
 export async function handleChat(req: ChatRequest, token: string | null, env: ChatEnv): Promise<ChatResult> {
