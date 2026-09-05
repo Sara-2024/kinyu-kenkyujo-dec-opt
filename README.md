@@ -66,7 +66,7 @@ src/
    ├─ useMarket.ts         相場のライブ更新と急変動シミュレーション
    └─ useEconomicAlerts.ts 経済指標の発表前のお知らせ（ジン）
 api/
-├─ chat.ts / _lib/chat.ts        研究員の AI 回答（Gemini 2.5 Flash-Lite）
+├─ chat.ts / _lib/chat.ts        研究員の AI 回答（Gemini 3.5 Flash-Lite）
 ├─ calendar.ts / _lib/calendar.ts 経済指標カレンダー（ForexFactory）
 └─ market.ts / _lib/market.ts     相場データ
 ```
@@ -137,7 +137,7 @@ Cursor からはそのまま clone / push できます。Cloud Agent を使う�
 
 ## 研究員の AI（Gemini）
 
-リン・ジン・アルゴ・ミオの受け答えは Gemini 2.5 Flash-Lite（いちばん安いモデル）に聞く。
+リン・ジン・アルゴ・ミオの受け答えは Gemini 3.5 Flash-Lite（いちばん安いモデル）に聞く。
 費用を抑えるため、研究員ごとに担当を固定し、担当ぶんのデータだけを渡し、担当外の質問は
 調べずに「▶ ○○に聞く」ボタンで担当へ案内する。1回の質問はおおむね 0.05 円前後。
 

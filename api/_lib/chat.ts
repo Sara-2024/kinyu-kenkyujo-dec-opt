@@ -1,4 +1,4 @@
-// 研究員の受け答え（AI）。Gemini 2.5 Flash-Lite に聞く。
+// 研究員の受け答え（AI）。Gemini 3.5 Flash-Lite に聞く。
 //
 //   POST /api/chat  { role, question, context, names }
 //   →  { answer, redirect }   redirect は担当外のとき、案内先の研究員の id
@@ -16,7 +16,7 @@ export type Role = 'rin' | 'jin' | 'algo' | 'mio'
 
 const ROLES: Role[] = ['rin', 'jin', 'algo', 'mio']
 
-const MODEL = 'gemini-2.5-flash-lite'
+const MODEL = 'gemini-3.5-flash-lite'
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 const MAX_QUESTION = 300
