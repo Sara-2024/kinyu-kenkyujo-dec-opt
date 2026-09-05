@@ -223,3 +223,29 @@ export function formatPositionsAnswer(rows: PositionRow[] | undefined, currency?
     '下に、それぞれの値段と現在値を出しました。'
   )
 }
+
+/** つながったあと、MT5 の画面でお客様が一度だけやること（外からは自動化できない） */
+export const MT5_STEPS: UserStep[] = [
+  {
+    no: 1,
+    title: 'システムをチャートに載せる',
+    detail: 'ナビゲーター →「エキスパートアドバイザ」→ SiteTestEA をチャートへドラッグ →「アルゴ取引を許可」にチェック → OK',
+  },
+  {
+    no: 2,
+    title: '「アルゴ取引」ボタンを ON にする',
+    detail: 'MT5 上部のボタンが緑になれば OK（「自動売買」と表示される版もあります）',
+  },
+]
+
+/**
+ * MT5 側の準備がどこまで済んだか。ブリッジが返した状態だけを見る。
+ * 返り値は「いまやってもらう手順」の添字。すべて済んでいれば null。
+ */
+export function mt5StepIndex(
+  s: { ea_alive?: boolean; ea_state?: string | null; terminal_trade_allowed?: boolean } | null | undefined,
+): number | null {
+  if (!s || s.ea_alive !== true) return 0
+  if (s.terminal_trade_allowed === false || s.ea_state === '自動売買ボタンがオフ') return 1
+  return null
+}

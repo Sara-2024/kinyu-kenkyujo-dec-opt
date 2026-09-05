@@ -18,18 +18,21 @@ import { formatBridgeError } from '../data/bridgeErrors'
 import {
   CONNECT_WAIT,
   installSteps,
+  MT5_STEPS,
+  mt5StepIndex,
   connectChecksFromStatus,
   formatHistoryAnswer,
   formatPositionsAnswer,
   formatTodayAnswer,
   type ConnectCheck,
+  type UserStep,
 } from '../data/setupFlow'
 import { LiveReportView, type LiveReport } from './LiveReport'
 import { CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, downloadConnector, launchConnector } from '../data/connector'
 import { formatReviewAnswer, reviewTrades } from '../data/tradeReview'
 import { PixelPerson } from './PixelPerson'
 
-type Phase = 'talk' | 'intro' | 'tour' | 'launching' | 'download' | 'waiting' | 'connecting' | 'done' | 'control'
+type Phase = 'talk' | 'intro' | 'tour' | 'launching' | 'download' | 'waiting' | 'connecting' | 'mt5' | 'done' | 'control'
 
 /** ダウンロード後の手順（exe か zip かで変わる） */
 const INSTALL_STEPS = installSteps(CONNECTOR_DOWNLOAD.kind)
@@ -131,6 +134,12 @@ export function DialogueWindow({
     }
     if (character.id === 'yui') {
       if (saved) {
+        // つながっているのに MT5 側の操作が残っていれば、その案内から再開する
+        if (bridge.live && bridge.status && mt5StepIndex(bridge.status) != null) {
+          setPhase('mt5')
+          setAiText(t(SETUP.mt5Again))
+          return
+        }
         setPhase('talk')
         setAiText(t(SETUP.already))
         return
@@ -413,14 +422,43 @@ export function DialogueWindow({
       setConn(created)
       setError(null)
       finishIntro()
-      setPhase('done')
-      setAiText(t(SETUP.done))
+      // チャートに載せる・自動売買ボタンを押すのは MT5 の画面でしかできない。
+      // 残っていればその案内へ。済んでいれば完了。
+      if (mt5StepIndex(ack) != null) {
+        setPhase('mt5')
+        setAiText(t(SETUP.mt5Intro))
+      } else {
+        setPhase('done')
+        setAiText(t(SETUP.done))
+      }
     })()
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, bridge.live, bridge.send, bridge.error])
+
+  // MT5 側の操作を見張る。ブリッジが送ってくる状態を見るだけで、こちらからは何もしない。
+  // 手順が1つ進んだら台詞を切り替え、すべて済んだら完了へ。
+  const mt5Step = useRef<number | null>(null)
+  useEffect(() => {
+    if (phase !== 'mt5') {
+      mt5Step.current = null
+      return
+    }
+    if (!bridge.live) return
+    const idx = mt5StepIndex(bridge.status)
+    if (idx == null) {
+      setPhase('done')
+      setAiText(t(SETUP.done))
+      return
+    }
+    if (mt5Step.current !== null && idx !== mt5Step.current) {
+      setAiText(t(idx === 0 ? SETUP.mt5Attach : SETUP.mt5Button))
+    }
+    mt5Step.current = idx
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, bridge.live, bridge.status])
 
   // MT5 が返した口座を常に正とする（保存済み口座よりブリッジを優先）
   useEffect(() => {
@@ -457,7 +495,7 @@ export function DialogueWindow({
   }, [character, phase, conn, bridge.live, bridge.phase, member?.id])
 
   // 管理画面は ControlPanel 側で出すので、ここでは出さない（二重表示になる）
-  const showBridgeBar = phase === 'waiting' || phase === 'connecting' || phase === 'done'
+  const showBridgeBar = phase === 'waiting' || phase === 'connecting' || phase === 'mt5' || phase === 'done'
 
   /** 別の研究員に引き継ぐ。カメラは受付から離れるので、紹介のフォーカスも外す */
   const handoffTo = (id: string) => {
@@ -539,6 +577,8 @@ export function DialogueWindow({
                         ? '起動を待っています'
                         : phase === 'connecting'
                           ? '接続中…'
+                          : phase === 'mt5'
+                            ? 'MT5の準備'
                           : phase === 'control'
                             ? '管理画面'
                             : '連携完了'}
@@ -910,6 +950,37 @@ export function DialogueWindow({
           </div>
         )}
 
+        {/* ══════ つながったあと、MT5 の画面でお客様がすること（終わると自動で進む） ══════ */}
+        {phase === 'mt5' && (
+          <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+            <p className="mb-2.5 text-[13px] font-bold text-slate-400">MT5 の画面で、一度だけお願いします。</p>
+            <InstallSteps steps={MT5_STEPS} active={mt5StepIndex(bridge.status) ?? MT5_STEPS.length} />
+
+            <div
+              className="mt-4 flex flex-wrap items-center gap-4 rounded-[6px] border px-5 py-4"
+              style={{ borderColor: 'rgba(250,204,21,0.4)', background: 'rgba(250,204,21,0.06)' }}
+            >
+              <span className="spin h-5 w-5 shrink-0 rounded-full" style={{ border: '2px solid rgba(250,204,21,0.25)', borderTopColor: '#ffd23e' }} />
+              <p className="text-[15px] font-bold text-slate-200">{SETUP.mt5Label}</p>
+              <span className="font-mono ml-auto text-[12px] tracking-wide text-slate-500">{SETUP.mt5Note}</span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <SetupButton
+                onClick={() => {
+                  setPhase('done')
+                  setAiText(t(SETUP.done))
+                }}
+              >
+                {SETUP.mt5Later}
+              </SetupButton>
+              <button type="button" onClick={backToTalk} className="font-mono ml-auto text-[12px] text-slate-400 underline-offset-4 hover:underline">
+                {SETUP.back}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ══════ AIが代わりに作業している様子 ══════ */}
         {(phase === 'connecting' || phase === 'done') && (
           <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
@@ -1036,14 +1107,16 @@ function SetupButton({ primary, onClick, children }: { primary?: boolean; onClic
   )
 }
 
-/** ダウンロード後にお客様がすること。active より前は済み、active はいま、あとは待ち */
-function InstallSteps({ active }: { active: number }) {
+/** お客様がする手順の一覧。active より前は済み、active はいま、あとは待ち */
+function InstallSteps({ active, steps = INSTALL_STEPS }: { active: number; steps?: UserStep[] }) {
+  // ダウンロード手順の最後は「あとは待つだけ」なので、やる前から緑で出す
+  const lastIsWait = steps === INSTALL_STEPS
   return (
     <ol className="space-y-2.5">
-      {INSTALL_STEPS.map((u, i) => {
+      {steps.map((u, i) => {
         const done = i < active
         const now = i === active
-        const last = i === INSTALL_STEPS.length - 1
+        const last = lastIsWait && i === steps.length - 1
         const color = done ? '#35f58a' : now ? '#ffd23e' : last ? '#35f58a' : 'var(--accent)'
         return (
           <li key={u.no} className="flex items-start gap-3" style={{ opacity: done ? 0.55 : 1 }}>

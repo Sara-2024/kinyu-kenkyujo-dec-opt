@@ -1312,6 +1312,12 @@ class Bridge:
                 today.get("today_profit"),
                 today.get("open_positions"),
                 today.get("open_profit"),
+                # MT5 側の準備（チャートに載ったか・自動売買ボタンが押されたか）。
+                # 初期設定でユイがここを見て、次の案内に進む。
+                status.get("ea_alive"),
+                status.get("ea_state"),
+                status.get("terminal_trade_allowed"),
+                status.get("terminal_connected"),
             )
         )
 
