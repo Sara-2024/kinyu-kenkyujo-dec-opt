@@ -36,7 +36,7 @@ function normalizeRoom(raw) {
 }
 
 function roomOf(id) {
-  if (!rooms.has(id)) rooms.set(id, { bridge: null, apps: new Set(), status: null })
+  if (!rooms.has(id)) rooms.set(id, { bridge: null, apps: new Set(), status: null, since: null })
   return rooms.get(id)
 }
 
@@ -80,8 +80,13 @@ const server = createServer((req, res) => {
       bridges: liveRooms.length,
       apps: [...rooms.values()].reduce((n, room) => n + room.apps.size, 0),
     }
-    if (asked && ROOM_RE.test(asked)) body.room = { id: asked, bridge: Boolean(rooms.get(asked)?.bridge) }
-    res.writeHead(200, { 'Content-Type': 'application/json' })
+    // 画面は、初回起動で既定の部屋に入ったブリッジを「いるか／いつ来たか」だけ見に来る。
+    // 口座の中身は返さないので、どこからでも読める（CORS）。
+    if (asked && ROOM_RE.test(asked)) {
+      const room = rooms.get(asked)
+      body.room = { id: asked, bridge: Boolean(room?.bridge), since: room?.bridge ? room.since : null }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' })
     res.end(JSON.stringify(body))
     return
   }
@@ -133,6 +138,7 @@ function handleBridge(ws, roomId) {
     room.bridge.close(4001, 'replaced')
   }
   room.bridge = ws
+  room.since = Date.now()
   log(`ブリッジ接続: ${roomId}（現在 ${[...rooms.values()].filter((r) => r.bridge).length} 部屋）`)
   notifyWatchers(roomId)
 
@@ -174,6 +180,7 @@ function handleBridge(ws, roomId) {
     clearInterval(ping)
     if (room.bridge === ws) {
       room.bridge = null
+      room.since = null
       log(`ブリッジ切断: ${roomId} code=${code ?? ''}`)
       broadcastToRoom(roomId, { type: 'bridge_offline', bridgeId: roomId })
       pruneRoom(roomId)

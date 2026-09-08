@@ -7,6 +7,46 @@
 
 export const CONNECTOR_SCHEME = 'aitrader'
 
+/**
+ * 部屋（会員ID）を知らずに起動した接続ツールが入る、既定の部屋。
+ * ダウンロードした exe を「開くだけ」の初回は aitrader:// を通らないので、ここに来る。
+ * サイトはこの部屋にブリッジが現れたら、登録の済んだ aitrader:// で部屋を伝えて呼び直す。
+ */
+export const DEFAULT_ROOM = 'vps-01'
+
+/** 既定の部屋を見に行く間隔と、「いま起動したもの」とみなす新しさ */
+export const DEFAULT_ROOM_POLL_MS = 3_000
+export const DEFAULT_ROOM_FRESH_MS = 10 * 60_000
+
+/**
+ * 中継の /health（ブリッジが「いるか／いつ来たか」だけを返す）の URL。
+ * 画面は会員ID以外の部屋には入れないので、既定の部屋はこれで見る。
+ */
+export function relayHealthUrl(room: string): string {
+  const ws = (import.meta.env.VITE_RELAY_URL as string | undefined) || 'ws://localhost:8080/app'
+  const http = ws.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:').replace(/\/app(\?.*)?$/, '')
+  return `${http}/health?room=${encodeURIComponent(room)}`
+}
+
+export interface RoomProbe {
+  bridge: boolean
+  /** ブリッジがつながった時刻（ms）。いなければ null */
+  since: number | null
+}
+
+/** 既定の部屋にブリッジがいるかを中継に聞く。中継に届かなければ null */
+export async function probeRoom(room: string): Promise<RoomProbe | null> {
+  try {
+    const res = await fetch(relayHealthUrl(room), { cache: 'no-store' })
+    if (!res.ok) return null
+    const body = (await res.json()) as { room?: { bridge?: boolean; since?: number | null } }
+    if (!body.room) return null
+    return { bridge: Boolean(body.room.bridge), since: typeof body.room.since === 'number' ? body.room.since : null }
+  } catch {
+    return null
+  }
+}
+
 /** 呼び出してから、ブリッジが名乗り出るのを待つ時間 */
 // EA のコンパイルと MT5 の初期化を挟むので、12秒だと足りないことがある
 export const CONNECTOR_WAIT_MS = 30_000

@@ -28,7 +28,7 @@ import {
   type UserStep,
 } from '../data/setupFlow'
 import { LiveReportView, type LiveReport } from './LiveReport'
-import { CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, downloadConnector, launchConnector } from '../data/connector'
+import { CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, DEFAULT_ROOM, DEFAULT_ROOM_FRESH_MS, DEFAULT_ROOM_POLL_MS, downloadConnector, launchConnector, probeRoom } from '../data/connector'
 import { formatReviewAnswer, reviewTrades, type TradeHistory } from '../data/tradeReview'
 import { PixelPerson } from './PixelPerson'
 import { AI_FAILURE_TEXT, askAi, setPendingQuestion, takePendingQuestion, type AiRole } from '../data/ai'
@@ -512,6 +512,37 @@ export function DialogueWindow({
     setPhase('waiting')
     setAiText(t(SETUP.waiting))
   }
+
+  // 初回はダウンロードした exe を「開くだけ」なので、ツールは部屋（会員ID）を知らないまま
+  // 既定の部屋につながる。画面は会員ID以外の部屋には入れないので、中継の /health で
+  // 「その部屋に、いまブリッジが来たか」だけを見る。来ていたら、ツールが登録したばかりの
+  // aitrader:// で部屋を伝えて呼び直す（ツールは既定の部屋のブリッジを止め、正しい部屋でつなぎ直す）。
+  const watchDefaultRoom = phase === 'waiting' && !!member?.id && member.id !== DEFAULT_ROOM
+  const firstRunRelaunched = useRef(false)
+  useEffect(() => {
+    if (!watchDefaultRoom) {
+      firstRunRelaunched.current = false
+      return
+    }
+    const startedAt = Date.now()
+    let alive = true
+    const check = async () => {
+      const probe = await probeRoom(DEFAULT_ROOM)
+      if (!alive || !probe?.bridge || firstRunRelaunched.current) return
+      // 古い置き去りのブリッジ（別のPC）に反応しないよう、最近つながったものだけ
+      if (probe.since != null && probe.since < startedAt - DEFAULT_ROOM_FRESH_MS) return
+      firstRunRelaunched.current = true
+      launchConnector(member?.id)
+      setAiText(t(SETUP.firstRunDetected))
+    }
+    void check()
+    const id = setInterval(() => void check(), DEFAULT_ROOM_POLL_MS)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchDefaultRoom, member?.id])
 
   // 接続ツール（ブリッジ）が生きたら、タイマーではなく実応答で接続を進める
   useEffect(() => {
