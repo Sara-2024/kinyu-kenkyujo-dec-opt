@@ -78,7 +78,7 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-08.1"
+VERSION = "2026-09-08.2"
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
@@ -178,6 +178,9 @@ def _list_bridge_processes() -> list[int]:
     古い版はロックに番号を書いていないので、ロックだけでは見つけられない。
     """
     me = os.getpid()
+    # exe 版（PyInstaller onefile）は「起動役の親 → 本体」の2プロセスで、どちらも
+    # コマンドラインが同じ。親を古いブリッジと間違えて終了させると自分も道連れになる。
+    skip = {me, os.getppid()}
     if os.name == "nt":
         script = (
             "Get-CimInstance Win32_Process | "
@@ -225,7 +228,7 @@ def _list_bridge_processes() -> list[int]:
             continue
         pid = int(pid_s)
         image = image.lower()
-        if pid == me:
+        if pid in skip:
             continue
         if "python" in image or image == own_exe:
             pids.append(pid)
@@ -239,6 +242,7 @@ def takeover_old_bridges() -> None:
     「触っていないのに稼働中と停止中が入れ替わる」のはこれが原因だった。
     """
     me = os.getpid()
+    parent = os.getppid()
     same_version: set[int] = set()
     targets: dict[int, str] = {}
     for name in LOCK_NAMES:
@@ -246,7 +250,7 @@ def takeover_old_bridges() -> None:
         if not path.is_file():
             continue
         pid, version = _read_lock(path)
-        if pid is None or pid == me:
+        if pid is None or pid == me or pid == parent:
             continue
         if version == VERSION:
             same_version.add(pid)

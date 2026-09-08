@@ -369,8 +369,12 @@ def launch_mt5(exe: Path) -> None:
 def wait_for_login(timeout_sec: int = 600) -> dict | None:
     try:
         import MetaTrader5  # noqa: F401
-    except ImportError:
-        log("MetaTrader5 パッケージがありません（setup-windows.bat を先に実行してください）")
+    except ImportError as exc:
+        # exe 版でここに来るのは「無い」のではなく DLL が読めなかったとき（セキュリティ
+        # ソフトが展開先を消した等）。理由をそのまま残す
+        log(f"MetaTrader5 を読み込めません: {exc}")
+        if not FROZEN:
+            log("setup-windows.bat を先に実行してください")
         return None
 
     existing = find_logged_in_terminal()

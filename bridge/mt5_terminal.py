@@ -7,8 +7,11 @@ from typing import Any
 
 try:
     import MetaTrader5 as mt5
-except ImportError:
+
+    MT5_IMPORT_ERROR = ""
+except ImportError as exc:  # DLL が読めない等もここに来る。理由はログに出す
     mt5 = None  # type: ignore[assignment]
+    MT5_IMPORT_ERROR = str(exc)
 
 # お客様の MT5 に置くシステム。connect.py が配り、bridge.py が有無を報告する
 EA_NAMES = ("OrbitGoldEA_v5",)
