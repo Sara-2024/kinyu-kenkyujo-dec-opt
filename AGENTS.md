@@ -110,6 +110,13 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/AITrader.zip`
   で差し替えられる。`connect.py` や `bridge/` を変えたら exe を作り直して置き直すこと。
   メールで送る導線は廃止した。
+- **MT5 に送る EA は `bridge/OrbitGoldEA_v5.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、
+  XAUUSD 専用）。名前は `bridge/mt5_terminal.py` の `EA_NAMES` が唯一の定義で、
+  connect.py の配置・bridge.py の有無報告・古い EA の片づけ（`OLD_EA_NAMES`）が全部そこを見る。
+  EA を差し替えるときは、`TradingGate.mqh` を include して
+  `IsTradingAllowedRaw()` / `GateNumber("AI_LOT")` などをエントリー前に見ることと、
+  `OnTimer` で `SyncGateFileToGlobals()` を呼ぶこと（これが無いと `ea_alive` が立たず、
+  サイトの「稼働／停止」も効かない）。売買ロジックそのものは触らない。
 - **役割分担。** MT5との連携（初期設定・ダウンロード案内・メンバー紹介）は受付のユイ、
   稼働・停止・ロット変更（管理画面）はアルゴ。アルゴの「自動売買をはじめる」は
   未連携ならユイへ案内するだけ。台詞は `characters.ts` の `SETUP` / `TOUR`。

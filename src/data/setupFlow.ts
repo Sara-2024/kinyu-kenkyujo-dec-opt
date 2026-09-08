@@ -229,7 +229,7 @@ export const MT5_STEPS: UserStep[] = [
   {
     no: 1,
     title: 'システムをチャートに載せる',
-    detail: 'ナビゲーター →「エキスパートアドバイザ」→ SiteTestEA をチャートへドラッグ →「アルゴ取引を許可」にチェック → OK',
+    detail: 'ナビゲーター →「エキスパートアドバイザ」→ OrbitGoldEA_v5 をゴールド（XAUUSD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK',
   },
   {
     no: 2,

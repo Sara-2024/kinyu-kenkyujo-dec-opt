@@ -10,6 +10,9 @@ try:
 except ImportError:
     mt5 = None  # type: ignore[assignment]
 
+# お客様の MT5 に置くシステム。connect.py が配り、bridge.py が有無を報告する
+EA_NAMES = ("OrbitGoldEA_v5",)
+
 
 def terminal_dir_from_data_path(data_path: str | Path) -> Path | None:
     """data_path/origin.txt から、この口座が使っている terminal64.exe のフォルダを取る。"""
@@ -129,7 +132,7 @@ def probe_ea_files(data_path: str) -> dict[str, Any]:
     include = Path(data_path) / "MQL5" / "Include"
     found: list[str] = []
     compiled: list[str] = []
-    for name in ("SiteTestEA",):
+    for name in EA_NAMES:
         if (experts / f"{name}.mq5").is_file():
             found.append(name)
         if (experts / f"{name}.ex5").is_file():

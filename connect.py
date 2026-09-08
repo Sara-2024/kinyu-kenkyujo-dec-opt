@@ -44,6 +44,7 @@ SERVER_DIR = ROOT / "server"
 sys.path.insert(0, str(BRIDGE_DIR))
 
 from mt5_terminal import (  # noqa: E402
+    EA_NAMES,
     find_logged_in_terminal,
     find_metaeditor,
     probe_ea_files,
@@ -58,10 +59,12 @@ MT5_SETUP_URL = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/
 PRODUCTION_RELAY = "wss://kinyu-relay.onrender.com/bridge"
 LOCAL_RELAY = "ws://127.0.0.1:8080/bridge"
 
-EA_FILES = ("SiteTestEA.mq5",)
+# お客様の MT5 に送るシステムは、これ1つだけ（Orbit GOLD 2軸エンジン。XAUUSD 専用）
+EA_NAME = EA_NAMES[0]
+EA_FILES = (f"{EA_NAME}.mq5",)
 # 以前に配っていたもの。1つに絞ったので、見つけたら片づける。
 # 残っていると同じ指令ファイルを二重に読み書きして紛らわしい。
-OLD_EA_NAMES = ("TrelabEA", "TrelabGate")
+OLD_EA_NAMES = ("TrelabEA", "TrelabGate", "SiteTestEA")
 INCLUDE_FILES = ("TradingGate.mqh",)
 
 PRODUCT_NAME = "AIトレーダー"
@@ -431,9 +434,9 @@ def compile_mq5(editor: Path, mq5: Path, terminal_dir: Path | None) -> bool:
 
 def verify_ea_install(data_path: str) -> tuple[bool, dict]:
     probe = probe_ea_files(data_path)
-    ok = probe["include_ok"] and "SiteTestEA" in probe["ea_found"]
-    if ok and "SiteTestEA" not in probe["ea_compiled"]:
-        log("注意  SiteTestEA.mq5 はありますが .ex5 がまだありません")
+    ok = probe["include_ok"] and EA_NAME in probe["ea_found"]
+    if ok and EA_NAME not in probe["ea_compiled"]:
+        log(f"注意  {EA_NAME}.mq5 はありますが .ex5 がまだありません")
     return ok, probe
 
 
@@ -492,11 +495,11 @@ def copy_ea_files(session: dict) -> Path:
         log("注意  metaeditor64.exe が見つかりません（MT5 の F4 から手動コンパイル）")
 
     ok, probe = verify_ea_install(data_path)
-    if editor and "SiteTestEA" not in probe["ea_compiled"]:
+    if editor and EA_NAME not in probe["ea_compiled"]:
         ok = False
     log(f"確認 Include/TradingGate.mqh : {'OK' if probe['include_ok'] else 'なし'}")
-    log(f"確認 Experts/SiteTestEA.mq5 : {'OK' if 'SiteTestEA' in probe['ea_found'] else 'なし'}")
-    log(f"確認 Experts/SiteTestEA.ex5 : {'OK' if 'SiteTestEA' in probe['ea_compiled'] else 'なし'}")
+    log(f"確認 Experts/{EA_NAME}.mq5 : {'OK' if EA_NAME in probe['ea_found'] else 'なし'}")
+    log(f"確認 Experts/{EA_NAME}.ex5 : {'OK' if EA_NAME in probe['ea_compiled'] else 'なし'}")
 
     # 画面に出さない方針なので、エクスプローラは調査モードのときだけ開く
     if CONSOLE and os.name == "nt":

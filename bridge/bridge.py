@@ -66,8 +66,9 @@ except ImportError:  # pragma: no cover - Windows以外では import できな�
     mt5 = None  # type: ignore[assignment]
 
 try:
-    from mt5_terminal import find_logged_in_terminal, resolve_terminal_exe
+    from mt5_terminal import EA_NAMES, find_logged_in_terminal, resolve_terminal_exe
 except ImportError:
+    EA_NAMES = ("OrbitGoldEA_v5",)
     find_logged_in_terminal = None  # type: ignore[assignment,misc]
     resolve_terminal_exe = None  # type: ignore[assignment,misc]
 
@@ -77,7 +78,7 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-03.2"
+VERSION = "2026-09-08.1"
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
@@ -708,7 +709,7 @@ class MT5Controller:
         experts = Path(str(data_path)) / "MQL5" / "Experts"
         found: list[str] = []
         compiled: list[str] = []
-        for name in ("SiteTestEA",):
+        for name in EA_NAMES:
             if (experts / f"{name}.mq5").is_file():
                 found.append(name)
             if (experts / f"{name}.ex5").is_file():

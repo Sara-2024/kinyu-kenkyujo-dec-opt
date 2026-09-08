@@ -59,7 +59,7 @@ TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
    - 黒い画面は出ない。中では EA 配置 → コンパイル → ブリッジ起動まで進む
    - あわせて `aitrader://` とスタートアップを登録するので、
      次回からは**サイトのボタン1つ**、PC再起動後は**自動**でつながる
-3. チャートに SiteTestEA を載せ、自動売買 ON
+3. ゴールド（XAUUSD）のチャートに OrbitGoldEA_v5 を載せ、自動売買 ON
 4. うまくいかないときは `%LOCALAPPDATA%\AITrader\connect.log` と `bridge.log` を見る
    （画面付きで追うなら `はじめる.bat` か `tools\start-connect.bat`）
 
