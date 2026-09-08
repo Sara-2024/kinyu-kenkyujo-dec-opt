@@ -57,13 +57,24 @@ if not exist dist\AITrader.exe (
   exit /b 1
 )
 
+REM サイトが配る場所へそのまま置く（あとは commit と push だけ）
+if not exist public\download mkdir public\download
+copy /Y dist\AITrader.exe public\download\AITrader.exe >nul
+if errorlevel 1 (
+  echo [ERROR] public\download\AITrader.exe に置けませんでした。
+  pause
+  exit /b 1
+)
+
 echo.
 echo ================================================================
-echo   できました: dist\AITrader.exe
+echo   できました: public\download\AITrader.exe
 echo   表示名: AIトレーダー
 echo.
-echo   お客様は、この1本をダウンロードして一度開くだけです。
-echo   （黒い画面は出ません。以後はサイトのボタンから起動できます）
+echo   あとは、このファイルを commit して push すれば、サイトから配られます。
+echo     git add public/download/AITrader.exe
+echo     git commit -m "exe を作り直す"
+echo     git push
 echo ================================================================
 echo.
 pause
