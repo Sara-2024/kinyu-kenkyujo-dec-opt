@@ -941,6 +941,16 @@ def bridge_already_running() -> bool:
         return True
 
 
+def embedded_risk_token() -> str:
+    """exe に埋め込んだ AIリスク監督の合言葉。無ければ空（＝AIゲートは切のまま）。"""
+    try:
+        import risk_secret  # type: ignore[import-not-found]
+
+        return str(getattr(risk_secret, "TOKEN", "")).strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def bridge_env(session: dict | None) -> dict[str, str]:
     env = dict(os.environ)
     env["TRELAB_WS_URL"] = relay_url()
@@ -953,6 +963,9 @@ def bridge_env(session: dict | None) -> dict[str, str]:
         value = env_value(key)
         if value:
             env[key] = value
+    if not env.get("TRELAB_RISK_TOKEN"):
+        # ビルドのときに埋め込んだ合言葉（bridge/risk_secret.py）。お客様は何も入力しない
+        env["TRELAB_RISK_TOKEN"] = embedded_risk_token()
     env["LOG_FILE"] = str(CONFIG_DIR / "bridge.log")
     if session:
         exe = resolve_terminal_exe(session)

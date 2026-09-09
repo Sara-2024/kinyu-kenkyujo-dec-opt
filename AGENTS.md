@@ -114,8 +114,11 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   `python3 bridge/tests/risk_gate_test.py` … 停止と再開、通信断、古い応答、重複呼び出し
   `node --experimental-strip-types api/_lib/risk.test.mjs` … 根拠の検証と方向別の理由コード
 - **有効にする設定**: Vercel に `TRELAB_RISK_TOKEN`（と `GEMINI_API_KEY`）、
-  お客様のPCの `%LOCALAPPDATA%\AITrader\bridge.env` に同じ `TRELAB_RISK_TOKEN`。
+  手元に `bridge/risk_secret.py`（`risk_secret.py.example` をコピーして同じ文字列）。
+  `tools\build-windows.bat` がこれを exe に同梱するので、**お客様は何も入力しない**。
   どちらか欠けていれば「切」のまま動かない（`/api/risk` は 503 を返す）。
+  `risk_secret.py` はコミットしない。配布物からは取り出せるので、サイト側で
+  1台あたりの呼び出し回数を制限している（`api/_lib/risk.ts` の `RATE_LIMIT`）。
 - 戦略プロフィールは EA が自分の設定を状態ファイルへ書き出したものを使う
   （`GateProfile`）。ここを増やしたら `bridge/bridge.py` の `DEFAULT_PROFILE` も合わせる。
 

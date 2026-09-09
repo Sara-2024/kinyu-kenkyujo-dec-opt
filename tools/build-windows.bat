@@ -27,9 +27,18 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM AIリスク監督の合言葉。bridge\risk_secret.py があれば exe に同梱する
+set RISKARG=
+if exist bridge\risk_secret.py (
+  set RISKARG=--add-data "bridge\risk_secret.py;bridge"
+  echo   AIリスク監督の合言葉を同梱します
+) else (
+  echo   bridge\risk_secret.py が無いので、AIの見張りは「切」で出荷されます
+)
+
 echo.
 echo [2/3] exe を作っています（数分かかります）...
-py -3 -m PyInstaller --noconfirm --clean ^
+py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --onefile --noconsole ^
   --name AITrader ^
   --add-data "bridge\bridge.py;bridge" ^
