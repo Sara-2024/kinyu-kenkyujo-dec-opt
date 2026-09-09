@@ -30,6 +30,16 @@ if errorlevel 1 (
 REM AIリスク監督の合言葉。bridge\risk_secret.py があれば exe に同梱する
 set RISKARG=
 if exist bridge\risk_secret.py (
+  findstr /R /C:"TOKEN *= *\"\"" bridge\risk_secret.py >nul
+  if not errorlevel 1 (
+    echo.
+    echo [ERROR] bridge\risk_secret.py の TOKEN が空のままです。
+    echo         メモ帳で開いて、最後の行を次のように書き換えて保存してください:
+    echo             TOKEN = "（サイトと同じ合言葉）"
+    echo.
+    pause
+    exit /b 1
+  )
   set RISKARG=--add-data "bridge\risk_secret.py;bridge"
   echo   AIリスク監督の合言葉を同梱します
 ) else (
