@@ -4,6 +4,7 @@
 // 設定の変更は「MT5のグローバル変数を書き換える」だけなので、
 // EAを載せ直す必要も、MT5を触っていただく必要もない。
 import { useState } from 'react'
+import { AiGatePanel } from './AiGatePanel'
 import { BridgeStatusBar } from './BridgeStatusBar'
 import type { Connection } from '../data/connection'
 import { formatBridgeError } from '../data/bridgeErrors'
@@ -149,6 +150,9 @@ export function ControlPanel({
           {running ? '■ いますぐ停止' : '▶ 自動売買をはじめる'}
         </button>
       </div>
+
+      {/* ── AIの見張り（新規注文の許可・停止）。ブリッジが返した判定をそのまま出す ── */}
+      {bridge.live && bridge.status?.ai_gate && <AiGatePanel gate={bridge.status.ai_gate} bridge={bridge} />}
 
       {/* ── MT5側が実際に出している状態（表示のズレをその場で見つける） ── */}
       {bridge.live && bridge.status?.ea_state && (

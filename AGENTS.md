@@ -90,6 +90,35 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **手動の売買も同じように扱う。** magic の有無で拾う・拾わないを決めない
   （`by_system` は表示の区別に使うだけ）。
 
+## AIリスク監督（新規注文の見張り）の決まり
+
+- **止めるのは新規注文だけ。** 決済・SL/TP・トレーリング・ロットには一切触らない。
+  停止中も `ManageM1Basket()` の決済管理は動き続ける。ナンピンの追加も新規注文として
+  同じゲートを通す（`bridge/OrbitGoldEA_v5.mq5` の `OpenTrade` と ナンピン追加の2か所）。
+- **買いと売りは別々に止める。** 高値が近いことを理由に売りを止めない。逆も同じ。
+- **原則は許可。** 「レンジっぽい」「自信がない」では止めない。止めるときは、
+  入力に実在する数値と理由コード（`api/_lib/risk.ts` の `REASON_CODES`）が必ず要る。
+- **EA は通信を待たない。** 判定はブリッジが取りに行き、指令ファイルに数字で書く
+  （`AI_GATE_MODE` / `AI_BUY_ALLOWED` / `AI_SELL_ALLOWED` / `AI_GATE_UNTIL` / `AI_GATE_SEQ`）。
+  EA はそれを読むだけ。`TradingGate.mqh` の `AiAllowsEntry()` が唯一の判定入口。
+- **AI に期限・口座・銘柄・連番・モデル名を作らせない。** すべて `api/_lib/risk.ts` が付ける。
+  AI の evidence は入力の項目名と値に一致するものだけ採用し、合わなければ捨てて停止も取り消す。
+- **迷いと故障を区別する。** 有効なデータでの INSUFFICIENT_DATA は新しい停止の理由にしない。
+  通信障害は前の判定を期限まで使う。期限が切れたら（反映モードのときだけ）新規注文を止める。
+- **一度止めたら時間切れでは戻さない。** 最新のデータで連続 `RISK_UNBLOCK_CONFIRM` 回
+  問題なしになり、かつ `RISK_MIN_BLOCK_SEC` を過ぎたときだけ再開する。
+- **本番口座では自動で反映しない。** デモは `on`、本番は `shadow`（記録のみ）で始まる。
+  切り替えは管理画面の「反映 / 記録のみ / 切」だけ。切でも既存の安全装置は働く。
+- **試験の走らせ方**（MT5 も鍵も要らない）:
+  `python3 bridge/tests/risk_features_test.py` … 水準・突破・リテストの計算
+  `python3 bridge/tests/risk_gate_test.py` … 停止と再開、通信断、古い応答、重複呼び出し
+  `node --experimental-strip-types api/_lib/risk.test.mjs` … 根拠の検証と方向別の理由コード
+- **有効にする設定**: Vercel に `TRELAB_RISK_TOKEN`（と `GEMINI_API_KEY`）、
+  お客様のPCの `%LOCALAPPDATA%\AITrader\bridge.env` に同じ `TRELAB_RISK_TOKEN`。
+  どちらか欠けていれば「切」のまま動かない（`/api/risk` は 503 を返す）。
+- 戦略プロフィールは EA が自分の設定を状態ファイルへ書き出したものを使う
+  （`GateProfile`）。ここを増やしたら `bridge/bridge.py` の `DEFAULT_PROFILE` も合わせる。
+
 ## お客様のPCで動くもの（接続ツール）
 
 - **黒い画面（コンソール）を出さない。** お客様は「何か怖いものが動いた」と感じる。

@@ -47,6 +47,13 @@ try:
 except ImportError:
     pass
 
+try:  # AIリスク監督（無くてもブリッジは動く）
+    from risk_gate import MODE_NAMES as RISK_MODE_NAMES, RiskConfig, RiskGate
+except ImportError:  # pragma: no cover
+    RiskGate = None  # type: ignore[assignment]
+    RiskConfig = None  # type: ignore[assignment]
+    RISK_MODE_NAMES = {}
+
 import websockets
 from websockets.exceptions import WebSocketException
 
@@ -78,7 +85,7 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-08.2"
+VERSION = "2026-09-09.1"
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
@@ -618,6 +625,26 @@ class MT5Controller:
         async with self._lock:
             return await self._call(self._set_gv_blocking, name, value)
 
+    def _set_gvs_blocking(self, values: dict[str, float]) -> bool:
+        """複数の値をまとめて指令ファイルへ。EA が中途半端な組み合わせを読まないようにする。"""
+        current = self._load_gate()
+        current.update({k: float(v) for k, v in values.items()})
+        self._save_gate(current)
+        setter = getattr(mt5, "global_variable_set", None) if mt5 is not None else None
+        if callable(setter):
+            for key, value in values.items():
+                try:
+                    setter(key, float(value))
+                except Exception:  # noqa: BLE001 指令ファイル側が本命なので握りつぶす
+                    pass
+        return True
+
+    async def set_variables(self, values: dict[str, float]) -> bool:
+        if not self.ready or not values:
+            return False
+        async with self._lock:
+            return await self._call(self._set_gvs_blocking, values)
+
     async def get_variable(self, name: str) -> float | None:
         if not self.ready:
             return None
@@ -692,11 +719,20 @@ class MT5Controller:
             age = time.time() - path.stat().st_mtime
         except OSError:
             return {"ea_state": None}
+        skipped = {
+            key: int(float(out[key]))
+            for key in ("ai_skip_buy", "ai_skip_sell", "ai_shadow_buy", "ai_shadow_sell")
+            if key in out and str(out[key]).replace(".", "", 1).isdigit()
+        }
         return {
             "ea_state": out.get("state"),
             "ea_allowed": out.get("allowed"),
             "ea_state_at": out.get("at"),
             "ea_name": out.get("ea"),
+            "ea_symbol": out.get("symbol"),
+            # EA が自分の設定を書き出したもの。AI へ渡す戦略プロフィールの元になる
+            "ea_profile_raw": out.get("profile"),
+            "ea_skipped": skipped,
             # EA は10秒ごとに書く。30秒以上古ければ、チャートから外れている
             "ea_alive": age < 30,
             # EA が見ているフォルダと、こちらが書いているフォルダが同じか
@@ -726,6 +762,179 @@ class MT5Controller:
             "ea_compiled": compiled,
             "ea_installed": len(found) > 0,
         }
+
+    # ---------- AIリスク監督に渡す材料 ----------
+    # 既定は EA の設定と同じ値。EA が状態ファイルに profile を書いていればそちらで上書きする。
+    DEFAULT_PROFILE: dict[str, Any] = {
+        "name": "Orbit GOLD 2軸（M1軸・H1軸）",
+        "entry": "上位トレンド方向へ、内部高値／安値のブレイク後のリテスト成立で入る",
+        "ema_period": 200,
+        "atr_period": 14,
+        "retest_tolerance_atr": 0.12,
+        "retest_bars": 6,
+        "m1_sl_atr_mult": 5.0,
+        "m1_tp_atr_mult": 4.5,
+        "m1_min_atr_usd": 2.0,
+        "m1_require_h1_align": True,
+        "m1_nanpin_enabled": True,
+        "m1_nanpin_step_atr": 1.0,
+        "m1_nanpin_max_adds": 3,
+        "m1_nanpin_sl_room": 4,
+        "h1_sl_atr_mult": 1.5,
+        "h1_rr": 2.0,
+        "max_spread_usd": 0.60,
+        "source": "defaults",
+    }
+
+    _TF_MAP = {"M1": "TIMEFRAME_M1", "H1": "TIMEFRAME_H1", "H4": "TIMEFRAME_H4", "D1": "TIMEFRAME_D1", "W1": "TIMEFRAME_W1"}
+
+    def _profile_from_ea(self) -> dict[str, Any]:
+        """EA が書き出した設定（profile=key:value;...）を読む。無ければ既定値。"""
+        profile = dict(self.DEFAULT_PROFILE)
+        raw = self._ea_state_blocking().get("ea_profile_raw")
+        if not raw:
+            return profile
+        got: dict[str, Any] = {}
+        for part in str(raw).split(";"):
+            if ":" not in part:
+                continue
+            key, value = part.split(":", 1)
+            key, value = key.strip(), value.strip()
+            if not key:
+                continue
+            try:
+                num = float(value)
+                got[key] = int(num) if num.is_integer() and "." not in value else num
+            except ValueError:
+                got[key] = value
+        if got:
+            profile.update(got)
+            profile["source"] = "ea"
+        return profile
+
+    def _pick_symbol_blocking(self, wanted: str = "") -> str:
+        """EA と同じ銘柄を選ぶ。EA が書き出していればそれ、無ければ XAUUSD 系を探す。"""
+        if wanted:
+            return wanted
+        from_ea = self._ea_state_blocking().get("ea_symbol")
+        if from_ea:
+            return str(from_ea)
+        try:
+            for pos in mt5.positions_get() or ():
+                name = str(getattr(pos, "symbol", ""))
+                if "XAU" in name.upper() or "GOLD" in name.upper():
+                    return name
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            for candidate in mt5.symbols_get("*XAU*") or ():
+                name = str(getattr(candidate, "name", ""))
+                if name.upper().startswith("XAUUSD"):
+                    return name
+        except Exception:  # noqa: BLE001
+            pass
+        return "XAUUSD"
+
+    def _rates_blocking(self, symbol: str, tf_name: str, count: int) -> list[dict[str, Any]]:
+        """確定した足だけを新しい順→古い順で返す（最後の形成中の足は落とす）。"""
+        timeframe = getattr(mt5, self._TF_MAP[tf_name], None)
+        if timeframe is None:
+            return []
+        try:
+            info = mt5.symbol_info(symbol)
+            if info is not None and not getattr(info, "visible", True):
+                mt5.symbol_select(symbol, True)
+            rows = mt5.copy_rates_from_pos(symbol, timeframe, 0, count + 1)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("足を取れません %s %s: %s", symbol, tf_name, exc)
+            return []
+        if rows is None or len(rows) < 2:
+            return []
+        bars = [
+            {
+                "time": int(row["time"]),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+            }
+            for row in rows
+        ]
+        return bars[:-1]  # 最後は形成中
+
+    def _risk_snapshot_blocking(self, symbol: str, bars_m1: int, bars_h1: int, bars_h4: int) -> dict[str, Any] | None:
+        symbol = self._pick_symbol_blocking(symbol)
+        tick = mt5.symbol_info_tick(symbol) if mt5 is not None else None
+        if tick is None:
+            return None
+        bid, ask = float(getattr(tick, "bid", 0.0)), float(getattr(tick, "ask", 0.0))
+        if not bid or not ask:
+            return None
+        m1 = self._rates_blocking(symbol, "M1", bars_m1)
+        h1 = self._rates_blocking(symbol, "H1", bars_h1)
+        if not m1 or not h1:
+            return None
+        account = mt5.account_info()
+        offset = self._server_offset_blocking()
+        return {
+            "symbol": symbol,
+            "bid": bid,
+            "ask": ask,
+            "m1": m1,
+            "h1": h1,
+            "h4": self._rates_blocking(symbol, "H4", bars_h4),
+            "d1": self._rates_blocking(symbol, "D1", 60),
+            "w1": self._rates_blocking(symbol, "W1", 30),
+            "profile": self._profile_from_ea(),
+            "account": getattr(account, "login", None) if account is not None else None,
+            "bar_time": m1[-1]["time"],
+            "server_time": self._server_now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "server_epoch": int(time.time()) + offset,
+        }
+
+    def _account_mode_blocking(self) -> str:
+        account = mt5.account_info() if mt5 is not None else None
+        if account is None:
+            return "unknown"
+        mode = getattr(account, "trade_mode", None)
+        demo = getattr(mt5, "ACCOUNT_TRADE_MODE_DEMO", 0)
+        real = getattr(mt5, "ACCOUNT_TRADE_MODE_REAL", 2)
+        contest = getattr(mt5, "ACCOUNT_TRADE_MODE_CONTEST", 1)
+        if mode == demo:
+            return "demo"
+        if mode == real:
+            return "real"
+        if mode == contest:
+            return "contest"
+        return "unknown"
+
+    async def risk_snapshot(self, *, symbol: str, bars_m1: int, bars_h1: int, bars_h4: int) -> dict[str, Any] | None:
+        if not self.ready:
+            return None
+        return await self._call(self._risk_snapshot_blocking, symbol, bars_m1, bars_h1, bars_h4)
+
+    async def account_mode(self) -> str:
+        if not self.ready:
+            return "unknown"
+        return await self._call(self._account_mode_blocking)
+
+    async def last_closed_m1(self, symbol: str) -> int:
+        if not self.ready:
+            return 0
+        bars = await self._call(self._rates_blocking, self._pick_symbol_blocking(symbol) if symbol else symbol, "M1", 2)
+        return int(bars[-1]["time"]) if bars else 0
+
+    async def symbol_tick(self, symbol: str) -> dict[str, float] | None:
+        if not self.ready:
+            return None
+
+        def _tick() -> dict[str, float] | None:
+            t = mt5.symbol_info_tick(self._pick_symbol_blocking(symbol))
+            if t is None:
+                return None
+            return {"bid": float(getattr(t, "bid", 0.0)), "ask": float(getattr(t, "ask", 0.0))}
+
+        return await self._call(_tick)
 
     # ---------- 時刻 ----------
     # MT5 は約定やティックの時刻を「ブローカーのサーバー時計」で持っている。
@@ -1161,10 +1370,25 @@ class CommandRouter:
     def __init__(self, cfg: Config, mt: MT5Controller) -> None:
         self.cfg = cfg
         self.mt = mt
+        self.risk: Any | None = None
 
     async def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
         command = str(payload.get("command", "")).strip().lower()
         request_id = payload.get("id")
+
+        if command == "set_ai_gate":
+            mode = str(payload.get("mode", "")).strip().lower()
+            if self.risk is None:
+                return self._ack(command, request_id, False, error="AIリスク監督が動いていません")
+            if not self.risk.set_mode(mode):
+                return self._ack(command, request_id, False, error="mode は off / shadow / on / auto")
+            log.info("指令: AIゲートを %s に変更", mode)
+            return self._ack(command, request_id, True, ai_gate=self.risk.status())
+
+        if command == "get_ai_gate":
+            if self.risk is None:
+                return self._ack(command, request_id, False, error="AIリスク監督が動いていません")
+            return self._ack(command, request_id, True, ai_gate=self.risk.status(), history=self.risk.history[:20])
 
         if command == "stop_trading":
             reason = payload.get("reason", "")
@@ -1224,6 +1448,11 @@ class CommandRouter:
 
         if command in ("get_status", "status"):
             status = await self.mt.status(include_today=True)
+            if self.risk is not None:
+                try:
+                    status["ai_gate"] = self.risk.status(status.get("ea_skipped") or {})
+                except Exception as exc:  # noqa: BLE001
+                    log.debug("AIゲートの状態を作れませんでした: %s", exc)
             log.debug("指令: 状態要求 -> %s", status)
             return self._ack(command, request_id, True, **status)
 
@@ -1264,6 +1493,14 @@ class Bridge:
         # いま画面が何枚開いているか（中継が教えてくれる）。
         # 0 のあいだは口座の数字を送らない。
         self.watchers: int = 0
+        # AIリスク監督（新規注文の許可・停止）。設定が無ければ None のまま
+        self.risk: Any | None = None
+        if RiskGate is not None and RiskConfig is not None:
+            try:
+                self.risk = RiskGate(self.mt, RiskConfig(), cfg.bridge_id, _config_dir())
+                self.router.risk = self.risk
+            except Exception as exc:  # noqa: BLE001
+                log.warning("AIリスク監督を用意できませんでした: %s", exc)
 
     # ---------- WebSocket ----------
     def _connect_kwargs(self) -> dict[str, Any]:
@@ -1283,11 +1520,21 @@ class Bridge:
     async def _send(self, ws: Any, message: dict[str, Any]) -> None:
         await ws.send(json.dumps(message, ensure_ascii=False, allow_nan=False, default=str))
 
+    def _with_risk(self, status: dict[str, Any]) -> dict[str, Any]:
+        """AIリスク監督の状態を、画面へ送る内容に足す。"""
+        if self.risk is None:
+            return status
+        try:
+            status["ai_gate"] = self.risk.status(status.get("ea_skipped") or {})
+        except Exception as exc:  # noqa: BLE001
+            log.debug("AIゲートの状態を作れませんでした: %s", exc)
+        return status
+
     async def _on_connected(self, ws: Any) -> None:
         self.connected_since = time.time()
         self._failsafe_fired = False
         self._active_ws = ws
-        status = await self.mt.status(include_today=True)
+        status = self._with_risk(await self.mt.status(include_today=True))
         self._status_key = self._status_fingerprint(status)
         await self._send(
             ws,
@@ -1335,7 +1582,7 @@ class Bridge:
         ws = self._active_ws
         if ws is None or not self.mt.ready:
             return
-        status = await self.mt.status(include_today=True, include_probe=False)
+        status = self._with_risk(await self.mt.status(include_today=True, include_probe=False))
         # 画面が開いている間は、ズレを見つけたらその場で直す（見張りの30秒を待たない）
         value = status.get("value")
         if value is None or float(value) != float(self.mt.desired_value):
@@ -1546,12 +1793,18 @@ class Bridge:
 
         watchdog = asyncio.create_task(self.watchdog(), name="watchdog")
         pusher = asyncio.create_task(self.status_pusher(), name="pusher")
+        tasks = [watchdog, pusher]
+        if self.risk is not None:
+            # サイトから停止中は評価しない（新規注文が無いので費用をかけない）
+            tasks.append(
+                asyncio.create_task(self.risk.run(self.stop, lambda: self.mt.last_value != 0.0), name="risk")
+            )
         try:
             await self.ws_loop()
         finally:
-            for task in (watchdog, pusher):
+            for task in tasks:
                 task.cancel()
-            for task in (watchdog, pusher):
+            for task in tasks:
                 try:
                     await task
                 except (asyncio.CancelledError, Exception):  # noqa: BLE001

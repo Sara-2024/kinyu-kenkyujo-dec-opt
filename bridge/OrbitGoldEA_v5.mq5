@@ -476,6 +476,13 @@ bool OpenTrade(SEngine &eng, const int dir, const double refEntry, const double 
    string why;
    if(!SiteAllowsEntry(false, why)) { SiteSkipLog(eng.name, why); return(false); }
 
+   //--- AIリスク監督（方向別）。損失上限・手動停止・スプレッドの次に見る
+   string aiWhy=""; bool aiShadow=false;
+   if(!AiAllowsEntry(dir, aiWhy, aiShadow))
+     { AiCountSkip(dir, false); SiteSkipLog(eng.name, aiWhy); return(false); }
+   if(aiWhy != "" && aiShadow)
+     { AiCountSkip(dir, true); if(InpVerboseLog) PrintFormat("[%s] AI記録のみ: %s（発注は続行）", eng.name, aiWhy); }
+
    bool isBuy = (dir>0);
    int    dgt = (int)SymbolInfoInteger(_Symbol,SYMBOL_DIGITS);
    double pt  = SymbolInfoDouble(_Symbol,SYMBOL_POINT);
@@ -583,11 +590,16 @@ void ManageM1Basket()
      {
       double nextAdd = first - step*(adds+1)*dir;
       bool hit = (dir>0) ? (bid<=nextAdd) : (ask>=nextAdd);
-      string why;
-      if(hit && SpreadOK() && !SiteAllowsEntry(true, why))
+      string why="", aiWhy=""; bool aiShadow=false;
+      bool aiOK = AiAllowsEntry(dir, aiWhy, aiShadow);
+      if(hit && SpreadOK() && !aiOK)
+        { AiCountSkip(dir, false); SiteSkipLog("M1軸 ナンピン", aiWhy); }   // 追加はしないが、SL/TP の管理は続ける
+      else if(hit && SpreadOK() && !SiteAllowsEntry(true, why))
          SiteSkipLog("M1軸 ナンピン", why);        // 追加はしないが、SL/TP の管理は続ける
       else if(hit && SpreadOK())
         {
+         if(aiWhy != "" && aiShadow)
+           { AiCountSkip(dir, true); if(InpVerboseLog) PrintFormat("[M1軸 ナンピン] AI記録のみ: %s（追加は続行）", aiWhy); }
          // 等倍＝初回建玉と同じロット（途中でサイトのロットが変わっても崩さない）
          double baseLot = (firstVol>0.0) ? firstVol : SiteLot();
          double lot = NormalizeLotValue(baseLot*MathPow(InpM1NanpinLotMult,adds+1));
@@ -692,6 +704,25 @@ int OnInit()
 
    g_trade.SetDeviationInPoints(InpSlippagePoints);
    g_trade.SetTypeFillingBySymbol(_Symbol);
+
+   // AIリスク監督へ渡す戦略プロフィール。ここが唯一の出どころで、
+   // ブリッジは状態ファイル越しにこの値を読む（実際の設定と食い違わないようにする）
+   GateProfile = StringFormat(
+      "name:Orbit GOLD 2軸;entry:上位トレンド方向へ内部高値安値のブレイク後リテスト成立で入る;"
+      "ema_period:%d;atr_period:%d;retest_tolerance_atr:%.3f;retest_bars:%d;"
+      "m1_enabled:%d;m1_sl_atr_mult:%.2f;m1_tp_atr_mult:%.2f;m1_min_atr_usd:%.2f;m1_require_h1_align:%d;"
+      "m1_cooldown_bars:%d;m1_max_signals:%d;"
+      "m1_nanpin_enabled:%d;m1_nanpin_step_atr:%.2f;m1_nanpin_max_adds:%d;m1_nanpin_sl_room:%d;m1_nanpin_lot_mult:%.2f;"
+      "m1_trail_start_atr:%.2f;m1_trail_dist_atr:%.2f;"
+      "h1_enabled:%d;h1_sl_atr_mult:%.2f;h1_rr:%.2f;h1_max_positions:%d;h1_cooldown_bars:%d;h1_max_signals:%d;"
+      "max_spread_usd:%.2f;lot_mode:%d",
+      InpEmaPeriod, InpAtrPeriod, InpAtrMultiplier, InpRetestBars,
+      (InpM1Enabled?1:0), InpM1SLatrMult, InpM1TPatrMult, InpM1MinAtrUSD, (InpM1RequireH1Align?1:0),
+      InpM1Cooldown, InpM1MaxSignals,
+      (InpM1NanpinEnabled?1:0), InpM1NanpinStepATR, InpM1NanpinMaxAdds, InpM1NanpinSLRoom, InpM1NanpinLotMult,
+      InpM1TrailStartATR, InpM1TrailDistATR,
+      (InpH1Enabled?1:0), InpH1AtrSLmult, InpH1RR, InpH1MaxPositions, InpH1Cooldown, InpH1MaxSignals,
+      InpMaxSpreadUSD, (int)InpLotMode);
 
    // サイト連携: 1秒ごとに指令ファイルを読み、チャートのパネルと状態ファイルを更新する
    EventSetMillisecondTimer(1000);

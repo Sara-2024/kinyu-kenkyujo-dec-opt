@@ -947,6 +947,12 @@ def bridge_env(session: dict | None) -> dict[str, str]:
     token = env_value("TRELAB_TOKEN")
     if token:
         env["TRELAB_TOKEN"] = token
+    # AIリスク監督（新規注文の許可・停止）の設定。bridge.env に書いてあれば渡す。
+    # 合言葉が無ければブリッジ側で自動的に「切」になる（勝手に動き出さない）。
+    for key in ("TRELAB_RISK_TOKEN", "RISK_API_URL", "RISK_GATE_ENABLED", "RISK_EVAL_SEC", "RISK_LIVE_MODE", "RISK_DEMO_MODE", "RISK_SYMBOL"):
+        value = env_value(key)
+        if value:
+            env[key] = value
     env["LOG_FILE"] = str(CONFIG_DIR / "bridge.log")
     if session:
         exe = resolve_terminal_exe(session)
