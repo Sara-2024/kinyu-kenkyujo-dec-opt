@@ -840,13 +840,18 @@ class MT5Controller:
                     return name
         except Exception:  # noqa: BLE001
             pass
-        try:
-            for candidate in mt5.symbols_get("*XAU*") or ():
-                name = str(getattr(candidate, "name", ""))
-                if name.upper().startswith("XAUUSD"):
+        # 業者によって金の名前が違う。XAUUSD… だけを見ていると、XM のように
+        # GOLD という名前の口座で足が取れず、AIリスク監督が動けなくなる。
+        # 実際に値が取れるものだけを、狭いほうから順に選ぶ。
+        for pattern, wanted in (("*XAU*", "XAUUSD"), ("*GOLD*", "GOLD")):
+            try:
+                names = [str(getattr(c, "name", "")) for c in (mt5.symbols_get(pattern) or ())]
+            except Exception:  # noqa: BLE001
+                continue
+            exact = [n for n in names if n.upper().startswith(wanted)]
+            for name in (*exact, *names):
+                if mt5.symbol_info_tick(name) is not None:
                     return name
-        except Exception:  # noqa: BLE001
-            pass
         return "XAUUSD"
 
     def _rates_blocking(self, symbol: str, tf_name: str, count: int) -> list[dict[str, Any]]:
