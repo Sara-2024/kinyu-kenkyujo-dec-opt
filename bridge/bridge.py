@@ -840,19 +840,42 @@ class MT5Controller:
                     return name
         except Exception:  # noqa: BLE001
             pass
-        # 業者によって金の名前が違う。XAUUSD… だけを見ていると、XM のように
-        # GOLD という名前の口座で足が取れず、AIリスク監督が動けなくなる。
-        # 実際に値が取れるものだけを、狭いほうから順に選ぶ。
+        # 業者によって金の名前が違う（XAUUSD / GOLD / GOLD# など）。名前だけで選ぶと
+        # XAUEUR や XAUJPY を拾ってしまい、EA が売買している商品と別の値を
+        # AI に見せることになる。ドル建ての金だけを採る。
         for pattern, wanted in (("*XAU*", "XAUUSD"), ("*GOLD*", "GOLD")):
             try:
                 names = [str(getattr(c, "name", "")) for c in (mt5.symbols_get(pattern) or ())]
             except Exception:  # noqa: BLE001
                 continue
             exact = [n for n in names if n.upper().startswith(wanted)]
-            for name in (*exact, *names):
+            for name in (*exact, *[n for n in names if n not in exact]):
+                if not self._is_gold_usd(name):
+                    continue
                 if mt5.symbol_info_tick(name) is not None:
+                    log.info("AIリスク監督が見る銘柄: %s", name)
                     return name
+        log.warning("金の銘柄を特定できませんでした（RISK_SYMBOL で指定できます）")
         return "XAUUSD"
+
+    @staticmethod
+    def _is_gold_usd(name: str) -> bool:
+        """ドル建ての金かどうか。XAUEUR / XAUJPY を除くために通貨で確かめる。"""
+        try:
+            info = mt5.symbol_info(name)
+        except Exception:  # noqa: BLE001
+            return False
+        if info is None:
+            return False
+        profit = str(getattr(info, "currency_profit", "") or "").upper()
+        base = str(getattr(info, "currency_base", "") or "").upper()
+        if profit and profit != "USD":
+            return False
+        if base and base not in ("XAU", "GOLD"):
+            return False
+        # 通貨の情報を持たない業者もあるので、そのときは名前で判断する
+        upper = name.upper()
+        return bool(profit or base) or upper.startswith(("XAUUSD", "GOLD"))
 
     def _rates_blocking(self, symbol: str, tf_name: str, count: int) -> list[dict[str, Any]]:
         """確定した足だけを新しい順→古い順で返す（最後の形成中の足は落とす）。"""

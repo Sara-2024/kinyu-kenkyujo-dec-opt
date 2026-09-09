@@ -129,6 +129,11 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
         )}
       </div>
 
+      {gate.data_error && (
+        <p className="mt-2 text-[13px]" style={{ color: '#ffd23e' }}>
+          ⚠ MT5から材料が取れていません（{gate.data_error}）
+        </p>
+      )}
       {expired && (
         <p className="mt-2 text-[13px] font-bold" style={{ color: '#ffd23e' }}>
           ⚠ 判定が期限切れです。新規注文は止まりますが、保有中の決済とSL/TPの管理は続いています

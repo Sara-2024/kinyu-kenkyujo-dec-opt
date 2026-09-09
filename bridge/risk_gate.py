@@ -136,8 +136,10 @@ class RiskGate:
         self.mode: float = MODE_OFF
         self.mode_reason = "未開始"
         self.mode_override: str | None = None
-        self.comms = "off"  # off / ok / error
+        self.comms = "off"  # off / ok / error（外部AIとの通信だけ）
         self.comms_error = ""
+        # MT5 から足が取れない等、手元の材料の問題。通信の障害とは別に持つ
+        self.data_error = ""
         self.last_decision: dict[str, Any] | None = None
         self.decided_at: str | None = None
         self.expires_at: str | None = None
@@ -315,6 +317,7 @@ class RiskGate:
         if not isinstance(decision, dict):
             self.comms, self.comms_error = "error", "応答の形が違う"
             self.errors += 1
+            log.warning("AIゲート: サイトの応答に判定が入っていません")
             return None
         self.comms, self.comms_error = "ok", ""
         return decision
@@ -333,7 +336,8 @@ class RiskGate:
                 bars_h4=self.cfg.bars_h4,
             )
             if not snapshot:
-                self.comms, self.comms_error = "error", "MT5 から足を取れません"
+                self.data_error = "MT5 から足を取れません（銘柄が特定できない可能性）"
+                log.warning("AIゲート: %s", self.data_error)
                 return
             self.symbol = snapshot["symbol"]
             features = rf.build_features(
@@ -348,7 +352,9 @@ class RiskGate:
             )
             if not rf.data_is_usable(features):
                 # データが足りないのに AI に聞かない（憶測で埋めさせない）
-                self.comms_error = "足が足りません"
+                missing = [k for k in ("atr_m1", "atr_h1", "price_mid", "ema200_h1") if features.get(k) is None]
+                self.data_error = f"足が足りません（{'・'.join(missing)}）"
+                log.warning("AIゲート: %s", self.data_error)
                 return
             payload = {
                 "bridge_id": self.bridge_id,
@@ -361,6 +367,7 @@ class RiskGate:
                 "strategy_profile": snapshot["profile"],
                 "features": features,
             }
+            self.data_error = ""
             decision = await self._ask(payload)
             if not decision:
                 return
@@ -446,7 +453,11 @@ class RiskGate:
         if not (new_bar and due) and not stale and (now - self.last_near_eval) >= self.cfg.near_recheck_sec:
             near = await self._near_level()
         if not ((new_bar and due) or near or stale):
-            self._trace(f"待機中（新しい足={new_bar} 間隔待ち={not due} 期限切れ={stale}）")
+            self._trace(
+                f"待機中（新しい足={new_bar} 間隔待ち={not due} 期限切れ={stale}"
+                + (f" 材料={self.data_error}" if self.data_error else "")
+                + "）"
+            )
         if (new_bar and due) or near or stale:
             self.last_eval = now
             self.last_near_eval = now
@@ -498,6 +509,7 @@ class RiskGate:
             "seq": self.applied_seq,
             "comms": self.comms,
             "comms_error": self.comms_error,
+            "data_error": self.data_error,
             "model": (self.last_decision or {}).get("model"),
             "prompt_version": (self.last_decision or {}).get("prompt_version"),
             "metrics": {

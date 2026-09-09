@@ -39,6 +39,8 @@ export interface AiGateState {
   seq?: number
   comms?: 'ok' | 'error' | 'off'
   comms_error?: string
+  /** MT5 側の材料が足りないとき（通信の障害とは別物） */
+  data_error?: string
   model?: string | null
   prompt_version?: string | null
   metrics?: {
