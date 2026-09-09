@@ -116,6 +116,11 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   `python3 bridge/tests/wiring_test.py` … Bridge の配線（未定義の名前・属性違いを捕まえる）
   `python3 bridge/tests/symbol_test.py` … 金の銘柄選び（GOLD を採り、XAUEUR/XAUJPY を弾く）
   `python3 bridge/tests/settings_restore_test.py` … 指令ファイルが消えたときの設定の書き戻し
+- **AI に聞くのは「入りうる場面」だけ。** EA はブレイク後のリテスト成立でしか入らないので、
+  水準から遠く伸びも小さい時間帯に聞いても、その判定は使われない（費用だけ増える）。
+  条件は `RiskGate._entry_possible`：重要水準まで ATR 1個以内／直近15本で ATR 4個以上動いた／
+  水準を抜けて `retest_bars` 本以内。ゴールドの実データで聞く回数は全体の 27%。
+  聞かなかったときは判定の期限だけ延ばし、EA は止めない（原則は許可）。
 - **有効にする設定**: Vercel に `TRELAB_RISK_TOKEN`（と `GEMINI_API_KEY`）、
   手元に `bridge/risk_secret.py`（`risk_secret.py.example` をコピーして同じ文字列）。
   `tools\build-windows.bat` がこれを exe に同梱するので、**お客様は何も入力しない**。

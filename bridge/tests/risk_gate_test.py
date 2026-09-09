@@ -128,6 +128,9 @@ async def main() -> None:
         return item
 
     gate._post_blocking = fake_post  # type: ignore[method-assign]
+    # ここで見たいのは停止と再開のふるまいなので、聞く条件は満たしている前提にする
+    always = lambda features, profile: (True, "テスト")  # noqa: E731
+    gate._entry_possible = always  # type: ignore[method-assign]
 
     # 1) 買いだけ停止
     replies.append(decision("BLOCK", "ALLOW", 1, buy_codes=["NEAR_RESISTANCE"]))
@@ -210,6 +213,7 @@ async def main() -> None:
     thin = RiskGate(ThinMT(), RiskConfig(), "test-room", tmp)
     thin.account_mode = "demo"
     thin._decide_mode()
+    thin._entry_possible = always  # type: ignore[method-assign]
     called = []
     thin._post_blocking = lambda payload: called.append(payload)  # type: ignore[method-assign]
     await thin.evaluate(reason="test")
@@ -220,6 +224,7 @@ async def main() -> None:
     slow = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
     slow.account_mode = "demo"
     slow._decide_mode()
+    slow._entry_possible = always  # type: ignore[method-assign]
 
     def slow_post(payload):
         time.sleep(2.0)          # 遅い外部AIのつもり
@@ -245,6 +250,7 @@ async def main() -> None:
     over = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
     over.account_mode = "demo"
     over._decide_mode()
+    over._entry_possible = always  # type: ignore[method-assign]
     calls = []
 
     def counting(payload):
@@ -262,6 +268,7 @@ async def main() -> None:
     sw.account_mode = "demo"
     sw.set_mode("on")
     sw._decide_mode()
+    sw._entry_possible = always  # type: ignore[method-assign]
     await sw._sync_gate()
     check("反映にすると指令ファイルが 2 になる", sw.mt.gate.get(GV_MODE) == MODE_ON, str(sw.mt.gate))
     sw.set_mode("shadow")
@@ -276,6 +283,7 @@ async def main() -> None:
     bo = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
     bo.account_mode = "demo"
     bo._decide_mode()
+    bo._entry_possible = always  # type: ignore[method-assign]
     import urllib.error, io
 
     def quota(payload):
@@ -289,6 +297,47 @@ async def main() -> None:
     bo._post_blocking = lambda payload: decision("ALLOW", "ALLOW", 99)  # type: ignore[method-assign]
     await bo.evaluate(reason="test")
     check("成功したら間隔は元に戻る", bo._error_wait == 0.0 and not bo._waiting_after_error())
+
+
+    # 17) 入る見込みが無いときは AI に聞かない（費用をかけない）
+    quiet = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
+    quiet.account_mode = "demo"
+    quiet._decide_mode()
+    asked = []
+    quiet._post_blocking = lambda payload: (asked.append(payload), decision("ALLOW", "ALLOW", 200))[1]  # type: ignore[method-assign]
+
+    profile = {"m1_min_atr_usd": 2.0, "retest_bars": 6, "h1_enabled": True}
+    far = {
+        "atr_m1": 3.0,
+        "dist_to_resistance_atr": 12.0,
+        "dist_to_support_atr": 9.0,
+        "move_m1_15bars_atr": 0.4,
+        "resistance_break_state": 0,
+        "support_break_state": 0,
+    }
+    ok, why = quiet._entry_possible(far, profile)
+    check("水準から遠ければ聞かない", not ok, why)
+
+    near = dict(far, dist_to_resistance_atr=0.8)  # 既定は ATR 1個以内
+    ok, why = quiet._entry_possible(near, profile)
+    check("水準が近ければ聞く", ok, why)
+
+    broke = dict(far, resistance_break_state=1, resistance_bars_since_break=3)
+    check("抜けた直後は聞く", quiet._entry_possible(broke, profile)[0])
+
+    ran = dict(far, move_m1_15bars_atr=-4.6)  # 既定は ATR 4個以上
+    check("急に動いた直後は聞く", quiet._entry_possible(ran, profile)[0])
+
+    thin_atr = dict(far, atr_m1=0.5)
+    check("ATRが下限未満で水準も遠ければ聞かない", quiet._entry_possible(thin_atr, profile)[0] is False)
+    check("H1軸も止めていれば聞かない", quiet._entry_possible(thin_atr, dict(profile, h1_enabled=False))[0] is False)
+
+    # 実際に evaluate を回して、静かな場面では問い合わせが起きないこと
+    quiet._entry_possible = lambda f, p: (False, "静か")  # type: ignore[method-assign]
+    await quiet.evaluate(reason="test")
+    check("静かな場面では問い合わせが1回も出ない", not asked, str(len(asked)))
+    check("聞かなくても期限は延ばす（EAを止めない）", quiet.mt.gate.get(GV_UNTIL, 0) > 1757400000)
+    check("見送りの回数を数える", quiet.skipped_calls == 1)
 
 
 asyncio.run(main())

@@ -77,10 +77,18 @@ class RiskConfig:
     )
     token: str = field(default_factory=lambda: _env_str("TRELAB_RISK_TOKEN"))
     symbol: str = field(default_factory=lambda: _env_str("RISK_SYMBOL"))
-    # 確定 M1 足ごとに1回（60秒）。人数が増えたら伸ばす
-    eval_sec: float = field(default_factory=lambda: _env_float("RISK_EVAL_SEC", 60.0))
+    # 判定を取り直す間隔。確定 M1 足ごと（60秒）にすると費用が倍になるため、
+    # 既定は 120 秒。重要水準への接近や急な伸びは、この間隔を待たずに見る。
+    eval_sec: float = field(default_factory=lambda: _env_float("RISK_EVAL_SEC", 120.0))
     # 重要水準まで ATR 1個ぶんより近ければ、足の途中でも見直す
     near_level_atr: float = field(default_factory=lambda: _env_float("RISK_NEAR_LEVEL_ATR", 1.0))
+    # AI に聞く条件。ゴールドの1分足（9/3〜9/9 の実データ）で、聞く回数が
+    # 全体の 27% に収まる値を選んだ。緩めると費用が増え、締めると危ない場面を
+    # 取りこぼす。RISK_ASK_* で調整できる。
+    ask_within_atr: float = field(default_factory=lambda: _env_float("RISK_ASK_WITHIN_ATR", 1.0))
+    ask_move_atr: float = field(default_factory=lambda: _env_float("RISK_ASK_MOVE_ATR", 4.0))
+    # 聞かずに見送ったときに、判定の期限をどれだけ延ばすか（秒）
+    quiet_extend_sec: float = field(default_factory=lambda: _env_float("RISK_QUIET_EXTEND_SEC", 180.0))
     near_recheck_sec: float = field(default_factory=lambda: _env_float("RISK_NEAR_RECHECK_SEC", 30.0))
     # 停止したら最低これだけは続ける（数十秒での付け外しを防ぐ）
     min_block_sec: float = field(default_factory=lambda: _env_float("RISK_MIN_BLOCK_SEC", 180.0))
@@ -152,6 +160,8 @@ class RiskGate:
         self.last_near_eval = 0.0
         self.evaluations = 0
         self.insufficient = 0
+        self.skipped_calls = 0
+        self.last_skip_reason = ""
         self.errors = 0
         self._busy = False
         self._last_trace: tuple[str, float] = ("", 0.0)
@@ -350,6 +360,44 @@ class RiskGate:
         self._error_wait = 0.0
         return decision
 
+    # ── 聞く価値があるかの判断（無駄に AI を回さない） ──
+    def _entry_possible(self, features: dict[str, Any], profile: dict[str, Any]) -> tuple[bool, str]:
+        """EA がこの先すぐ入りうる形か。そうでなければ AI に聞かない。
+
+        EA は「内部高値／安値のブレイク後、リテスト成立」でしか入らない。
+        静かな時間帯や、どの水準からも遠い場面で聞いても、その判定は使われない。
+        """
+        atr = features.get("atr_m1")
+        if not atr:
+            return False, "ATRが出ていない"
+
+        # M1軸は ATR が下限を割ると一切入らない（EA の InpM1MinAtrUSD と同じ値）
+        min_atr = float(profile.get("m1_min_atr_usd", 0.0) or 0.0)
+        m1_alive = (not min_atr) or atr >= min_atr
+        h1_alive = bool(profile.get("h1_enabled", True))
+        if not m1_alive and not h1_alive:
+            return False, f"ATR {atr:.2f} が下限 {min_atr:.2f} 未満"
+
+        # 突破待ち・リテスト待ちが立っているか（ブレイクからの本数が浅い）
+        retest_bars = int(profile.get("retest_bars", 6) or 6)
+        for side in ("resistance", "support"):
+            since = features.get(f"{side}_bars_since_break")
+            if features.get(f"{side}_break_state") and since is not None and since <= retest_bars:
+                return True, f"{'上' if side == 'resistance' else '下'}の水準を抜けた直後"
+
+        # 重要な水準の近く（ここが AI に見てほしい場面そのもの）
+        for side in ("resistance", "support"):
+            near = features.get(f"dist_to_{side}_atr")
+            if near is not None and near <= self.cfg.ask_within_atr:
+                return True, f"{'上' if side == 'resistance' else '下'}の水準まで ATR {near:.1f} 個"
+
+        # 急に伸びた直後（飛び乗りが起きやすい）
+        move = features.get("move_m1_15bars_atr")
+        if move is not None and abs(move) >= self.cfg.ask_move_atr:
+            return True, f"直近15本で ATR {abs(move):.1f} 個ぶん動いた"
+
+        return False, "水準から遠く、伸びも小さい"
+
     # ── 1回ぶんの評価 ──
     async def evaluate(self, *, reason: str) -> None:
         if self._busy:  # 呼び出しが重ならないようにする
@@ -384,6 +432,18 @@ class RiskGate:
                 self.data_error = f"足が足りません（{'・'.join(missing)}）"
                 log.warning("AIゲート: %s", self.data_error)
                 return
+            # ここまでは MT5 の中だけの処理（無料）。AI に聞くのは必要なときだけ。
+            possible, why = self._entry_possible(features, snapshot["profile"])
+            if not possible:
+                self.skipped_calls += 1
+                self.last_skip_reason = why
+                # 入る見込みが無いあいだは、期限だけ延ばして EA を止めない
+                self._until_epoch = int(snapshot["server_epoch"]) + int(self.cfg.quiet_extend_sec)
+                if await self._write_gate(self._until_epoch):
+                    self._written = (self.mode, self.buy.blocked, self.sell.blocked, self._until_epoch)
+                self._trace(f"聞かずに見送り（{why}）")
+                return
+
             payload = {
                 "bridge_id": self.bridge_id,
                 "seq": seq,
@@ -563,6 +623,8 @@ class RiskGate:
             "metrics": {
                 "evaluations": self.evaluations,
                 "insufficient": self.insufficient,
+                "skipped_calls": self.skipped_calls,
+                "last_skip_reason": self.last_skip_reason,
                 "errors": self.errors,
                 "skipped": ea_counters or {},
             },
