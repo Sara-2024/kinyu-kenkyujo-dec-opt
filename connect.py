@@ -954,6 +954,9 @@ def embedded_risk_token() -> str:
 def bridge_env(session: dict | None) -> dict[str, str]:
     env = dict(os.environ)
     env["TRELAB_WS_URL"] = relay_url()
+    # 部屋の名前。exe には bridge/.env が入らないので、ここで渡さないと
+    # ブリッジは既定の vps-01 に入ってしまい、サイトの指令が届かない。
+    env["BRIDGE_ID"] = env_value("BRIDGE_ID") or "vps-01"
     token = env_value("TRELAB_TOKEN")
     if token:
         env["TRELAB_TOKEN"] = token
