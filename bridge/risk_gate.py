@@ -22,7 +22,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -152,6 +152,7 @@ class RiskGate:
         self.insufficient = 0
         self.errors = 0
         self._busy = False
+        self._last_trace: tuple[str, float] = ("", 0.0)
         self._log_path = state_dir / "risk_decisions.jsonl"
         self._override_path = state_dir / "risk_gate.json"
         self._load_override()
@@ -203,7 +204,7 @@ class RiskGate:
             self.mode_reason = "口座種別が確認できないので記録のみ"
 
     # ── 指令ファイルへ ──
-    async def _write_gate(self, until_server: int | None) -> None:
+    async def _write_gate(self, until_server: int | None) -> bool:
         values = {
             GV_MODE: self.mode,
             GV_BUY: 0.0 if self.buy.blocked else 1.0,
@@ -212,7 +213,10 @@ class RiskGate:
         }
         if until_server is not None:
             values[GV_UNTIL] = float(until_server)
-        await self.mt.set_variables(values)
+        ok = await self.mt.set_variables(values)
+        if not ok:
+            log.warning("AIゲート: 指令ファイルに書けませんでした（MT5 未接続の可能性）")
+        return bool(ok)
 
     # ── 判定を当てる ──
     def _apply(self, decision: dict[str, Any], features: dict[str, Any]) -> None:
@@ -385,6 +389,12 @@ class RiskGate:
 
     # ── 常駐ループ ──
     async def run(self, stop: asyncio.Event, should_watch: Callable[[], bool]) -> None:
+        log.info(
+            "AIリスク監督を開始します（合言葉=%s 宛先=%s 間隔=%.0f秒）",
+            "あり" if self.cfg.token else "なし（切のまま）",
+            self.cfg.endpoint,
+            self.cfg.eval_sec,
+        )
         while not stop.is_set():
             try:
                 await self._tick(should_watch)
@@ -397,6 +407,21 @@ class RiskGate:
             except asyncio.TimeoutError:
                 pass
 
+    def _trace(self, why: str) -> None:
+        """なぜ評価したか／しなかったかを、たまに1行だけ残す（追跡用）。"""
+        now = time.time()
+        if why == self._last_trace[0] and (now - self._last_trace[1]) < 60.0:
+            return
+        self._last_trace = (why, now)
+        log.info(
+            "AIゲート: %s（モード=%s 口座=%s 銘柄=%s 通信=%s）",
+            why,
+            MODE_NAMES.get(self.mode, "?"),
+            self.account_mode,
+            self.symbol or "未定",
+            self.comms,
+        )
+
     async def _tick(self, should_watch: Callable[[], bool]) -> None:
         info = await self.mt.account_mode()
         if info:
@@ -404,9 +429,11 @@ class RiskGate:
         self._decide_mode()
         if self.mode <= MODE_OFF:
             # 切っているときは、EA が期限切れで止まらないよう指令も 0（=判定なし）にしておく
-            await self._write_gate(0)
+            wrote = await self._write_gate(0)
+            self._trace(f"切のまま（{self.mode_reason}）指令の書き込み={'成功' if wrote else '失敗'}")
             return
         if not should_watch():
+            self._trace("サイトから停止中なので評価しない")
             return  # サイトから停止中は新規注文が無いので、費用をかけない
         now = time.time()
         bar_time = await self.mt.last_closed_m1(self.symbol)
@@ -418,6 +445,8 @@ class RiskGate:
         near = False
         if not (new_bar and due) and not stale and (now - self.last_near_eval) >= self.cfg.near_recheck_sec:
             near = await self._near_level()
+        if not ((new_bar and due) or near or stale):
+            self._trace(f"待機中（新しい足={new_bar} 間隔待ち={not due} 期限切れ={stale}）")
         if (new_bar and due) or near or stale:
             self.last_eval = now
             self.last_near_eval = now
