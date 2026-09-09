@@ -16,7 +16,7 @@ export type Role = 'rin' | 'jin' | 'algo' | 'mio'
 
 const ROLES: Role[] = ['rin', 'jin', 'algo', 'mio']
 
-const MODEL = 'gemini-3.5-flash-lite'
+const DEFAULT_MODEL = 'gemini-3.5-flash-lite'
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 const MAX_QUESTION = 300
@@ -75,6 +75,8 @@ export interface ChatEnv {
   geminiKey?: string
   /** テストで差し替える。既定は本物の Gemini */
   geminiBase?: string
+  /** 使うモデル。GEMINI_CHAT_MODEL で変えられる（既定は Flash-Lite） */
+  model?: string
   supabaseUrl?: string
   supabaseKey?: string
 }
@@ -189,7 +191,8 @@ export async function callGemini(
   user: string,
 ): Promise<{ answer: string; redirect: Role | null }> {
   const base = env.geminiBase || GEMINI_BASE
-  const url = `${base}/models/${MODEL}:generateContent?key=${encodeURIComponent(env.geminiKey ?? '')}`
+  const model = env.model || DEFAULT_MODEL
+  const url = `${base}/models/${model}:generateContent?key=${encodeURIComponent(env.geminiKey ?? '')}`
   let data: GeminiResponse | null = null
   let lastError = ''
   for (let i = workingVariant; i < CONFIG_VARIANTS.length; i++) {
@@ -288,6 +291,7 @@ export function envFrom(source: Record<string, string | undefined>): ChatEnv {
   return {
     geminiKey: source.GEMINI_API_KEY?.trim() || undefined,
     geminiBase: source.GEMINI_BASE_URL?.trim() || undefined,
+    model: source.GEMINI_CHAT_MODEL?.trim() || undefined,
     supabaseUrl: source.VITE_SUPABASE_URL || source.SUPABASE_URL,
     supabaseKey: source.VITE_SUPABASE_ANON_KEY || source.SUPABASE_ANON_KEY,
   }
