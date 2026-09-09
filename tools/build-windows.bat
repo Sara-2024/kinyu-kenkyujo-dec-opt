@@ -58,6 +58,20 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --hidden-import bridge ^
   --hidden-import mt5_terminal ^
   --hidden-import MetaTrader5 ^
+  --collect-all numpy ^
+  --hidden-import logging.handlers ^
+  --hidden-import concurrent.futures ^
+  --hidden-import urllib.error ^
+  --hidden-import urllib.request ^
+  --hidden-import argparse ^
+  --hidden-import inspect ^
+  --hidden-import dataclasses ^
+  --hidden-import functools ^
+  --hidden-import random ^
+  --hidden-import signal ^
+  --hidden-import risk_features ^
+  --hidden-import risk_gate ^
+  --hidden-import websockets.exceptions ^
   --hidden-import websockets ^
   --hidden-import websockets.asyncio.client ^
   --hidden-import dotenv ^
