@@ -85,7 +85,14 @@ _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
-VERSION = "2026-09-09.1"
+VERSION = "2026-09-10.1"
+# exe 版は、作り直すたびに版が変わるようにする。同じ版だと「すでに動いている」と
+# みなして古いブリッジがそのまま残り、作り直した exe が効かない。
+if getattr(sys, "frozen", False):
+    try:
+        VERSION = f"{VERSION}+{int(os.path.getmtime(sys.executable))}"
+    except OSError:
+        pass
 
 
 # 以前の版が使っていたロック名。名前が変わったせいで、
