@@ -41,6 +41,8 @@ export interface AiGateState {
   comms_error?: string
   /** MT5 側の材料が足りないとき（通信の障害とは別物） */
   data_error?: string
+  /** AI側が混雑・上限のとき、次に試すまでの秒数 */
+  retry_in_sec?: number
   model?: string | null
   prompt_version?: string | null
   metrics?: {

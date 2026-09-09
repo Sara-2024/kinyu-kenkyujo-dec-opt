@@ -114,6 +114,7 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
           通信 {gate.comms === 'ok' ? '正常' : gate.comms === 'error' ? '不通' : '停止中'}
           {gate.comms_error ? `（${gate.comms_error.slice(0, 40)}）` : ''}
         </span>
+        {gate.retry_in_sec ? <span>再試行まで {gate.retry_in_sec}秒</span> : null}
         {gate.symbol && <span>{gate.symbol}</span>}
         {gate.model && <span>{gate.model}</span>}
         {gate.metrics?.evaluations != null && <span>判定 {gate.metrics.evaluations}回</span>}

@@ -155,6 +155,12 @@ class RiskGate:
         self.errors = 0
         self._busy = False
         self._last_trace: tuple[str, float] = ("", 0.0)
+        # 最後に指令ファイルへ書いた内容。変わったときだけ書き直す
+        self._written: tuple[float, bool, bool, int] | None = None
+        self._until_epoch = 0
+        # AI 側が混んでいる／上限に達したときの、次に試すまでの待ち時間
+        self._error_wait = 0.0
+        self._error_at = 0.0
         self._log_path = state_dir / "risk_decisions.jsonl"
         self._override_path = state_dir / "risk_gate.json"
         self._load_override()
@@ -206,6 +212,24 @@ class RiskGate:
             self.mode_reason = "口座種別が確認できないので記録のみ"
 
     # ── 指令ファイルへ ──
+    async def _sync_gate(self) -> None:
+        """モードや停止状態が変わったら、判定を待たずに EA へ伝える。
+
+        画面で「反映 → 記録のみ」に切り替えたのに、次の判定が返るまで
+        EA が古い値を読み続けるのを防ぐ。
+        """
+        now_state = (self.mode, self.buy.blocked, self.sell.blocked, self._until_epoch)
+        if now_state == self._written:
+            return
+        if await self._write_gate(self._until_epoch or None):
+            self._written = now_state
+            log.info(
+                "AIゲートを指令ファイルに反映: モード=%s 買い=%s 売り=%s",
+                MODE_NAMES.get(self.mode, "?"),
+                "停止" if self.buy.blocked else "許可",
+                "停止" if self.sell.blocked else "許可",
+            )
+
     async def _write_gate(self, until_server: int | None) -> bool:
         values = {
             GV_MODE: self.mode,
@@ -306,11 +330,14 @@ class RiskGate:
             detail = exc.read().decode("utf-8", "replace")[:200]
             self.comms, self.comms_error = "error", f"HTTP {exc.code} {detail}"
             self.errors += 1
+            # 429（上限）や 503（混雑）で叩き続けない。間隔を広げて待つ
+            self._back_off("上限・混雑" if exc.code in (429, 503) else f"HTTP {exc.code}")
             log.warning("AIリスク判定に失敗: %s", self.comms_error)
             return None
         except (urllib.error.URLError, OSError, ValueError) as exc:
             self.comms, self.comms_error = "error", str(exc)[:200]
             self.errors += 1
+            self._back_off("届かない")
             log.warning("AIリスク判定に届きません: %s", self.comms_error)
             return None
         decision = data.get("decision") if isinstance(data, dict) else None
@@ -320,6 +347,7 @@ class RiskGate:
             log.warning("AIゲート: サイトの応答に判定が入っていません")
             return None
         self.comms, self.comms_error = "ok", ""
+        self._error_wait = 0.0
         return decision
 
     # ── 1回ぶんの評価 ──
@@ -383,7 +411,9 @@ class RiskGate:
             self.summary = str(decision.get("summary", ""))
             self._record(decision, features)
             ttl = int(decision.get("ttl_sec", 180) or 180)
-            await self._write_gate(int(snapshot["server_epoch"]) + ttl)
+            self._until_epoch = int(snapshot["server_epoch"]) + ttl
+            if await self._write_gate(self._until_epoch):
+                self._written = (self.mode, self.buy.blocked, self.sell.blocked, self._until_epoch)
             log.info(
                 "AIゲート判定 seq=%s 買い=%s 売り=%s (%s)",
                 self.applied_seq,
@@ -436,12 +466,20 @@ class RiskGate:
         self._decide_mode()
         if self.mode <= MODE_OFF:
             # 切っているときは、EA が期限切れで止まらないよう指令も 0（=判定なし）にしておく
+            self._until_epoch = 0
             wrote = await self._write_gate(0)
+            if wrote:
+                self._written = (self.mode, self.buy.blocked, self.sell.blocked, 0)
             self._trace(f"切のまま（{self.mode_reason}）指令の書き込み={'成功' if wrote else '失敗'}")
             return
+        # 画面での切り替えを、判定を待たずに EA へ伝える
+        await self._sync_gate()
         if not should_watch():
             self._trace("サイトから停止中なので評価しない")
             return  # サイトから停止中は新規注文が無いので、費用をかけない
+        if self._waiting_after_error():
+            self._trace(f"AI側の失敗のあとなので待機中（あと{self._error_wait:.0f}秒まで）")
+            return
         now = time.time()
         bar_time = await self.mt.last_closed_m1(self.symbol)
         new_bar = bool(bar_time and bar_time != self.last_bar_time)
@@ -465,6 +503,15 @@ class RiskGate:
                 self.last_bar_time = bar_time
             reason = "新しい足" if new_bar else ("判定が無い／期限切れ" if stale else "重要水準に接近")
             await self.evaluate(reason=reason)
+
+    def _back_off(self, why: str) -> None:
+        """失敗が続くほど、次に試すまでの間隔を広げる（30秒→最大5分）。"""
+        self._error_wait = min(300.0, self._error_wait * 2 if self._error_wait else 30.0)
+        self._error_at = time.time()
+        log.info("AIリスク判定は %.0f 秒あけて試します（%s）", self._error_wait, why)
+
+    def _waiting_after_error(self) -> bool:
+        return self._error_wait > 0 and (time.time() - self._error_at) < self._error_wait
 
     def _expired(self) -> bool:
         """いま手元にある判定が切れているか（まだ一度も無い場合も切れている扱い）。"""
@@ -510,6 +557,7 @@ class RiskGate:
             "comms": self.comms,
             "comms_error": self.comms_error,
             "data_error": self.data_error,
+            "retry_in_sec": round(max(0.0, self._error_wait - (time.time() - self._error_at)), 0) if self._waiting_after_error() else 0,
             "model": (self.last_decision or {}).get("model"),
             "prompt_version": (self.last_decision or {}).get("prompt_version"),
             "metrics": {

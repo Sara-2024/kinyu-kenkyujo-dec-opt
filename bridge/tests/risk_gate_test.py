@@ -257,6 +257,40 @@ async def main() -> None:
     check("同時に呼ばれても1回だけ問い合わせる", len(calls) == 1, f"calls={len(calls)}")
 
 
+    # 15) 画面でモードを切り替えたら、判定を待たずに指令ファイルへ出る
+    sw = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
+    sw.account_mode = "demo"
+    sw.set_mode("on")
+    sw._decide_mode()
+    await sw._sync_gate()
+    check("反映にすると指令ファイルが 2 になる", sw.mt.gate.get(GV_MODE) == MODE_ON, str(sw.mt.gate))
+    sw.set_mode("shadow")
+    sw._decide_mode()
+    await sw._sync_gate()
+    check("記録のみに切り替えると 1 になる", sw.mt.gate.get(GV_MODE) == 1.0, str(sw.mt.gate))
+    before = dict(sw.mt.gate)
+    await sw._sync_gate()
+    check("変化が無ければ書き直さない", sw.mt.gate == before)
+
+    # 16) AI 側が上限・混雑のときは、間隔をあけて試す（無料枠を数分で使い切らない）
+    bo = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
+    bo.account_mode = "demo"
+    bo._decide_mode()
+    import urllib.error, io
+
+    def quota(payload):
+        raise urllib.error.HTTPError("u", 429, "Too Many Requests", None, io.BytesIO(b"quota"))
+
+    bo._post_blocking = quota  # type: ignore[method-assign]
+    await bo.evaluate(reason="test")
+    check("429 のあとは待機に入る", bo._waiting_after_error() and bo._error_wait == 30.0, f"wait={bo._error_wait}")
+    await bo.evaluate(reason="test")
+    check("失敗が続くと間隔が広がる", bo._error_wait == 60.0, f"wait={bo._error_wait}")
+    bo._post_blocking = lambda payload: decision("ALLOW", "ALLOW", 99)  # type: ignore[method-assign]
+    await bo.evaluate(reason="test")
+    check("成功したら間隔は元に戻る", bo._error_wait == 0.0 and not bo._waiting_after_error())
+
+
 asyncio.run(main())
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)
