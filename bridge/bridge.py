@@ -871,7 +871,10 @@ class MT5Controller:
         base = str(getattr(info, "currency_base", "") or "").upper()
         if profit and profit != "USD":
             return False
-        if base and base not in ("XAU", "GOLD"):
+        # 基準通貨は業者によって書き方が違う（XM の GOLD は base も USD）。
+        # XAUEUR / XAUJPY は利益通貨で弾けるので、base は利益通貨が
+        # 取れないときの保険としてだけ使う。
+        if not profit and base and base not in ("XAU", "GOLD", "USD"):
             return False
         # 通貨の情報を持たない業者もあるので、そのときは名前で判断する
         upper = name.upper()
