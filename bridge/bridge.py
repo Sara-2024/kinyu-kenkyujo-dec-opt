@@ -620,6 +620,7 @@ class MT5Controller:
         values = self._load_gate()
         values[name] = float(value)
         path = self._save_gate(values)
+        self._backup_settings_blocking({name: float(value)})
         log.info("指令ファイルに書き込み: %s=%s  (%s)", name, value, path)
         return True, values[name]
 
@@ -639,11 +640,58 @@ class MT5Controller:
         async with self._lock:
             return await self._call(self._set_gv_blocking, name, value)
 
+    # サイトから受けた設定（ロット・同時保有・1日の損失上限・稼働/停止）は、
+    # 指令ファイルとは別に控えておく。指令ファイルは MT5 の入れ直しや掃除で
+    # 消えることがあり、消えたままだと EA は上限なしで動いてしまう。
+    SETTING_KEYS = ("AI_LOT", "AI_MAX_POSITIONS", "AI_DAY_LOSS_LIMIT", "AI_TRADING_ALLOWED")
+
+    def _settings_backup_path(self) -> Path:
+        return _config_dir() / "gate_settings.json"
+
+    def _backup_settings_blocking(self, values: dict[str, float]) -> None:
+        keep = {k: float(v) for k, v in values.items() if k in self.SETTING_KEYS}
+        if not keep:
+            return
+        path = self._settings_backup_path()
+        try:
+            current = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        except (OSError, ValueError):
+            current = {}
+        current.update(keep)
+        try:
+            path.write_text(json.dumps(current, ensure_ascii=False), encoding="utf-8")
+        except OSError as exc:
+            log.debug("設定の控えを書けませんでした: %s", exc)
+
+    def _restore_settings_blocking(self) -> list[str]:
+        """指令ファイルから消えた設定を、控えから書き戻す。"""
+        path = self._settings_backup_path()
+        if not path.is_file():
+            return []
+        try:
+            saved = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        gate = self._load_gate()
+        missing = {k: float(v) for k, v in saved.items() if k in self.SETTING_KEYS and k not in gate}
+        if not missing:
+            return []
+        gate.update(missing)
+        self._save_gate(gate)
+        return sorted(missing)
+
+    async def restore_settings(self) -> list[str]:
+        if not self.ready:
+            return []
+        async with self._lock:
+            return await self._call(self._restore_settings_blocking)
+
     def _set_gvs_blocking(self, values: dict[str, float]) -> bool:
         """複数の値をまとめて指令ファイルへ。EA が中途半端な組み合わせを読まないようにする。"""
         current = self._load_gate()
         current.update({k: float(v) for k, v in values.items()})
         self._save_gate(current)
+        self._backup_settings_blocking(values)
         setter = getattr(mt5, "global_variable_set", None) if mt5 is not None else None
         if callable(setter):
             for key, value in values.items():
@@ -1831,6 +1879,13 @@ class Bridge:
             return
         # 起動直後は、MT5 側にある値をそのまま引き継ぐ。
         # 勝手に稼働中へ戻さないための要。記録が無いときだけ初期値を書く。
+        try:
+            restored = await self.mt.restore_settings()
+            if restored:
+                log.warning("指令ファイルから消えていた設定を書き戻しました: %s", "、".join(restored))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("設定の書き戻しに失敗しました: %s", exc)
+
         try:
             await self.mt.adopt_current_state()
         except Exception as exc:  # noqa: BLE001

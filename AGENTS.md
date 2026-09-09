@@ -113,6 +113,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   `python3 bridge/tests/risk_features_test.py` … 水準・突破・リテストの計算
   `python3 bridge/tests/risk_gate_test.py` … 停止と再開、通信断、古い応答、重複呼び出し
   `node --experimental-strip-types api/_lib/risk.test.mjs` … 根拠の検証と方向別の理由コード
+  `python3 bridge/tests/wiring_test.py` … Bridge の配線（未定義の名前・属性違いを捕まえる）
+  `python3 bridge/tests/symbol_test.py` … 金の銘柄選び（GOLD を採り、XAUEUR/XAUJPY を弾く）
+  `python3 bridge/tests/settings_restore_test.py` … 指令ファイルが消えたときの設定の書き戻し
 - **有効にする設定**: Vercel に `TRELAB_RISK_TOKEN`（と `GEMINI_API_KEY`）、
   手元に `bridge/risk_secret.py`（`risk_secret.py.example` をコピーして同じ文字列）。
   `tools\build-windows.bat` がこれを exe に同梱するので、**お客様は何も入力しない**。
