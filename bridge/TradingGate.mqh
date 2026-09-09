@@ -28,6 +28,15 @@ void SyncGateFileToGlobals()
      }
    g_gate_file_ok = true;
    g_gate_mtime   = (datetime)FileGetInteger(handle, FILE_MODIFY_DATE);
+
+   // AIの見張りの値は、毎回ここで無害な状態に戻してから読み直す。
+   // MT5 のグローバル変数は消えずに残るので、指令ファイルから行が消えても
+   // 古い「停止」が居座り、新規注文が二度と出なくなるため。
+   GlobalVariableSet("AI_GATE_MODE",  0.0);
+   GlobalVariableSet("AI_BUY_ALLOWED",  1.0);
+   GlobalVariableSet("AI_SELL_ALLOWED", 1.0);
+   GlobalVariableSet("AI_GATE_UNTIL", 0.0);
+
    while(!FileIsEnding(handle))
      {
       string line = FileReadString(handle);
