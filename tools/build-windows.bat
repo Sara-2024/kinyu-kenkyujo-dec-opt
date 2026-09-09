@@ -1,53 +1,53 @@
 @echo off
 REM ================================================================
-REM  ãŠå®¢æ§˜ã«é…ã‚‹æ¥ç¶šãƒ„ãƒ¼ãƒ«ï¼ˆAITrader.exe / è¡¨ç¤ºå AIãƒˆãƒ¬ãƒ¼ãƒ€ãƒ¼ï¼‰ã‚’ä½œã‚‹
+REM  ‚¨‹q—l‚É”z‚éÚ‘±ƒc[ƒ‹iAITrader.exe / •\¦–¼ AIƒgƒŒ[ƒ_[j‚ğì‚é
 REM
-REM  Windows ã§ä¸€åº¦ã ã‘å®Ÿè¡Œã™ã‚‹ã€‚ã§ãã‚ãŒã£ãŸ exe ã¯
-REM  Python ã‚‚ Node ã‚‚å…¥ã£ã¦ã„ãªã„PCã§å‹•ãã€é»’ã„ç”»é¢ã‚‚å‡ºãªã„ã€‚
-REM  åŒæ¢±ã™ã‚‹ã®ã¯ãƒ–ãƒªãƒƒã‚¸æœ¬ä½“ã¨ EA ã ã‘ï¼ˆvenv ã‚„ .env ã¯å…¥ã‚Œãªã„ã€‚
-REM  æ¥ç¶šå…ˆã¯ã‚¯ãƒ©ã‚¦ãƒ‰ã®ä¸­ç¶™ã«å›ºå®šã•ã‚Œã¦ã„ã‚‹ï¼‰ã€‚
+REM  Windows ‚Åˆê“x‚¾‚¯Às‚·‚éB‚Å‚«‚ ‚ª‚Á‚½ exe ‚Í
+REM  Python ‚à Node ‚à“ü‚Á‚Ä‚¢‚È‚¢PC‚Å“®‚«A•‚¢‰æ–Ê‚ào‚È‚¢B
+REM  “¯«‚·‚é‚Ì‚ÍƒuƒŠƒbƒW–{‘Ì‚Æ EA ‚¾‚¯ivenv ‚â .env ‚Í“ü‚ê‚È‚¢B
+REM  Ú‘±æ‚ÍƒNƒ‰ƒEƒh‚Ì’†Œp‚ÉŒÅ’è‚³‚ê‚Ä‚¢‚éjB
 REM
-REM    dist\AITrader.exe   â€¦ ã“ã‚Œã‚’ãŠå®¢æ§˜ã«ãŠæ¸¡ã—ã™ã‚‹
+REM    dist\AITrader.exe   c ‚±‚ê‚ğ‚¨‹q—l‚É‚¨“n‚µ‚·‚é
 REM ================================================================
 cd /d "%~dp0.."
 
 where py >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] Python ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã€‚https://www.python.org ã‹ã‚‰ 64bit ç‰ˆã‚’å…¥ã‚Œã¦ãã ã•ã„ã€‚
+  echo [ERROR] Python ‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñBhttps://www.python.org ‚©‚ç 64bit ”Å‚ğ“ü‚ê‚Ä‚­‚¾‚³‚¢B
   pause
   exit /b 1
 )
 
-echo [1/3] å¿…è¦ãªã‚‚ã®ã‚’å…¥ã‚Œã¦ã„ã¾ã™...
+echo [1/3] •K—v‚È‚à‚Ì‚ğ“ü‚ê‚Ä‚¢‚Ü‚·...
 py -3 -m pip install --upgrade pip >nul
 py -3 -m pip install pyinstaller MetaTrader5 websockets python-dotenv
 if errorlevel 1 (
-  echo [ERROR] pip install ã«å¤±æ•—ã—ã¾ã—ãŸã€‚
+  echo [ERROR] pip install ‚É¸”s‚µ‚Ü‚µ‚½B
   pause
   exit /b 1
 )
 
-REM AIãƒªã‚¹ã‚¯ç›£ç£ã®åˆè¨€è‘‰ã€‚bridge\risk_secret.py ãŒã‚ã‚Œã° exe ã«åŒæ¢±ã™ã‚‹
+REM AIƒŠƒXƒNŠÄ“Â‚Ì‡Œ¾—tBbridge\risk_secret.py ‚ª‚ ‚ê‚Î exe ‚É“¯«‚·‚é
 set RISKARG=
 if exist bridge\risk_secret.py (
   findstr /R /C:"TOKEN *= *\"\"" bridge\risk_secret.py >nul
   if not errorlevel 1 (
     echo.
-    echo [ERROR] bridge\risk_secret.py ã® TOKEN ãŒç©ºã®ã¾ã¾ã§ã™ã€‚
-    echo         ãƒ¡ãƒ¢å¸³ã§é–‹ã„ã¦ã€æœ€å¾Œã®è¡Œã‚’æ¬¡ã®ã‚ˆã†ã«æ›¸ãæ›ãˆã¦ä¿å­˜ã—ã¦ãã ã•ã„:
-    echo             TOKEN = "ï¼ˆã‚µã‚¤ãƒˆã¨åŒã˜åˆè¨€è‘‰ï¼‰"
+    echo [ERROR] bridge\risk_secret.py ‚Ì TOKEN ‚ª‹ó‚Ì‚Ü‚Ü‚Å‚·B
+    echo         ƒƒ‚’ ‚ÅŠJ‚¢‚ÄAÅŒã‚Ìs‚ğŸ‚Ì‚æ‚¤‚É‘‚«Š·‚¦‚Ä•Û‘¶‚µ‚Ä‚­‚¾‚³‚¢:
+    echo             TOKEN = "iƒTƒCƒg‚Æ“¯‚¶‡Œ¾—tj"
     echo.
     pause
     exit /b 1
   )
   set RISKARG=--add-data "bridge\risk_secret.py;bridge"
-  echo   AIãƒªã‚¹ã‚¯ç›£ç£ã®åˆè¨€è‘‰ã‚’åŒæ¢±ã—ã¾ã™
+  echo   AIƒŠƒXƒNŠÄ“Â‚Ì‡Œ¾—t‚ğ“¯«‚µ‚Ü‚·
 ) else (
-  echo   bridge\risk_secret.py ãŒç„¡ã„ã®ã§ã€AIã®è¦‹å¼µã‚Šã¯ã€Œåˆ‡ã€ã§å‡ºè·ã•ã‚Œã¾ã™
+  echo   bridge\risk_secret.py ‚ª–³‚¢‚Ì‚ÅAAI‚ÌŒ©’£‚è‚ÍuØv‚Åo‰×‚³‚ê‚Ü‚·
 )
 
 echo.
-echo [2/3] exe ã‚’ä½œã£ã¦ã„ã¾ã™ï¼ˆæ•°åˆ†ã‹ã‹ã‚Šã¾ã™ï¼‰...
+echo [2/3] exe ‚ğì‚Á‚Ä‚¢‚Ü‚·i”•ª‚©‚©‚è‚Ü‚·j...
 py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --onefile --noconsole ^
   --name AITrader ^
@@ -63,36 +63,36 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --hidden-import dotenv ^
   connect.py
 if errorlevel 1 (
-  echo [ERROR] ãƒ“ãƒ«ãƒ‰ã«å¤±æ•—ã—ã¾ã—ãŸã€‚
+  echo [ERROR] ƒrƒ‹ƒh‚É¸”s‚µ‚Ü‚µ‚½B
   pause
   exit /b 1
 )
 
 echo.
-echo [3/3] ç¢ºèª...
+echo [3/3] Šm”F...
 if not exist dist\AITrader.exe (
-  echo [ERROR] dist\AITrader.exe ãŒã§ãã¦ã„ã¾ã›ã‚“ã€‚
+  echo [ERROR] dist\AITrader.exe ‚ª‚Å‚«‚Ä‚¢‚Ü‚¹‚ñB
   pause
   exit /b 1
 )
 
-REM ã‚µã‚¤ãƒˆãŒé…ã‚‹å ´æ‰€ã¸ãã®ã¾ã¾ç½®ãï¼ˆã‚ã¨ã¯ commit ã¨ push ã ã‘ï¼‰
+REM ƒTƒCƒg‚ª”z‚éêŠ‚Ö‚»‚Ì‚Ü‚Ü’u‚­i‚ ‚Æ‚Í commit ‚Æ push ‚¾‚¯j
 if not exist public\download mkdir public\download
 copy /Y dist\AITrader.exe public\download\AITrader.exe >nul
 if errorlevel 1 (
-  echo [ERROR] public\download\AITrader.exe ã«ç½®ã‘ã¾ã›ã‚“ã§ã—ãŸã€‚
+  echo [ERROR] public\download\AITrader.exe ‚É’u‚¯‚Ü‚¹‚ñ‚Å‚µ‚½B
   pause
   exit /b 1
 )
 
 echo.
 echo ================================================================
-echo   ã§ãã¾ã—ãŸ: public\download\AITrader.exe
-echo   è¡¨ç¤ºå: AIãƒˆãƒ¬ãƒ¼ãƒ€ãƒ¼
+echo   ‚Å‚«‚Ü‚µ‚½: public\download\AITrader.exe
+echo   •\¦–¼: AIƒgƒŒ[ƒ_[
 echo.
-echo   ã‚ã¨ã¯ã€ã“ã®ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ commit ã—ã¦ push ã™ã‚Œã°ã€ã‚µã‚¤ãƒˆã‹ã‚‰é…ã‚‰ã‚Œã¾ã™ã€‚
+echo   ‚ ‚Æ‚ÍA‚±‚Ìƒtƒ@ƒCƒ‹‚ğ commit ‚µ‚Ä push ‚·‚ê‚ÎAƒTƒCƒg‚©‚ç”z‚ç‚ê‚Ü‚·B
 echo     git add public/download/AITrader.exe
-echo     git commit -m "exe ã‚’ä½œã‚Šç›´ã™"
+echo     git commit -m "exe ‚ğì‚è’¼‚·"
 echo     git push
 echo ================================================================
 echo.

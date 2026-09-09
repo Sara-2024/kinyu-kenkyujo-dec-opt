@@ -1,72 +1,71 @@
 @echo off
 REM ================================================================
-REM  作り直した AITrader.exe を GitHub に上げて、サイトから配る
+REM  ��蒼���� AITrader.exe �� GitHub �ɏグ�āA�T�C�g����z��
 REM
-REM    先に tools\build-windows.bat を実行しておくこと。
-REM    （public\download\AITrader.exe まで置き換わる）
+REM    ��� tools\build-windows.bat �����s���Ă������ƁB
+REM    �ipublic\download\AITrader.exe �܂Œu�������j
 REM
-REM    このファイルをダブルクリックするだけ。黒い画面は出るが、
-REM    終わったら閉じてよい。
+REM    ���̃t�@�C�����_�u���N���b�N���邾���B������ʂ͏o�邪�A
+REM    �I���������Ă悢�B
 REM ================================================================
-chcp 65001 >nul
 cd /d "%~dp0.."
 
 echo.
 echo ================================================================
-echo   接続ツール（AITrader.exe）をサイトに配ります
+echo   �ڑ��c�[���iAITrader.exe�j���T�C�g�ɔz��܂�
 echo ================================================================
 echo.
 
 where git >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] git が見つかりません。https://git-scm.com/download/win から入れてください。
+  echo [ERROR] git ��������܂���Bhttps://git-scm.com/download/win �������Ă��������B
   pause
   exit /b 1
 )
 
 if not exist public\download\AITrader.exe (
-  echo [ERROR] public\download\AITrader.exe がありません。
-  echo         先に tools\build-windows.bat を実行してください。
+  echo [ERROR] public\download\AITrader.exe ������܂���B
+  echo         ��� tools\build-windows.bat �����s���Ă��������B
   pause
   exit /b 1
 )
 
-echo [1/4] 新しい exe かどうか確認しています...
+echo [1/4] �V���� exe ���ǂ����m�F���Ă��܂�...
 git add public/download/AITrader.exe
 git diff --cached --quiet -- public/download/AITrader.exe
 if not errorlevel 1 (
   echo.
-  echo   いまの exe は、すでに GitHub に上がっているものと同じでした。
-  echo   作り直していない可能性があります。tools\build-windows.bat を先に実行してください。
+  echo   ���܂� exe �́A���ł� GitHub �ɏオ���Ă�����̂Ɠ����ł����B
+  echo   ��蒼���Ă��Ȃ��\��������܂��Btools\build-windows.bat ���Ɏ��s���Ă��������B
   echo.
   pause
   exit /b 0
 )
 
-echo [2/4] 記録しています...
-git commit -m "接続ツールの exe を作り直す" >nul
+echo [2/4] �L�^���Ă��܂�...
+git commit -m "�ڑ��c�[���� exe ����蒼��" >nul
 if errorlevel 1 (
-  echo [ERROR] コミットできませんでした。
+  echo [ERROR] �R�~�b�g�ł��܂���ł����B
   pause
   exit /b 1
 )
 
-echo [3/4] GitHub へ送っています...
+echo [3/4] GitHub �֑����Ă��܂�...
 git push
 if errorlevel 1 (
   echo.
-  echo [ERROR] push できませんでした。
-  echo         ユーザー名とパスワードを聞かれた場合は、ブラウザで GitHub にログインし直してください。
+  echo [ERROR] push �ł��܂���ł����B
+  echo         ���[�U�[���ƃp�X���[�h�𕷂��ꂽ�ꍇ�́A�u���E�U�� GitHub �Ƀ��O�C���������Ă��������B
   echo.
   pause
   exit /b 1
 )
 
-echo [4/4] 完了。
+echo [4/4] �����B
 echo.
 echo ================================================================
-echo   送りました。1〜2分でサイトから新しい接続ツールが配られます。
-echo   確認: https://kinyu-kenkyujo-dec-opt.vercel.app/download/AITrader.exe
+echo   ����܂����B1�`2���ŃT�C�g����V�����ڑ��c�[�����z���܂��B
+echo   �m�F: https://kinyu-kenkyujo-dec-opt.vercel.app/download/AITrader.exe
 echo ================================================================
 echo.
 pause

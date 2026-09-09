@@ -1,24 +1,23 @@
 @echo off
-chcp 65001 >nul
-title AIトレーダー ｜ 連携を解除する
+title AI�g���[�_�[ �b �A�g����������
 cd /d "%~dp0.."
 
 echo.
 echo  ============================================================
-echo    このパソコンの連携をすべて解除します
+echo    ���̃p�\�R���̘A�g�����ׂĉ������܂�
 echo  ============================================================
 echo.
-echo    ・裏で動いている接続を止めます
-echo    ・PC起動時の自動接続を消します
-echo    ・サイトのボタンからの起動（trelab://）を消します
+echo    �E���œ����Ă���ڑ����~�߂܂�
+echo    �EPC�N�����̎����ڑ��������܂�
+echo    �E�T�C�g�̃{�^������̋N���itrelab://�j�������܂�
 echo.
-echo    MT5 と、配置ずみのシステム(EA)はそのまま残ります。
+echo    MT5 �ƁA�z�u���݂̃V�X�e��(EA)�͂��̂܂܎c��܂��B
 echo.
 set "YN=n"
-set /p YN=   解除してよければ y を入れて Enter:
+set /p YN=   �������Ă悯��� y ������ Enter:
 if /i not "%YN%"=="y" (
   echo.
-  echo   やめました。
+  echo   ��߂܂����B
   echo.
   pause
   exit /b 0
@@ -26,7 +25,7 @@ if /i not "%YN%"=="y" (
 echo.
 
 if not exist bridge\venv\Scripts\python.exe (
-  echo   [!] まだ準備ができていません。
+  echo   [!] �܂��������ł��Ă��܂���B
   echo.
   pause
   exit /b 1
@@ -35,6 +34,6 @@ if not exist bridge\venv\Scripts\python.exe (
 bridge\venv\Scripts\python.exe connect.py --uninstall --console
 
 echo.
-echo    解除しました。もう一度使うときは「はじめる.bat」から。
+echo    �������܂����B������x�g���Ƃ��́u�͂��߂�.bat�v����B
 echo.
 pause

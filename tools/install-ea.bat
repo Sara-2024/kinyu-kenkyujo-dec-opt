@@ -4,12 +4,12 @@ cd /d "%~dp0.."
 echo.
 echo ========================================================
 echo   Install EA into logged-in MT5
-echo   (no relay / bridge â€” files only)
+echo   (no relay / bridge - files only)
 echo ========================================================
 echo.
 
 if not exist bridge\venv\Scripts\python.exe (
-  echo ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆç›´ä¸‹ã®ã€Œã¯ã˜ã‚ã‚‹.batã€ã‚’å…ˆã«ä¸€åº¦å®Ÿè¡Œã—ã¦ãã ã•ã„ã€‚
+  echo ƒvƒƒWƒFƒNƒg’¼‰º‚Ìu‚Í‚¶‚ß‚é.batv‚ğæ‚Éˆê“xÀs‚µ‚Ä‚­‚¾‚³‚¢B
   pause
   exit /b 1
 )

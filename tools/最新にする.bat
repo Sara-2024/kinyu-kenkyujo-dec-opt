@@ -1,22 +1,21 @@
 @echo off
 REM ================================================================
-REM  サイト側で直したものを、このPCに取り込む（git pull）
+REM  �T�C�g���Œ��������̂��A����PC�Ɏ�荞�ށigit pull�j
 REM
-REM    ダブルクリックするだけ。黒い画面は出るが、終わったら閉じてよい。
-REM    exe を作り直す前に、これを実行しておく。
+REM    �_�u���N���b�N���邾���B������ʂ͏o�邪�A�I���������Ă悢�B
+REM    exe ����蒼���O�ɁA��������s���Ă����B
 REM ================================================================
-chcp 65001 >nul
 cd /d "%~dp0.."
 
 echo.
 echo ================================================================
-echo   最新のものを取り込みます
+echo   �ŐV�̂��̂���荞�݂܂�
 echo ================================================================
 echo.
 
 where git >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] git が見つかりません。https://git-scm.com/download/win から入れてください。
+  echo [ERROR] git ��������܂���Bhttps://git-scm.com/download/win �������Ă��������B
   pause
   exit /b 1
 )
@@ -24,8 +23,8 @@ if errorlevel 1 (
 git pull
 if errorlevel 1 (
   echo.
-  echo [ERROR] 取り込めませんでした。
-  echo         この画面をそのまま送ってください。
+  echo [ERROR] ��荞�߂܂���ł����B
+  echo         ���̉�ʂ����̂܂ܑ����Ă��������B
   echo.
   pause
   exit /b 1
@@ -33,10 +32,10 @@ if errorlevel 1 (
 
 echo.
 echo ================================================================
-echo   取り込みました。
-echo   このあと exe を作り直すときは:
+echo   ��荞�݂܂����B
+echo   ���̂��� exe ����蒼���Ƃ���:
 echo     1. tools\build-windows.bat
-echo     2. tools\exeを配る.bat
+echo     2. tools\exe��z��.bat
 echo ================================================================
 echo.
 pause
