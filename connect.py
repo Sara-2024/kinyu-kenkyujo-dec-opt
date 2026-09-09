@@ -967,6 +967,11 @@ def bridge_env(session: dict | None) -> dict[str, str]:
         # ビルドのときに埋め込んだ合言葉（bridge/risk_secret.py）。お客様は何も入力しない
         env["TRELAB_RISK_TOKEN"] = embedded_risk_token()
     env["LOG_FILE"] = str(CONFIG_DIR / "bridge.log")
+    # exe が自分自身をもう一度起こすときは、展開先の目印を持ち越さない。
+    # 持ち越すと、子は「もう展開済み」と思ってこちらの一時フォルダを見に行き、
+    # そこは親の終了と同時に消えるので MetaTrader5 の DLL を読めずに落ちる。
+    for key in ("_MEIPASS2", "_PYI_APPLICATION_HOME_DIR", "_PYI_ARCHIVE_FILE", "_PYI_PARENT_PROCESS_LEVEL"):
+        env.pop(key, None)
     if session:
         exe = resolve_terminal_exe(session)
         if exe is not None:
@@ -996,7 +1001,11 @@ def start_bridge(session: dict | None = None) -> None:
     else:
         cmd = [pythonw(), str(BRIDGE_DIR / "bridge.py")]
     log(f"ブリッジを裏側で起動します（接続先 {relay_url()}）")
-    spawn_hidden(cmd, cwd=str(BRIDGE_DIR), env=bridge_env(session))
+    # 作業フォルダは、この exe が消えても残る場所にする。BRIDGE_DIR は exe の
+    # 一時展開先（_MEIxxxx）で、こちらが終了すると消える。そこを作業フォルダに
+    # したまま起こすと、裏のブリッジが道連れで落ちる。
+    workdir = CONFIG_DIR if FROZEN else BRIDGE_DIR
+    spawn_hidden(cmd, cwd=str(workdir), env=bridge_env(session))
 
 
 # ────────────────────────────────────────────────

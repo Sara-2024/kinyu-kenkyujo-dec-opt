@@ -340,6 +340,20 @@ def _env_str(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
 
+def _config_dir() -> Path:
+    """設定の置き場。intent.json と同じ %LOCALAPPDATA%\\AITrader。
+
+    AIリスク監督が「反映 / 記録のみ / 切」の選択を覚えておくのに使う。
+    """
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP") or "."
+    folder = Path(base) / "AITrader"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return Path(os.environ.get("TEMP", "."))
+    return folder
+
+
 def _env_int(key: str, default: int) -> int:
     try:
         return int(os.environ.get(key, "").strip() or default)
@@ -1797,7 +1811,7 @@ class Bridge:
         if self.risk is not None:
             # サイトから停止中は評価しない（新規注文が無いので費用をかけない）
             tasks.append(
-                asyncio.create_task(self.risk.run(self.stop, lambda: self.mt.last_value != 0.0), name="risk")
+                asyncio.create_task(self.risk.run(self.stop, lambda: self.mt.desired_value != 0.0), name="risk")
             )
         try:
             await self.ws_loop()
