@@ -28,6 +28,7 @@ import {
   type UserStep,
 } from '../data/setupFlow'
 import { LiveReportView, type LiveReport } from './LiveReport'
+import { SetupFigure } from './SetupFigures'
 import { CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, DEFAULT_ROOM, DEFAULT_ROOM_FRESH_MS, DEFAULT_ROOM_POLL_MS, downloadConnector, launchConnector, probeRoom } from '../data/connector'
 import { formatReviewAnswer, reviewTrades, type TradeHistory } from '../data/tradeReview'
 import { PixelPerson } from './PixelPerson'
@@ -1354,6 +1355,7 @@ function InstallSteps({ active, steps = INSTALL_STEPS }: { active: number; steps
             <span>
               <span className="text-[15px] font-bold text-white">{u.title}</span>
               <span className="ml-2 text-[13px] text-slate-400">{u.detail}</span>
+              {u.figure && now && <SetupFigure kind={u.figure} />}
             </span>
           </li>
         )

@@ -4,6 +4,8 @@ export interface UserStep {
   no: number
   title: string
   detail: string
+  /** 押す場所を示す絵（未署名のプログラムなので Windows が確認を出す） */
+  figure?: 'browserWarning' | 'smartScreen'
 }
 
 /**
@@ -18,11 +20,13 @@ export function installSteps(kind: 'exe' | 'zip'): UserStep[] {
         title: 'ブラウザの警告が出たら「保存」',
         detail:
           '「一般的にダウンロードされていません」と出たら、ダウンロード欄のファイルにある「…」→「保存」（Edge は「保持」→「詳細表示」→「それでも保持」）を押してください',
+        figure: 'browserWarning',
       },
       {
         no: 2,
         title: 'ダウンロードしたファイルを開く',
         detail: 'AITrader.exe をダブルクリック。「WindowsによってPCが保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません',
+        figure: 'smartScreen',
       },
       { no: 3, title: 'MT5はログインしたままに', detail: 'いつも通り口座に入っていれば、そのままで大丈夫です' },
       { no: 4, title: 'あとは待つだけ', detail: 'ツールが起動すると、この画面が自動で先へ進みます' },
