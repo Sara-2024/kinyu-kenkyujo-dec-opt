@@ -1135,7 +1135,7 @@ export function DialogueWindow({
               style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607', boxShadow: '0 0 18px rgba(250,204,21,0.3)' }}
             >
               ⬇ {SETUP.downloadButton}
-              <span className="font-mono text-[12px] font-bold opacity-70">{CONNECTOR_DOWNLOAD.filename}</span>
+              <span className="font-mono text-[12px] font-bold opacity-70">{CONNECTOR_DOWNLOAD.saveAs}</span>
             </button>
             <p className="font-mono mt-2 text-center text-[12px] text-slate-500">{SETUP.downloadNote}</p>
 

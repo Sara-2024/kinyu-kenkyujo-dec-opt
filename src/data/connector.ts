@@ -76,15 +76,22 @@ export type ConnectorKind = 'exe' | 'zip'
 
 export interface ConnectorDownload {
   url: string
+  /** サーバー上の置き場所から決まる名前（ビルドの都合） */
   filename: string
+  /** お客様のPCに保存されるときの名前。ここが画面にも出る */
+  saveAs: string
   kind: ConnectorKind
 }
+
+/** お客様が受け取るファイルの名前。中身は同じで、名前だけ分かりやすくする */
+const SAVE_AS = 'AITraderset 接続ツール.exe'
 
 export const CONNECTOR_DOWNLOAD: ConnectorDownload = (() => {
   const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/AITrader.exe'
   const filename = url.split('?')[0].split('/').pop() || 'AITrader.zip'
   const kind: ConnectorKind = /\.exe$/i.test(filename) ? 'exe' : 'zip'
-  return { url, filename, kind }
+  // ZIP を配るときは中身が違うので、名前もそのまま使う
+  return { url, filename, saveAs: kind === 'exe' ? SAVE_AS : filename, kind }
 })()
 
 /** ブラウザに保存ダイアログを出す（普通のダウンロード） */
@@ -92,7 +99,7 @@ export function downloadConnector(): void {
   if (typeof document === 'undefined') return
   const a = document.createElement('a')
   a.href = CONNECTOR_DOWNLOAD.url
-  a.download = CONNECTOR_DOWNLOAD.filename
+  a.download = CONNECTOR_DOWNLOAD.saveAs
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
