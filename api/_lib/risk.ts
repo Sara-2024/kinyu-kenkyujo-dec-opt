@@ -16,9 +16,14 @@ export const PROMPT_VERSION = '2026-09-09.1'
 const DEFAULT_MODEL = 'gemini-3.5-flash'
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
-/** DeepSeek は OpenAI 互換の口。RISK_PROVIDER=deepseek で切り替える */
+/**
+ * DeepSeek は OpenAI 互換の口。RISK_PROVIDER=deepseek で切り替える。
+ * 既定は `deepseek-flash`。以前ここに書いていた `deepseek-chat` は
+ * DeepSeek の料金表・モデル一覧から消えているので、既定にはしない
+ * （どうしても使うときは DEEPSEEK_RISK_MODEL で明示する）。
+ */
 const DEEPSEEK_BASE = 'https://api.deepseek.com/v1'
-const DEEPSEEK_DEFAULT_MODEL = 'deepseek-chat'
+const DEEPSEEK_DEFAULT_MODEL = 'deepseek-flash'
 
 /** 判定の有効期限（秒）。切れたらブリッジ側で新規注文を止める */
 const TTL_SEC = 180
@@ -305,12 +310,14 @@ function asAssessment(value: unknown): Assessment {
 
 /** AI に見せる本文。会社が変わっても同じものを見せる（判定を比べられるように） */
 function buildUserPrompt(body: RiskRequest): string {
+  // JSON は詰めて書く（整形すると改行とインデントのぶんだけ入力トークンが増える。
+  // 1回の判定では小さくても、100人ぶんを毎日続けると効いてくる）。
   return [
     '【戦略プロフィール（EAの実際の設定）】',
-    JSON.stringify(body.strategy_profile, null, 1),
+    JSON.stringify(body.strategy_profile),
     '',
     '【市場データ（ブリッジが MT5 から計算した数値）】',
-    JSON.stringify(body.features, null, 1),
+    JSON.stringify(body.features),
     '',
     `【銘柄】${body.symbol}  【サーバー時刻】${body.server_time}`,
   ].join('\n')

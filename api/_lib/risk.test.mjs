@@ -1,6 +1,6 @@
 // /api/risk の検証まわりを、偽の Gemini を立てて確かめる。
 import { createServer } from 'node:http'
-import { handleRisk, checkEvidence, applyGuards } from './risk.ts'
+import { handleRisk, checkEvidence, applyGuards, riskEnvFrom } from './risk.ts'
 
 let reply = {}
 const fake = createServer((req, res) => {
@@ -195,7 +195,7 @@ const dsEnv = {
   provider: 'deepseek',
   deepseekKey: 'ds-key',
   deepseekBase: `http://127.0.0.1:${dsFake.address().port}/v1`,
-  deepseekModel: 'deepseek-chat',
+  deepseekModel: 'deepseek-flash',
   bridgeToken: 'secret',
 }
 
@@ -211,7 +211,22 @@ dsReply = {
 }
 r = await handleRisk(req, dsEnv, 'secret')
 check('DeepSeek で判定が返る', r.status === 200 && r.body.decision.buy === 'BLOCK', JSON.stringify(r.body).slice(0, 120))
-check('DeepSeek のモデル名が記録される', r.body?.decision?.model === 'deepseek-chat', r.body?.decision?.model)
+check('DeepSeek のモデル名が記録される', r.body?.decision?.model === 'deepseek-flash', r.body?.decision?.model)
+check(
+  'DeepSeek の既定モデルは deepseek-flash（deepseek-chat は料金表から消えている）',
+  riskEnvFrom({ RISK_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'ds' }).deepseekModel === 'deepseek-flash',
+  riskEnvFrom({ RISK_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'ds' }).deepseekModel,
+)
+check(
+  'DEEPSEEK_RISK_MODEL があればそちらが勝つ',
+  riskEnvFrom({ RISK_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'ds', DEEPSEEK_RISK_MODEL: 'deepseek-v4-pro' })
+    .deepseekModel === 'deepseek-v4-pro',
+)
+check(
+  '市場データは詰めた JSON で送る（入力トークンを増やさない）',
+  (dsSeen?.body?.messages?.[1]?.content ?? '').includes(JSON.stringify(features)),
+  (dsSeen?.body?.messages?.[1]?.content ?? '').slice(0, 80),
+)
 check('OpenAI 互換の口を叩く', dsSeen?.path === '/v1/chat/completions', dsSeen?.path)
 check('Bearer で鍵を送る', dsSeen?.auth === 'Bearer ds-key', dsSeen?.auth)
 check('JSON モードを指定する', dsSeen?.body?.response_format?.type === 'json_object')
