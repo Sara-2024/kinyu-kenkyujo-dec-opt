@@ -20,7 +20,8 @@ TESTS=(
   "ブリッジの配線|python3 bridge/tests/wiring_test.py"
   "金の銘柄選び|python3 bridge/tests/symbol_test.py"
   "指令ファイルが消えたときの書き戻し|python3 bridge/tests/settings_restore_test.py"
-  "中継の部屋分け（通し試験）|node server/tests/relay_test.mjs"
+  "接続ツールが受け取る部屋の検査|python3 bridge/tests/connector_room_test.py"
+  "中継の部屋分け・会員の確認（通し試験）|node server/tests/relay_test.mjs"
   "判定の突き合わせ道具（通し試験）|node --experimental-strip-types tools/tests/compare_risk_models_test.mjs"
 )
 
