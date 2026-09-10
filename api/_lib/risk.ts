@@ -229,7 +229,9 @@ export interface RiskEnv {
 
 export function riskEnvFrom(source: Record<string, string | undefined>): RiskEnv {
   return {
-    geminiKey: source.GEMINI_API_KEY,
+    // 見張り専用のキー。研究員のチャットと分けておくと、商談中の会話で
+    // 見張りの枠を食い潰さない。未設定なら今までどおり共通のキーを使う。
+    geminiKey: (source.GEMINI_RISK_API_KEY || '').trim() || source.GEMINI_API_KEY,
     geminiBase: source.GEMINI_BASE_URL,
     model: (source.GEMINI_RISK_MODEL || '').trim() || DEFAULT_MODEL,
     bridgeToken: (source.TRELAB_RISK_TOKEN || '').trim(),
