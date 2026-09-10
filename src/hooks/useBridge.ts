@@ -112,9 +112,23 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'ai_gate',
 ]
 
+/**
+ * `status.value` は「自動売買が動いているか」だけを入れる枠。
+ *
+ * ブリッジは set_variable の応答でも、書き込んだ変数の読み返しを `value` で返す
+ * （`bridge.py` の `_ack(..., value=readback, name=name)`）。ロットを 0.11 に変えた応答を
+ * そのまま取り込むと、停止中でも `value = 0.11` になって画面が「稼働中」に化ける。
+ * 変数名が付いている応答（＝set_variable）は、その `value` を状態に混ぜない。
+ */
+function isVariableAck(extra: Record<string, unknown>): boolean {
+  return extra.command === 'set_variable' || typeof extra.variable === 'string' || typeof extra.name === 'string'
+}
+
 function definedFields(extra: Partial<BridgeStatus> & Record<string, unknown>): Partial<BridgeStatus> {
   const out: Partial<BridgeStatus> = {}
+  const skipValue = isVariableAck(extra)
   for (const key of STATUS_KEYS) {
+    if (key === 'value' && skipValue) continue
     if (extra[key] !== undefined) {
       ;(out as Record<string, unknown>)[key] = extra[key]
     }
@@ -250,7 +264,8 @@ export function useBridge(roomId?: string | null) {
           }
           if (ack.ok) {
             setStatus((s) => mergeStatus(s, ack))
-          } else if (typeof ack.value === 'number') {
+          } else if (typeof ack.value === 'number' && !isVariableAck(ack as unknown as Record<string, unknown>)) {
+            // 失敗しても、売買フラグの読み返しだけは「MT5 のいまの値」として受け取る
             setStatus((s) => (s ? { ...s, value: ack.value } : s))
           }
         }

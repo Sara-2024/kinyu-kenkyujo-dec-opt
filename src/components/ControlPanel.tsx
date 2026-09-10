@@ -3,7 +3,7 @@
 //
 // 設定の変更は「MT5のグローバル変数を書き換える」だけなので、
 // EAを載せ直す必要も、MT5を触っていただく必要もない。
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AiGatePanel } from './AiGatePanel'
 import { BridgeStatusBar } from './BridgeStatusBar'
 import type { Connection } from '../data/connection'
@@ -28,6 +28,28 @@ export function ControlPanel({
   const [sending, setSending] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
+  const [switching, setSwitching] = useState(false)
+  /** お客様がこの画面で触った項目。ここだけは MT5 の値で上書きしない */
+  const touched = useRef<Set<string>>(new Set())
+
+  // MT5 のいまの値（ブリッジの gate → conn.settings）に画面を合わせる。
+  // 合わせないと、別の端末で変えた値やブリッジが復元した値を知らないまま
+  // 古い保存値で「変更を反映」でき、MT5 の設定を勝手に巻き戻してしまう。
+  useEffect(() => {
+    setDraft((d) => {
+      const next = { ...d }
+      let changed = false
+      for (const s of EA_SETTINGS) {
+        const live = conn.settings[s.key]
+        if (live === undefined || touched.current.has(s.key)) continue
+        if (next[s.key] !== live) {
+          next[s.key] = live
+          changed = true
+        }
+      }
+      return changed ? next : d
+    })
+  }, [conn.settings])
 
   const dirty = EA_SETTINGS.some((s) => draft[s.key] !== conn.settings[s.key])
 
@@ -35,6 +57,7 @@ export function ControlPanel({
     const setting = EA_SETTINGS.find((s) => s.key === key)
     if (!setting) return
     setSavedAt(null)
+    touched.current.add(key)
     setDraft((d) => {
       const raw = (d[key] ?? setting.defaultValue) + dir * setting.step
       const clamped = Math.min(setting.max, Math.max(setting.min, raw))
@@ -58,15 +81,22 @@ export function ControlPanel({
     }
 
     const changed = EA_SETTINGS.filter((s) => draft[s.key] !== conn.settings[s.key])
+    // 1件ずつ MT5 に書く。途中で失敗しても、そこまでに書けたぶんは必ず確定させる。
+    // 確定しないと「MT5 は新しい値／画面は古い値」のまま食い違いに気づけない。
+    const applied: Record<string, number> = {}
     for (const setting of changed) {
       const ack = await bridge.send('set_variable', { name: setting.gv, value: draft[setting.key] })
       if (!ack.ok) {
+        onChange({ ...conn, settings: { ...conn.settings, ...applied } })
+        for (const key of Object.keys(applied)) touched.current.delete(key)
         setSending(false)
         setFailed(ack.error ?? `E007: ${setting.label}の反映に失敗しました`)
         return
       }
+      applied[setting.key] = draft[setting.key]
     }
-    onChange({ ...conn, settings: draft })
+    onChange({ ...conn, settings: { ...conn.settings, ...applied } })
+    touched.current.clear()
     setSending(false)
     setSavedAt(Date.now())
   }
@@ -119,7 +149,9 @@ export function ControlPanel({
         </div>
         <button
           type="button"
+          disabled={switching}
           onClick={async () => {
+            if (switching) return
             const next = !running
             if (!bridge.live) {
               if (onReconnect) {
@@ -129,16 +161,21 @@ export function ControlPanel({
               setFailed(bridge.error ? formatBridgeError(bridge.error) : 'E008: MT5 未接続')
               return
             }
-            const ack = await bridge.send(next ? 'start_trading' : 'stop_trading', {
-              reason: next ? '' : '画面から停止',
-            })
-            if (!ack.ok) {
-              setFailed(ack.error ?? 'E007: 切り替えに失敗しました')
-              return
+            setSwitching(true)
+            try {
+              const ack = await bridge.send(next ? 'start_trading' : 'stop_trading', {
+                reason: next ? '' : '画面から停止',
+              })
+              if (!ack.ok) {
+                setFailed(ack.error ?? 'E007: 切り替えに失敗しました')
+                return
+              }
+              setFailed(null)
+              const confirmed = typeof ack.value === 'number' ? Number(ack.value) !== 0 : next
+              onChange({ ...conn, running: confirmed })
+            } finally {
+              setSwitching(false)
             }
-            setFailed(null)
-            const confirmed = typeof ack.value === 'number' ? Number(ack.value) !== 0 : next
-            onChange({ ...conn, running: confirmed })
           }}
           className="ml-auto whitespace-nowrap rounded-[5px] border px-6 py-3 text-[15px] font-bold transition hover:brightness-110 active:translate-y-px"
           style={

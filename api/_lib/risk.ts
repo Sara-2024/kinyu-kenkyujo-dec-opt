@@ -154,6 +154,20 @@ const CONFIG_VARIANTS = [
   { name: 'json', config: { responseMimeType: 'application/json' } },
 ] as const
 let workingVariant = 0
+/** 落ちた書き方を覚えておく期限。過ぎたら先頭（いちばん安い書き方）から試し直す */
+let variantUntil = 0
+const VARIANT_KEEP_MS = 10 * 60_000
+
+/**
+ * いま試しはじめる書き方。
+ * 一度 400 が出ると弱い書き方に落ちるが、そのまま戻らないと
+ * `thinkingBudget: 0`（思考トークンを使わない指定）や responseSchema が
+ * 恒久的に外れて、費用も判定の安定も落ちる。時間が経ったら先頭に戻す。
+ */
+function currentVariant(): number {
+  if (workingVariant !== 0 && Date.now() > variantUntil) workingVariant = 0
+  return workingVariant
+}
 
 /**
  * responseSchema を受け付けない相手（DeepSeek など）に、同じ形を言葉で伝えるための説明。
@@ -176,14 +190,33 @@ const JSON_SHAPE_NOTE = `
 const BUY_CODES: ReasonCode[] = ['NEAR_RESISTANCE', 'OVEREXTENDED_UP', 'BREAKOUT_UNCONFIRMED', 'STRATEGY_CONFLICT']
 const SELL_CODES: ReasonCode[] = ['NEAR_SUPPORT', 'OVEREXTENDED_DOWN', 'BREAKOUT_UNCONFIRMED', 'STRATEGY_CONFLICT']
 
+/**
+ * 数値として読めるものだけを数値にする。
+ *
+ * 以前は文字列から数字以外を取り除いていたが、それだと項目名まで数値に化けて
+ * 別物どうしが同じ値になっていた（`swing_h1_high` も `swing_h1_low` も 1、
+ * `window_high` も `window_low` も 0、`H1` も `M1` も 1）。
+ * 結果、AI は「支持の名前は window_low です」という入力に対して
+ * 「window_high でした」と言い張れた。名前は名前として比べる。
+ */
 function num(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string') {
-    const n = Number(value.replace(/[^0-9eE+.\-]/g, ''))
-    return Number.isFinite(n) ? n : null
-  }
-  return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value !== 'string') return null
+  const t = value.trim()
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(t)) return null
+  const n = Number(t)
+  return Number.isFinite(n) ? n : null
 }
+
+/**
+ * その方向の停止に使える項目かどうか。
+ * 「買いを止める」なら上側（抵抗）と、方向を問わない伸び・かい離の項目だけを根拠にできる。
+ * 下側（支持）の数字しか出せていない買い停止は、根拠が方向と噛み合っていない。
+ */
+const BUY_EVIDENCE_RE =
+  /^(nearest_resistance|dist_to_resistance|resistance_|window_high|prev_(day|week)_high|move_|ema_dev_|ema200_|ema_h1_slope|pullback_from_high|htf_align|atr_|adx_|alternation_|price_)/
+const SELL_EVIDENCE_RE =
+  /^(nearest_support|dist_to_support|support_|window_low|prev_(day|week)_low|move_|ema_dev_|ema200_|ema_h1_slope|pullback_from_low|htf_align|atr_|adx_|alternation_|price_)/
 
 /** 入力に無い項目名や、入力と違う値を根拠にした evidence は捨てる */
 export function checkEvidence(
@@ -199,18 +232,34 @@ export function checkEvidence(
       continue
     }
     const actual = features[field]
+    // 計算できなかった項目（null）は根拠にできない。
+    // ここを通していたので、AI は空の項目に好きな数字を書けば必ず停止を通せた。
+    if (actual === null || actual === undefined || actual === '') {
+      dropped.push(`${field}: 入力の値が空（根拠に使えない）`)
+      continue
+    }
     const wanted = num(item?.value)
     const actualNum = num(actual)
-    if (actualNum != null && wanted != null) {
-      // 表示のまるめ差は許す（相対 0.5%、または絶対 0.01）
-      const tol = Math.max(Math.abs(actualNum) * 0.005, 0.01)
+    if (actualNum != null) {
+      if (wanted == null) {
+        dropped.push(`${field}: 数値の項目に数値以外を書いている（入力 ${actual} / 主張 ${item.value}）`)
+        continue
+      }
+      // 許すのは表示のまるめ差だけ。features は小数3桁に丸めて送っているので、
+      // これ以上ゆるめる理由が無い（以前の相対0.5%は、金 3,520 ドルなら $17 ＝ ATR 15個ぶん）。
+      const tol = Math.max(Math.abs(actualNum) * 1e-5, 5e-4)
       if (Math.abs(actualNum - wanted) > tol) {
         dropped.push(`${field}: 値が入力と違う（入力 ${actual} / 主張 ${item.value}）`)
         continue
       }
-    } else if (actual != null && String(actual).trim() !== String(item?.value ?? '').trim()) {
-      dropped.push(`${field}: 値が入力と違う（入力 ${actual} / 主張 ${item.value}）`)
-      continue
+    } else {
+      // 文字列の項目。注記付き（"window_low（直近の安値）"）は許すが、別の名前は許さない
+      const said = String(item?.value ?? '').trim()
+      const real = String(actual).trim()
+      if (said !== real && !said.startsWith(real)) {
+        dropped.push(`${field}: 値が入力と違う（入力 ${actual} / 主張 ${item.value}）`)
+        continue
+      }
     }
     kept.push({ field, value: actual as number | string, why: String(item?.why ?? '').slice(0, 200) })
   }
@@ -228,14 +277,19 @@ export function applyGuards(
   for (const c of raw.buyCodes) if (!BUY_CODES.includes(c)) dropped.push(`買いの理由コード ${c} は買いに使えない`)
   for (const c of raw.sellCodes) if (!SELL_CODES.includes(c)) dropped.push(`売りの理由コード ${c} は売りに使えない`)
 
+  // 「その方向の根拠」を実際に数える。件数だけ見ていたので、買いを止めるのに
+  // 下側の数字しか出していない（＝方向と噛み合わない）停止が通っていた。
+  const buyEvidence = evidence.filter((e) => BUY_EVIDENCE_RE.test(String(e?.field ?? '')))
+  const sellEvidence = evidence.filter((e) => SELL_EVIDENCE_RE.test(String(e?.field ?? '')))
+
   let buy = raw.buy
   let sell = raw.sell
-  if (buy === 'BLOCK' && (buyCodes.length === 0 || evidence.length === 0)) {
-    dropped.push('買い停止：根拠か理由コードが無いので採用しない')
+  if (buy === 'BLOCK' && (buyCodes.length === 0 || buyEvidence.length === 0)) {
+    dropped.push('買い停止：買いの根拠か理由コードが無いので採用しない')
     buy = 'ALLOW'
   }
-  if (sell === 'BLOCK' && (sellCodes.length === 0 || evidence.length === 0)) {
-    dropped.push('売り停止：根拠か理由コードが無いので採用しない')
+  if (sell === 'BLOCK' && (sellCodes.length === 0 || sellEvidence.length === 0)) {
+    dropped.push('売り停止：売りの根拠か理由コードが無いので採用しない')
     sell = 'ALLOW'
   }
   return { buy, sell, buyCodes: buy === 'BLOCK' ? buyCodes : [], sellCodes: sell === 'BLOCK' ? sellCodes : [], dropped }
@@ -421,10 +475,10 @@ async function askGemini(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
   const user = buildUserPrompt(body)
 
   let lastError = ''
-  for (let i = workingVariant; i < CONFIG_VARIANTS.length; i++) {
+  for (let i = currentVariant(); i < CONFIG_VARIANTS.length; i++) {
     const variant = CONFIG_VARIANTS[i]
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    const timer = setTimeout(() => controller.abort(), env.timeoutMs ?? TIMEOUT_MS)
     let res: Response
     try {
       res = await fetch(url, {
@@ -448,6 +502,7 @@ async function askGemini(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
     }
     if (i !== workingVariant) {
       workingVariant = i
+      variantUntil = Date.now() + VARIANT_KEEP_MS
       console.log(`[risk] gemini config -> ${variant.name}`)
     }
     const data = (await res.json()) as {
@@ -486,14 +541,44 @@ function tooMany(key: string): boolean {
   return list.length > RATE_LIMIT
 }
 
+/** features に入れてよい値。数値・短い文字列・null だけ（AI に長文を流し込ませない） */
+const MAX_FEATURES = 80
+const MAX_PROFILE = 60
+const MAX_FEATURE_TEXT = 40
+
+function badFeatures(features: Record<string, unknown>, min: number, max: number, label: string): string | null {
+  const keys = Object.keys(features)
+  if (keys.length < min) return label
+  if (keys.length > max) return `${label}: 項目が多すぎます`
+  for (const key of keys) {
+    if (!/^[A-Za-z0-9_]{1,40}$/.test(key)) return `${label}: 項目名 ${key.slice(0, 20)}`
+    const v = features[key]
+    if (v === null || typeof v === 'number' || typeof v === 'boolean') continue
+    if (typeof v === 'string' && v.length <= MAX_FEATURE_TEXT) continue
+    return `${label}: ${key} の値`
+  }
+  return null
+}
+
 function badRequest(body: RiskRequest | null): string | null {
   if (!body || typeof body !== 'object') return 'body'
-  if (!body.symbol || typeof body.symbol !== 'string') return 'symbol'
+  if (!body.symbol || typeof body.symbol !== 'string' || !/^[A-Za-z0-9._#-]{1,20}$/.test(body.symbol)) return 'symbol'
   if (!Number.isFinite(Number(body.seq))) return 'seq'
   if (!body.features || typeof body.features !== 'object') return 'features'
-  if (Object.keys(body.features).length < 5) return 'features'
+  const badF = badFeatures(body.features as Record<string, unknown>, 5, MAX_FEATURES, 'features')
+  if (badF) return badF
   if (!body.strategy_profile || typeof body.strategy_profile !== 'object') return 'strategy_profile'
+  const badP = badFeatures(body.strategy_profile as Record<string, unknown>, 1, MAX_PROFILE, 'strategy_profile')
+  if (badP) return badP
   return null
+}
+
+/** 合言葉の照合は長さと中身で早抜けしない（推測の手がかりを与えない） */
+function sameSecret(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
 }
 
 export async function handleRisk(
@@ -508,8 +593,13 @@ export async function handleRisk(
   // 鍵が無い／合言葉を決めていないときは動かさない（AI の踏み台にしない）
   if (!activeKey(env)) return { status: 503, body: { error: 'NOT_CONFIGURED' } }
   if (!env.bridgeToken) return { status: 503, body: { error: 'NOT_CONFIGURED' } }
-  if (authToken !== env.bridgeToken) return { status: 401, body: { error: 'UNAUTHORIZED' } }
-  if (tooMany(String(req.bridge_id || 'unknown'))) return { status: 429, body: { error: 'BUSY' } }
+  if (!sameSecret(authToken, env.bridgeToken)) return { status: 401, body: { error: 'UNAUTHORIZED' } }
+  // 呼び出し回数の数え方。bridge_id は本文の値なので、呼ぶ側が毎回変えれば
+  // いくらでもすり抜けられる。数えるのは口座と銘柄（お客様1人が動かせない値）。
+  // それでもサーバーレスではインスタンスごとに別勘定になるので、これは
+  // 「事故で叩きすぎるのを止める」ためのもので、悪用対策にはならない
+  // （悪用対策は合言葉を配布物に焼き込まない設計に変えること。AGENTS.md 参照）。
+  if (tooMany(`${req.account ?? '?'}@${req.symbol}`)) return { status: 429, body: { error: 'BUSY' } }
 
   const model = activeModel(env)
   let raw: RawVerdict

@@ -41,6 +41,16 @@ MODE_OFF, MODE_SHADOW, MODE_ON = 0.0, 1.0, 2.0
 MODE_NAMES = {MODE_OFF: "off", MODE_SHADOW: "shadow", MODE_ON: "on"}
 MODE_VALUES = {"off": MODE_OFF, "shadow": MODE_SHADOW, "on": MODE_ON}
 
+# 通信が失敗したときに、次に試すまで待つ最大の秒数。
+# サイト側の判定の有効期限（api/_lib/risk.ts の TTL_SEC = 180）より必ず短くすること。
+# 長いと、待っているあいだに判定が切れて新規注文が全部止まる。
+MAX_BACKOFF_SEC = 90.0
+
+
+def _iso_after(seconds: float) -> str:
+    """いまから seconds 秒後の時刻（画面に出す期限の表示用）。"""
+    return datetime.fromtimestamp(time.time() + seconds).isoformat(timespec="seconds")
+
 
 def _env_str(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
@@ -289,8 +299,11 @@ class RiskGate:
                 else:
                     state.allow_streak = 0
             else:  # INSUFFICIENT_DATA — 迷いを新しい停止の理由にしない
-                self.insufficient += 1
-                state.allow_streak = 0
+                if side == "buy":  # 1回の判定で2回数えない
+                    self.insufficient += 1
+                # 迷いは再開の妨げにもしない。ここで streak を 0 に戻していたので、
+                # ALLOW と INSUFFICIENT_DATA が交互に返るだけで永久に再開できなかった
+                # （再開には ALLOW が連続 unblock_confirm 回必要なため）。据え置きにする。
 
     def _record(self, decision: dict[str, Any], payload: dict[str, Any]) -> None:
         """判定を履歴と jsonl に残す。
@@ -453,15 +466,24 @@ class RiskGate:
                 return
             # ここまでは MT5 の中だけの処理（無料）。AI に聞くのは必要なときだけ。
             possible, why = self._entry_possible(features, snapshot["profile"])
-            if not possible:
+            # いま止めている最中は、入る見込みが無くても必ず聞く。
+            # 聞かないと `allow_streak` が増えず、再開の条件（最新データで連続して
+            # 問題なし）に永久に到達しない。危険が去っても止まったままになる。
+            must_ask = self.buy.blocked or self.sell.blocked
+            if not possible and not must_ask:
                 self.skipped_calls += 1
                 self.last_skip_reason = why
                 # 入る見込みが無いあいだは、期限だけ延ばして EA を止めない
                 self._until_epoch = int(snapshot["server_epoch"]) + int(self.cfg.quiet_extend_sec)
+                # 期限を延ばしたことを画面側にも反映する。ここを更新しないと
+                # 「判定が期限切れ」の扱いのまま 10 秒ごとに MT5 の足を取り直し続ける
+                self.expires_at = _iso_after(self.cfg.quiet_extend_sec)
                 if await self._write_gate(self._until_epoch):
                     self._written = (self.mode, self.buy.blocked, self.sell.blocked, self._until_epoch)
                 self._trace(f"聞かずに見送り（{why}）")
                 return
+            if not possible and must_ask:
+                self._trace(f"停止中なので聞く（{why}）")
 
             payload = {
                 "bridge_id": self.bridge_id,
@@ -478,8 +500,16 @@ class RiskGate:
             decision = await self._ask(payload)
             if not decision:
                 return
-            if int(decision.get("seq", 0)) < self.applied_seq:
-                log.info("古い応答（seq=%s）は使いません", decision.get("seq"))
+            # 古い応答・別の足の応答は使わない。
+            # seq が無い応答を 0 とみなすと、起動直後（applied_seq=0）だけ通ってしまうので、
+            # 「seq が入っていない」こと自体を捨てる理由にする。
+            got_seq = decision.get("seq")
+            if got_seq is None or int(got_seq) < self.applied_seq:
+                log.info("古い応答（seq=%s）は使いません", got_seq)
+                return
+            got_bar = int(decision.get("bar_time", 0) or 0)
+            if got_bar and got_bar != int(snapshot["bar_time"] or 0):
+                log.info("別の足の応答（bar_time=%s）は使いません", got_bar)
                 return
             self.applied_seq = int(decision.get("seq", seq))
             self.evaluations += 1
@@ -584,8 +614,13 @@ class RiskGate:
             await self.evaluate(reason=reason)
 
     def _back_off(self, why: str) -> None:
-        """失敗が続くほど、次に試すまでの間隔を広げる（30秒→最大5分）。"""
-        self._error_wait = min(300.0, self._error_wait * 2 if self._error_wait else 30.0)
+        """失敗が続くほど、次に試すまでの間隔を広げる（30秒→最大90秒）。
+
+        上限はサイト側の判定の有効期限（TTL 180秒）より必ず短くする。
+        以前は最大5分だったので、通信障害が続くと待っているあいだに判定が期限切れになり、
+        反映モードでは買いも売りも全部止まる「窓」が必ずできていた。
+        """
+        self._error_wait = min(MAX_BACKOFF_SEC, self._error_wait * 2 if self._error_wait else 30.0)
         self._error_at = time.time()
         log.info("AIリスク判定は %.0f 秒あけて試します（%s）", self._error_wait, why)
 

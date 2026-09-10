@@ -170,8 +170,13 @@ function handleBridge(ws, roomId) {
     }
 
     if (payload.type === 'ack') {
-      room.status = { ...(room.status ?? {}), ...payload }
-      log(`ブリッジ ${roomId} 応答: ${payload.command} ok=${payload.ok} value=${payload.value}`)
+      // set_variable の応答の value は「書き込んだ変数の読み返し」で、
+      // 売買フラグ（status.value）ではない。混ぜると、あとから開いた画面が
+      // ロット値を稼働状態として受け取ってしまう（welcome に room.status を載せるため）。
+      const { value, ...rest } = payload
+      const isVariableAck = payload.command === 'set_variable' || typeof payload.name === 'string'
+      room.status = { ...(room.status ?? {}), ...(isVariableAck ? rest : payload) }
+      log(`ブリッジ ${roomId} 応答: ${payload.command} ok=${payload.ok} value=${value}`)
     }
     broadcastToRoom(roomId, { ...payload, bridgeId: roomId })
   })

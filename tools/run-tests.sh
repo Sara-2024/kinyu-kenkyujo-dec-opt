@@ -14,6 +14,7 @@ QUIET=0
 # 「表示名」「走らせるコマンド」の順に並べる
 TESTS=(
   "根拠の検証と方向別の理由コード（/api/risk）|node --experimental-strip-types api/_lib/risk.test.mjs"
+  "研究員の受け答えと会員確認（/api/chat）|node --experimental-strip-types api/_lib/chat.test.mjs"
   "水準・突破・リテストの計算|python3 bridge/tests/risk_features_test.py"
   "停止と再開・通信断・古い応答|python3 bridge/tests/risk_gate_test.py"
   "ブリッジの配線|python3 bridge/tests/wiring_test.py"

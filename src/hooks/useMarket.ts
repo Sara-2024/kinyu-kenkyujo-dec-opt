@@ -115,6 +115,26 @@ export function useMarket() {
     setShocked(true)
   }, [])
 
+  /**
+   * 研究員に渡す「本物の相場」。
+   *
+   * 画面の `candles` は、生きて見えるように直近の足を揺らしてある（急変動の演出もある）。
+   * それをそのまま研究員に渡すと、AI が実在しない高値・安値・現在値を事実として説明する。
+   * AGENTS.md の「数字は作らない」に反するので、AI と受け答えには取得したままの足を使う。
+   */
+  const marketForAi = useCallback(() => {
+    const base = baseRef.current
+    const realLast = base[base.length - 1]
+    const realPrev = chart?.prevClose ?? (base.length > 1 ? base[base.length - 2].c : realLast?.o)
+    return {
+      symbol,
+      candles: base,
+      interval: chart?.interval ?? '15m',
+      price: realLast?.c ?? chart?.price ?? 0,
+      prevClose: realPrev ?? realLast?.c ?? 0,
+    }
+  }, [symbol, chart])
+
   const candles = live
   const last = candles[candles.length - 1]
   const prevClose = chart?.prevClose ?? (candles.length > 1 ? candles[candles.length - 2].c : last?.o)
@@ -136,5 +156,6 @@ export function useMarket() {
     quoteMap,
     shocked,
     triggerShock,
+    marketForAi,
   }
 }

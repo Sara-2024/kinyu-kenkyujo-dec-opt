@@ -274,6 +274,72 @@ reply = { body: { buy_assessment: 'ALLOW', sell_assessment: 'ALLOW', buy_reason_
 r = await handleRisk(req, env, 'secret')
 check('指定が無ければ Gemini のまま', r.status === 200 && r.body?.decision?.model === 'gemini-3.5-flash', r.body?.decision?.model)
 
+
+console.log('\n── 根拠の検証（作り話で止めさせない）')
+// ── 根拠の検証（ここが緩いと、AI の作り話で新規注文が止まる／止まらなくなる）──
+// 実際に「全部でっちあげの evidence」が素通りしていたので、そのままの形を試験にする。
+{
+  const f = {
+    price_mid: 3503.0,
+    atr_m1: 1.133,
+    adx_h1: null, // 計算できなかった項目
+    nearest_support_name: 'window_low',
+    nearest_resistance: 3520.5,
+    window_tf: 'H1',
+    dist_to_resistance_atr: null,
+  }
+  const fake = checkEvidence(
+    [
+      { field: 'adx_h1', value: 42, why: '空の項目に数字を書く' },
+      { field: 'nearest_support_name', value: 'window_high', why: '別の名前を言い張る' },
+      { field: 'window_tf', value: 'M1', why: '別の足を言い張る' },
+      { field: 'nearest_resistance', value: 3537.0, why: '$16 ずらす' },
+      { field: 'dist_to_resistance_atr', value: 0.1, why: '空の項目に距離を書く' },
+    ],
+    f,
+  )
+  check('でっちあげの根拠は1件も採用しない', fake.kept.length === 0, JSON.stringify(fake.kept))
+  check('空の項目は根拠にできない', fake.dropped.some((d) => d.includes('adx_h1') && d.includes('空')), fake.dropped.join(' / '))
+  check(
+    '名前の項目を別の名前に言い換えられない',
+    fake.dropped.some((d) => d.includes('nearest_support_name')),
+    fake.dropped.join(' / '),
+  )
+  check(
+    '価格を $16 ずらした主張は通らない',
+    fake.dropped.some((d) => d.includes('nearest_resistance')),
+    fake.dropped.join(' / '),
+  )
+
+  // 正しい根拠は今までどおり通る（厳しくしすぎて正当な停止を捨てない）
+  const good = checkEvidence(
+    [
+      { field: 'nearest_resistance', value: '3520.5', why: '抵抗' },
+      { field: 'nearest_support_name', value: 'window_low（直近の安値）', why: '注記つき' },
+      { field: 'atr_m1', value: 1.133, why: 'ATR' },
+    ],
+    f,
+  )
+  check('入力と一致する根拠は採用する', good.kept.length === 3, JSON.stringify(good.dropped))
+
+  // 方向と噛み合わない根拠だけの停止は成立しない
+  const off = applyGuards(
+    { buy: 'BLOCK', sell: 'ALLOW', buyCodes: ['NEAR_RESISTANCE'], sellCodes: [] },
+    [{ field: 'nearest_support', value: 3400, why: '下の水準' }],
+  )
+  check('下の水準だけを根拠にした買い停止は通さない', off.buy === 'ALLOW', off.buy)
+  const on = applyGuards(
+    { buy: 'BLOCK', sell: 'ALLOW', buyCodes: ['NEAR_RESISTANCE'], sellCodes: [] },
+    [{ field: 'nearest_resistance', value: 3520.5, why: '上の水準' }],
+  )
+  check('上の水準を根拠にした買い停止は通す', on.buy === 'BLOCK', on.buy)
+  const sellOff = applyGuards(
+    { buy: 'ALLOW', sell: 'BLOCK', buyCodes: [], sellCodes: ['NEAR_SUPPORT'] },
+    [{ field: 'nearest_resistance', value: 3520.5, why: '上の水準' }],
+  )
+  check('上の水準だけを根拠にした売り停止は通さない', sellOff.sell === 'ALLOW', sellOff.sell)
+}
+
 dsFake.close()
 fake.close()
 console.log(`\n${pass} ok / ${fail} NG`)
