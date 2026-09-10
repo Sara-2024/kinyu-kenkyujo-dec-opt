@@ -1,0 +1,29 @@
+# push と PR のたびに、型と試験を通す。
+# MT5 も AI の鍵も要らないので、GitHub 上でそのまま走る。
+name: test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 依存を入れる
+        run: |
+          npm ci
+          npm ci --prefix server
+      - name: 型を確かめる
+        run: npm run typecheck
+      - name: 試験を走らせる
+        run: npm test
