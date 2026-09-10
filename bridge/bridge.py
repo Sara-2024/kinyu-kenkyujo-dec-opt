@@ -75,7 +75,7 @@ except ImportError:  # pragma: no cover - Windows以外では import できな�
 try:
     from mt5_terminal import EA_NAMES, find_logged_in_terminal, resolve_terminal_exe
 except ImportError:
-    EA_NAMES = ("OrbitGoldEA_v5",)
+    EA_NAMES = ("OrbitGoldEA_v6",)
     find_logged_in_terminal = None  # type: ignore[assignment,misc]
     resolve_terminal_exe = None  # type: ignore[assignment,misc]
 
@@ -858,7 +858,7 @@ class MT5Controller:
         "m1_tp_atr_mult": 4.5,
         "m1_min_atr_usd": 2.0,
         "m1_require_h1_align": True,
-        "m1_nanpin_enabled": True,
+        "m1_nanpin_enabled": False,
         "m1_nanpin_step_atr": 1.0,
         "m1_nanpin_max_adds": 3,
         "m1_nanpin_sl_room": 4,

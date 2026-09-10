@@ -96,7 +96,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 
 - **止めるのは新規注文だけ。** 決済・SL/TP・トレーリング・ロットには一切触らない。
   停止中も `ManageM1Basket()` の決済管理は動き続ける。ナンピンの追加も新規注文として
-  同じゲートを通す（`bridge/OrbitGoldEA_v5.mq5` の `OpenTrade` と ナンピン追加の2か所）。
+  同じゲートを通す（`bridge/OrbitGoldEA_v6.mq5` の `OpenTrade` と ナンピン追加の2か所）。
 - **買いと売りは別々に止める。** 高値が近いことを理由に売りを止めない。逆も同じ。
 - **原則は許可。** 「レンジっぽい」「自信がない」では止めない。止めるときは、
   入力に実在する数値と理由コード（`api/_lib/risk.ts` の `REASON_CODES`）が必ず要る。
@@ -154,8 +154,10 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/AITrader.zip`
   で差し替えられる。`connect.py` や `bridge/` を変えたら exe を作り直して置き直すこと。
   メールで送る導線は廃止した。
-- **MT5 に送る EA は `bridge/OrbitGoldEA_v5.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、
-  XAUUSD 専用）。名前は `bridge/mt5_terminal.py` の `EA_NAMES` が唯一の定義で、
+- **MT5 に送る EA は `bridge/OrbitGoldEA_v6.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、
+  XAUUSD 専用）。v6 はトレンド方向を UP/DOWN の二択にし、ナンピンを既定 OFF にしたもの。
+  前の版 `bridge/OrbitGoldEA_v5.mq5` は参照用に残してあるだけで、配りも読み込みもしない
+  （`EA_NAMES` に入っていない。お客様の MT5 にあれば `OLD_EA_NAMES` で片づける）。名前は `bridge/mt5_terminal.py` の `EA_NAMES` が唯一の定義で、
   connect.py の配置・bridge.py の有無報告・古い EA の片づけ（`OLD_EA_NAMES`）が全部そこを見る。
   EA を差し替えるときは、`TradingGate.mqh` を include して
   `IsTradingAllowedRaw()` / `GateNumber("AI_LOT")` などをエントリー前に見ることと、

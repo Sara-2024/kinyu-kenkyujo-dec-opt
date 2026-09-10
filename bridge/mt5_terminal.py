@@ -14,7 +14,7 @@ except ImportError as exc:  # DLL が読めない等もここに来る。理由�
     MT5_IMPORT_ERROR = str(exc)
 
 # お客様の MT5 に置くシステム。connect.py が配り、bridge.py が有無を報告する
-EA_NAMES = ("OrbitGoldEA_v5",)
+EA_NAMES = ("OrbitGoldEA_v6",)
 
 
 def terminal_dir_from_data_path(data_path: str | Path) -> Path | None:

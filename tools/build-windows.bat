@@ -56,7 +56,7 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --add-data "bridge\risk_gate.py;bridge" ^
   --add-data "bridge\risk_features.py;bridge" ^
   --paths bridge ^
-  --add-data "bridge\OrbitGoldEA_v5.mq5;bridge" ^
+  --add-data "bridge\OrbitGoldEA_v6.mq5;bridge" ^
   --add-data "bridge\TradingGate.mqh;bridge" ^
   --hidden-import bridge ^
   --hidden-import mt5_terminal ^
