@@ -288,7 +288,7 @@ type OverlayKind = 'chart' | 'reports' | 'notices'
 type Room = 'main' | 'system'
 
 export function Lab() {
-  const { member, logout } = useAuth()
+  const { member, token, logout } = useAuth()
   const { characters: CHARACTERS, t } = useSiteSettings()
   const tutorialKey = member ? `lab-tutorial-done:${member.id}` : 'lab-tutorial-done'
   const guideKey = member ? `lab-guide-done:${member.id}` : 'lab-guide-done'
@@ -296,7 +296,7 @@ export function Lab() {
   const [tutorial, setTutorial] = useState(() => !localStorage.getItem(tutorialKey))
   const market = useMarket()
   const { shocked, triggerShock } = market
-  const bridge = useBridge(member?.id)
+  const bridge = useBridge(member?.id, token)
   const [news, setNews] = useState<NewsItem | null>(null)
   const [dialogueId, setDialogueId] = useState<string | null>(null)
 

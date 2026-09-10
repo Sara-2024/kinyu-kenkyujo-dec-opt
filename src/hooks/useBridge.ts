@@ -71,10 +71,13 @@ export type BridgePhase = 'connecting' | 'live' | 'no_bridge' | 'error'
 /** 接続先。未設定ならローカルの中継サーバー */
 export const WS_URL = import.meta.env.VITE_RELAY_URL || 'ws://localhost:8080/app'
 
-function appUrl(roomId?: string | null): string {
+function appUrl(roomId?: string | null, session?: string | null): string {
   if (!roomId) return WS_URL
   const sep = WS_URL.includes('?') ? '&' : '?'
-  return `${WS_URL}${sep}room=${encodeURIComponent(roomId)}`
+  // 合言葉（ログインのセッション）も渡す。中継はこれで「その部屋の本人か」を確かめる。
+  // 中継に Supabase の設定が無いときは無視されるので、付けても害はない。
+  const session_ = session ? `&session=${encodeURIComponent(session)}` : ''
+  return `${WS_URL}${sep}room=${encodeURIComponent(roomId)}${session_}`
 }
 
 const STATUS_KEYS: (keyof BridgeStatus)[] = [
@@ -146,7 +149,7 @@ function mergeStatus(prev: BridgeStatus | null, extra: Partial<BridgeStatus> & {
   }
 }
 
-export function useBridge(roomId?: string | null) {
+export function useBridge(roomId?: string | null, session?: string | null) {
   const [phase, setPhase] = useState<BridgePhase>('connecting')
   const [error, setError] = useState<BridgeError | null>(null)
   const [status, setStatus] = useState<BridgeStatus | null>(null)
@@ -174,7 +177,7 @@ export function useBridge(roomId?: string | null) {
     let closed = false
     let retry: ReturnType<typeof setTimeout> | null = null
 
-    const target = appUrl(roomId)
+    const target = appUrl(roomId, session)
 
     const connect = () => {
       if (closed) return
@@ -291,7 +294,7 @@ export function useBridge(roomId?: string | null) {
       if (offlineTimer.current) clearTimeout(offlineTimer.current)
       wsRef.current?.close()
     }
-  }, [roomId])
+  }, [roomId, session])
 
   const send = useCallback(
     (command: string, extra: Record<string, unknown> = {}): Promise<Ack> =>
@@ -318,5 +321,5 @@ export function useBridge(roomId?: string | null) {
     [phase, roomId],
   )
 
-  return { live, phase, status, error, wsUrl: appUrl(roomId), send }
+  return { live, phase, status, error, wsUrl: appUrl(roomId, session), send }
 }

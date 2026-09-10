@@ -5,6 +5,7 @@
 // いちばん大事なのは「会員ごとの部屋が本当に分かれているか」。
 // ここが崩れると、他人の MT5 が動く・他人の口座が見える、という事故になる。
 import { spawn } from 'node:child_process'
+import { createServer } from 'node:http'
 import { WebSocket } from 'ws'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -219,6 +220,86 @@ const okWs = await open(`ws://127.0.0.1:${secured.port}/app?room=${A}&token=aiko
 check('合言葉があれば入れる', okWs.readyState === WebSocket.OPEN)
 okWs.close()
 secured.proc.kill()
+
+console.log('\n── 会員の確認（部屋の名前を知っていても、本人でなければ入れない）')
+
+// 偽の Supabase。auth_me だけ答える
+const sessions = {
+  'session-A': { id: A, status: 'active', can_trade: true },
+  'session-B': { id: B, status: 'active', can_trade: true },
+  'session-stopped': { id: A, status: 'active', can_trade: false },
+  'session-suspended': { id: A, status: 'suspended', can_trade: true },
+}
+const supabase = createServer((req, res) => {
+  let body = ''
+  req.on('data', (c) => (body += c))
+  req.on('end', () => {
+    const token = JSON.parse(body || '{}').p_token
+    res.setHeader('content-type', 'application/json')
+    const member = sessions[token]
+    if (!member) {
+      res.statusCode = 401
+      res.end(JSON.stringify({ message: 'SESSION_EXPIRED' }))
+      return
+    }
+    res.end(JSON.stringify({ member }))
+  })
+})
+await new Promise((r) => supabase.listen(0, r))
+
+const checked = await startRelayOnFreePort({
+  SUPABASE_URL: `http://127.0.0.1:${supabase.address().port}`,
+  SUPABASE_ANON_KEY: 'anon',
+})
+const capp = (room, session) => `ws://127.0.0.1:${checked.port}/app?room=${room}${session ? `&session=${session}` : ''}`
+
+let denied = ''
+try {
+  await open(capp(A))
+} catch (err) {
+  denied = String(err.message)
+}
+check('合言葉（セッション）が無ければ入れない', denied.includes('401'), denied)
+
+denied = ''
+try {
+  await open(capp(A, 'session-B'))
+} catch (err) {
+  denied = String(err.message)
+}
+check('★ 他人の部屋のIDを知っていても、本人でなければ入れない', denied.includes('403'), denied)
+
+denied = ''
+try {
+  await open(capp(A, 'session-suspended'))
+} catch (err) {
+  denied = String(err.message)
+}
+check('止められた会員（suspended）は入れない', denied.includes('401'), denied)
+
+const mine = track(await open(capp(A, 'session-A')))
+check('本人なら自分の部屋に入れる', mine.readyState === WebSocket.OPEN)
+await mine.next()
+
+// 売買を止めた会員は、稼働・設定変更を通さない（画面のボタンを消すだけでは足りない）
+const stopped = track(await open(capp(A, 'session-stopped')))
+await stopped.next()
+stopped.send_({ id: 'n1', command: 'set_variable', name: 'AI_LOT', value: 3 })
+const refusedAck = await stopped.nextWhere((m) => m.type === 'ack')
+check('売買を止めた会員のロット変更は通さない', refusedAck?.ok === false, JSON.stringify(refusedAck))
+stopped.send_({ id: 'n2', command: 'stop_trading' })
+const stopAck = await stopped.nextWhere((m) => m.type === 'ack')
+check('止める操作だけは通す（安全側なので）', stopAck?.error === 'ブリッジがつながっていません', JSON.stringify(stopAck))
+
+// 知らない指令はブリッジへ流さない
+mine.send_({ id: 'n3', command: 'shutdown_windows' })
+const unknownAck = await mine.nextWhere((m) => m.type === 'ack')
+check('知らない指令はブリッジへ流さない', unknownAck?.ok === false && unknownAck?.error === 'この操作はできません', JSON.stringify(unknownAck))
+
+mine.close()
+stopped.close()
+supabase.close()
+checked.proc.kill()
 
 console.log(`\n${pass} ok / ${fail} NG`)
 process.exit(fail ? 1 : 0)
