@@ -48,6 +48,7 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const [sent, setSent] = useState<AiGateMode | null>(null)
 
   const enforced = gate.mode === 'on'
   const left = remainSec(gate.expires_at)
@@ -60,7 +61,13 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
     setBusy(true)
     setFailed(null)
     const ack = await bridge.send('set_ai_gate', { mode })
-    if (!ack.ok) setFailed(ack.error ?? 'E007: 切り替えに失敗しました')
+    if (!ack.ok) {
+      setFailed(ack.error ?? 'E007: 切り替えに失敗しました')
+    } else {
+      // ブリッジには届いた。画面の表示は次の状態が届いたとき（最大5秒）に変わる
+      setFailed(null)
+      setSent(mode)
+    }
     setBusy(false)
   }
 
@@ -105,6 +112,7 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-slate-400">
         <span>{MODE_NOTE[gate.mode]}</span>
+        {gate.mode_reason && <span>いまの状態の理由: {gate.mode_reason}</span>}
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[12px] text-slate-500 tabular-nums">
@@ -138,6 +146,11 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
       {expired && (
         <p className="mt-2 text-[13px] font-bold" style={{ color: '#ffd23e' }}>
           ⚠ 判定が期限切れです。新規注文は止まりますが、保有中の決済とSL/TPの管理は続いています
+        </p>
+      )}
+      {sent && sent !== gate.mode && (
+        <p className="mt-2 text-[13px] text-slate-400">
+          「{MODE_LABEL[sent]}」に切り替えています…（MT5へ伝わるまで数秒）
         </p>
       )}
       {failed && (
