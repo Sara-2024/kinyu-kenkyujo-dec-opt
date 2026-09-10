@@ -10,7 +10,7 @@
 import { createHash } from 'node:crypto'
 
 /** システムプロンプトを変えたら上げる。判定の記録に残る */
-export const PROMPT_VERSION = '2026-09-09.1'
+export const PROMPT_VERSION = '2026-09-10.1'
 
 /** 既定のモデル。環境変数 GEMINI_RISK_MODEL で変更できる（黙って別のモデルに落とさない） */
 const DEFAULT_MODEL = 'gemini-3.5-flash'
@@ -111,10 +111,48 @@ const SYSTEM_PROMPT = `あなたは既存EAの新規エントリーを監督す�
 - 買いの停止に使える理由コード: NEAR_RESISTANCE, OVEREXTENDED_UP, BREAKOUT_UNCONFIRMED, STRATEGY_CONFLICT
 - 売りの停止に使える理由コード: NEAR_SUPPORT, OVEREXTENDED_DOWN, BREAKOUT_UNCONFIRMED, STRATEGY_CONFLICT
 - 高値が近いことを理由に売りを止めない。安値が近いことを理由に買いを止めない。
-- evidence の field には、入力の features に実在する項目名だけを書く。値は入力の値をそのまま写す。
-- window_high / window_low は取得できた履歴の中の最高値・最安値であり、史上最高値ではない。そう呼ばない。
 - 過去成績のデータは渡していない。「実績上苦手」と書かない。テスト用の仮説として書く。
-- summary は日本語で1〜2文。お客様に見せる短い説明。`
+- summary は日本語で1〜2文。お客様に見せる短い説明。
+
+【evidence の書き方】守られていない停止は、こちらで取り消します。
+- field は features に実在する項目名だけ。value は features の値をそのまま写す（丸めない・注記を付けない）。
+- 値が null の項目は根拠にしない。
+- 止める方向に対応する項目を必ず1つ以上入れる。
+  買いの停止 → nearest_resistance / dist_to_resistance* / resistance_* / window_high / prev_*_high / move_* / ema_dev_* のいずれか
+  売りの停止 → nearest_support / dist_to_support* / support_* / window_low / prev_*_low / move_* / ema_dev_* のいずれか
+- 2〜4件にとどめる。
+
+【数値の読み方】単位はすべて銘柄の値段と同じ（金なら USD）。ATR は Wilder、期間は戦略プロフィールの atr_period 本。
+- price_mid / price_bid / price_ask: 仲値・売値・買値。spread_usd / spread_atr_m1: スプレッド（幅と、atr_m1 の何個ぶんか）。
+- atr_m1 / atr_h1: M1 / H1 の ATR。
+- ema200_m1 / ema200_h1: 戦略プロフィールの ema_period 本の EMA の値（名前は 200 だが、期間は ema_period に従う）。
+- ema_dev_m1_atr / ema_dev_h1_atr: (価格 − その足の EMA) ÷ その足の ATR。＋は価格が EMA の上。
+  ema200_h1_slope_atr: H1 の EMA が直近20本で動いた幅 ÷ atr_h1。
+- move_m1_15bars / move_h1_6bars: 直近15本(M1) / 直近6本(H1) の値動き。
+  move_m1_15bars_atr は atr_m1 の、move_h1_6bars_atr は atr_h1 の、それぞれ何個ぶんか。
+- pullback_from_high_ratio / pullback_from_low_ratio: 直近30本(M1)の高安レンジの中で、高値／安値からどれだけ引き戻したか（0〜1）。
+  高値に張り付いていれば pullback_from_high_ratio は 0。2つの合計は必ず 1。
+- nearest_resistance / nearest_support: いまの値段の**上**と**下**で、いちばん近い水準。
+  nearest_resistance_name / nearest_support_name はその出どころ
+  （prev_day_high, prev_week_low, swing_h1_high, swing_h4_low, window_high, window_low など）。
+  上抜け済みの高値は「下側の水準」に移るので、nearest_support_name に *_high が出ることがある（誤りではない）。
+- dist_to_resistance / dist_to_support: そこまでの値幅。
+  dist_to_resistance_atr / dist_to_support_atr は atr_m1 の何個ぶんか。
+  dist_to_resistance_sl_m1 / dist_to_support_sl_m1（H1軸は dist_to_resistance_sl_h1 / dist_to_support_sl_h1）は、
+  予定している損切りの**幅**
+  （planned_sl_m1 / planned_sl_h1。価格ではなく幅）の何倍か。1 を下回るなら、損切り幅ぶんの値幅も残っていない。
+- resistance_break_state / support_break_state: 直近 window_bars 本の中で、その水準の外側で確定した終値があれば 1。
+  resistance_bars_since_break / support_bars_since_break は最後に外へ出てからの本数。
+  resistance_retest_seen / support_retest_seen は一度戻ったか、
+  resistance_retest_confirmed / support_retest_confirmed は戻ってから再び外へ出たか（＝成立した突破）。
+- htf_alignment: H1 と H4 の向きが揃えば +1（上）/ -1（下）、食い違えば 0。
+- adx_h1: H1 の ADX（0〜100）。alternation_h1_20: 直近20本(H1)で上下が入れ替わった回数（0〜19。多いほどレンジ）。
+  この2つだけを理由に止めない（補助として使う）。
+- window_high / window_low: 取得できた履歴（window_tf の足を window_bars 本、window_start から）の中の最高値・最安値。
+  史上最高値ではない。そう呼ばない。
+- last_closed_m1_time: 判定のもとにした確定 M1 足の時刻（ブローカーのサーバー時計）。
+- prev_day_high/low, prev_week_high/low: 前日・前週の高値と安値。
+- null は「計算できなかった」という意味。推測で埋めない。`
 
 const RESPONSE_SCHEMA = {
   type: 'OBJECT',
@@ -180,7 +218,7 @@ const JSON_SHAPE_NOTE = `
   "sell_assessment": "ALLOW" | "BLOCK" | "INSUFFICIENT_DATA",
   "buy_reason_codes":  [${REASON_CODES.map((c) => `"${c}"`).join(', ')}] のうち該当するものだけ,
   "sell_reason_codes": 同上,
-  "evidence": [{ "field": "入力の features に実在する項目名", "value": 入力の値 }],
+  "evidence": [{ "field": "入力の features に実在する項目名", "value": "入力の値をそのまま文字列で", "why": "理由" }],
   "summary": "日本語1〜2文"
 }`
 
