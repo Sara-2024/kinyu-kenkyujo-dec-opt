@@ -22,9 +22,31 @@ function jitterAmount(candles: Candle[]): number {
   return avgRange * 0.05
 }
 
+// 選んだ銘柄はこのPCに覚えておく。商談中に画面を開き直すたび
+// 選び直すのは煩わしいため。知らない銘柄が入っていたら既定に戻す。
+const SYMBOL_KEY = 'trelab.chart.symbol'
+
+function rememberedSymbol(): string {
+  try {
+    const saved = localStorage.getItem(SYMBOL_KEY)
+    if (saved && CHART_SYMBOLS.some((s) => s.symbol === saved)) return saved
+  } catch {
+    // プライベートウィンドウなどで読めないことがある。既定で動けばよい
+  }
+  return CHART_SYMBOLS[0].symbol
+}
+
 export function useMarket() {
   const [quotes, setQuotes] = useState<Quote[]>([])
-  const [symbol, setSymbol] = useState(CHART_SYMBOLS[0].symbol)
+  const [symbol, setSymbolState] = useState(rememberedSymbol)
+  const setSymbol = useCallback((next: string) => {
+    setSymbolState(next)
+    try {
+      localStorage.setItem(SYMBOL_KEY, next)
+    } catch {
+      // 覚えられなくても表示は続ける
+    }
+  }, [])
   const [chart, setChart] = useState<ChartData | null>(null)
   const [live, setLive] = useState<Candle[]>([])
   const [shocked, setShocked] = useState(false)

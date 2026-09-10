@@ -361,7 +361,7 @@ export function InfoCenter({
   events: EconomicEvent[] | null
   eventsFailed?: boolean
   unread?: number
-  onOpen: (what: 'reports' | 'notices') => void
+  onOpen: (what: 'reports' | 'notices' | 'calendar') => void
   style?: CSSProperties
 }) {
   const s = bridge.live ? bridge.status : null
@@ -420,7 +420,7 @@ export function InfoCenter({
         </div>
       </Card>
 
-      <Card title="CALENDAR ／ 経済指標" color={YELLOW}>
+      <Card title="CALENDAR ／ 経済指標" color={YELLOW} onClick={() => onOpen('calendar')}>
         {events == null && <p className={`${T.sm} text-slate-500`}>{eventsFailed ? '予定を取得できませんでした。しばらくすると再表示します。' : '予定を読み込んでいます…'}</p>}
         {events != null && nextEvents.length === 0 && <p className={`${T.sm} text-slate-500`}>この先の大きな予定はありません。次の週のぶんは週明けに更新されます。</p>}
         {nextEvents.map((e) => (
@@ -619,6 +619,62 @@ export function Overlay({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       </div>
+    </div>
+  )
+}
+
+/** 経済指標の詳細。カレンダーの札を押すと出る。数字は /api/calendar が返したものだけ */
+export function CalendarList({ events }: { events: EconomicEvent[] | null }) {
+  const list = events ? upcoming(events) : []
+  if (list.length === 0) {
+    return (
+      <p className="px-6 py-8 text-center text-[16px] font-bold text-slate-400">
+        {events == null ? '予定を読み込んでいます…' : 'この先の大きな予定はありません。次の週のぶんは週明けに更新されます。'}
+      </p>
+    )
+  }
+  return (
+    <div className="px-5 py-4">
+      {list.map((e) => (
+        <div
+          key={e.id}
+          className="border-b py-3 last:border-b-0"
+          style={{ borderColor: 'rgba(94,204,255,0.12)' }}
+        >
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className="font-mono shrink-0 text-[14px] text-slate-400">
+              {formatEventDate(e.at)} {formatEventTime(e.at)}
+            </span>
+            <span
+              className="font-mono shrink-0 rounded-[3px] border px-1.5 py-0.5 text-[11px] font-bold"
+              style={{
+                color: e.impact === 'high' ? RED : YELLOW,
+                borderColor: e.impact === 'high' ? 'rgba(255,132,132,0.5)' : 'rgba(255,210,62,0.5)',
+              }}
+            >
+              {e.impact === 'high' ? '重要' : '中'}
+            </span>
+            <span className="font-mono shrink-0 text-[12px] text-slate-500">
+              {e.countryJa || e.country}
+            </span>
+          </div>
+          <p className="mt-1 text-[16px] font-bold leading-snug text-slate-100">{e.titleJa || e.title}</p>
+          {e.titleJa && e.title !== e.titleJa && (
+            <p className="font-mono mt-0.5 text-[11px] text-slate-600">{e.title}</p>
+          )}
+          <div className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1">
+            <span className="text-[14px] text-slate-400">
+              予想 <span className="font-mono font-bold text-slate-200">{e.forecast || '—'}</span>
+            </span>
+            <span className="text-[14px] text-slate-400">
+              前回 <span className="font-mono font-bold text-slate-200">{e.previous || '—'}</span>
+            </span>
+          </div>
+        </div>
+      ))}
+      <p className="mt-3 text-[12px] leading-relaxed text-slate-600">
+        今週ぶんの予定です。翌週ぶんは週明けに反映されます。予想・前回は配信元の値をそのまま表示しています。
+      </p>
     </div>
   )
 }
