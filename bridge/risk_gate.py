@@ -163,6 +163,8 @@ class RiskGate:
         self.skipped_calls = 0
         self.last_skip_reason = ""
         self.errors = 0
+        # サイトが会社から受け取ったトークン数の申告（費用の実測用。無ければ None）
+        self._last_usage: dict[str, Any] | None = None
         self._busy = False
         self._last_trace: tuple[str, float] = ("", 0.0)
         # 最後に指令ファイルへ書いた内容。変わったときだけ書き直す
@@ -290,10 +292,25 @@ class RiskGate:
                 self.insufficient += 1
                 state.allow_streak = 0
 
-    def _record(self, decision: dict[str, Any], features: dict[str, Any]) -> None:
+    def _record(self, decision: dict[str, Any], payload: dict[str, Any]) -> None:
+        """判定を履歴と jsonl に残す。
+
+        jsonl には **同じ問い合わせをもう一度作れるだけの材料**（銘柄・戦略プロフィール・
+        サーバー時刻・features）を必ず入れる。あとから別のモデルに同じ場面を見せて
+        judgment を突き合わせる（`tools/compare-risk-models.mjs`）ために要る。
+        画面へ渡すのは `status()` が選んだ項目だけなので、ここが増えても通信量は変わらない。
+        """
+        features = payload.get("features") or {}
         item = {
             "at": datetime.now().isoformat(timespec="seconds"),
             "seq": decision.get("seq"),
+            # ── 問い合わせを作り直すための材料 ──
+            "symbol": payload.get("symbol"),
+            "account_mode": payload.get("account_mode"),
+            "server_time": payload.get("server_time"),
+            "strategy_profile": payload.get("strategy_profile"),
+            # ── 実費を数えるための材料（サイトが会社から受け取った申告値） ──
+            "usage": self._last_usage,
             "mode": MODE_NAMES.get(self.mode, "?"),
             # 実際に発注を止めたのか、記録だけなのかを必ず区別する
             "enforced": self.mode >= MODE_ON,
@@ -350,6 +367,8 @@ class RiskGate:
             self._back_off("届かない")
             log.warning("AIリスク判定に届きません: %s", self.comms_error)
             return None
+        usage = data.get("usage") if isinstance(data, dict) else None
+        self._last_usage = usage if isinstance(usage, dict) else None
         decision = data.get("decision") if isinstance(data, dict) else None
         if not isinstance(decision, dict):
             self.comms, self.comms_error = "error", "応答の形が違う"
@@ -469,7 +488,7 @@ class RiskGate:
             self.decided_at = decision.get("issued_at")
             self.expires_at = decision.get("expires_at")
             self.summary = str(decision.get("summary", ""))
-            self._record(decision, features)
+            self._record(decision, payload)
             ttl = int(decision.get("ttl_sec", 180) or 180)
             self._until_epoch = int(snapshot["server_epoch"]) + ttl
             if await self._write_gate(self._until_epoch):

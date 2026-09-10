@@ -289,6 +289,17 @@ function activeKey(env: RiskEnv): string | undefined {
   return env.provider === 'deepseek' ? env.deepseekKey : env.geminiKey
 }
 
+/**
+ * 実際に使ったトークン数。会社が申告してきた値をそのまま持つ（こちらで数えない）。
+ * 費用の見積もりを勘に頼らないために、判定と一緒に持ち帰ってブリッジ側に記録する。
+ */
+export interface TokenUsage {
+  input: number
+  output: number
+  /** キャッシュが効いた入力ぶん（会社が返してきたときだけ） */
+  cached?: number
+}
+
 interface RawVerdict {
   buy: Assessment
   sell: Assessment
@@ -296,6 +307,7 @@ interface RawVerdict {
   sellCodes: ReasonCode[]
   evidence: EvidenceItem[]
   summary: string
+  usage?: TokenUsage
 }
 
 function stripFence(text: string): string {
@@ -323,10 +335,27 @@ function buildUserPrompt(body: RiskRequest): string {
   ].join('\n')
 }
 
+/** 会社ごとに名前が違うトークン数を、こちらの呼び方に揃える。数字が無ければ付けない */
+function toUsage(raw: unknown, names: { input: string; output: string; cached?: string }): TokenUsage | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const src = raw as Record<string, unknown>
+  const num = (key?: string): number | undefined => {
+    if (!key) return undefined
+    const v = Number(src[key])
+    return Number.isFinite(v) ? v : undefined
+  }
+  const input = num(names.input)
+  const output = num(names.output)
+  if (input === undefined && output === undefined) return undefined
+  const cached = num(names.cached)
+  return { input: input ?? 0, output: output ?? 0, ...(cached !== undefined ? { cached } : {}) }
+}
+
 /** 返ってきた JSON を判定の形にする。ここでは形を整えるだけで、中身の検証は後段でやる */
-function toVerdict(parsed: Record<string, unknown>): RawVerdict {
+function toVerdict(parsed: Record<string, unknown>, usage?: TokenUsage): RawVerdict {
   const evidence = Array.isArray(parsed.evidence) ? (parsed.evidence as EvidenceItem[]) : []
   return {
+    ...(usage ? { usage } : {}),
     buy: asAssessment(parsed.buy_assessment),
     sell: asAssessment(parsed.sell_assessment),
     buyCodes: (Array.isArray(parsed.buy_reason_codes) ? parsed.buy_reason_codes : []).map((c) => String(c) as ReasonCode),
@@ -374,9 +403,16 @@ async function askDeepSeek(env: RiskEnv, body: RiskRequest): Promise<RawVerdict>
     clearTimeout(timer)
   }
   if (!res.ok) throw new Error(`deepseek ${res.status}: ${(await res.text()).slice(0, 200)}`)
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: unknown }
   const text = data.choices?.[0]?.message?.content ?? ''
-  return toVerdict(parseOrThrow('deepseek', text))
+  return toVerdict(
+    parseOrThrow('deepseek', text),
+    toUsage(data.usage, {
+      input: 'prompt_tokens',
+      output: 'completion_tokens',
+      cached: 'prompt_cache_hit_tokens',
+    }),
+  )
 }
 
 async function askGemini(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
@@ -414,9 +450,19 @@ async function askGemini(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
       workingVariant = i
       console.log(`[risk] gemini config -> ${variant.name}`)
     }
-    const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
+    const data = (await res.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[]
+      usageMetadata?: unknown
+    }
     const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('')
-    return toVerdict(parseOrThrow('gemini', text))
+    return toVerdict(
+      parseOrThrow('gemini', text),
+      toUsage(data.usageMetadata, {
+        input: 'promptTokenCount',
+        output: 'candidatesTokenCount',
+        cached: 'cachedContentTokenCount',
+      }),
+    )
   }
   throw new Error(lastError || 'gemini: no response')
 }
@@ -502,6 +548,9 @@ export async function handleRisk(
     body: {
       decision,
       request_hash: createHash('sha256').update(JSON.stringify(req.features)).digest('hex').slice(0, 16),
+      // 判定そのものではないので decision には入れない（EA も検証もここは見ない）。
+      // ブリッジが記録に残し、あとで実費を数えるために使う。
+      ...(raw.usage ? { usage: raw.usage } : {}),
     },
   }
 }
