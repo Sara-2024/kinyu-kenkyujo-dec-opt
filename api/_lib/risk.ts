@@ -22,6 +22,19 @@ const DEEPSEEK_DEFAULT_MODEL = 'deepseek-chat'
 
 /** 判定の有効期限（秒）。切れたらブリッジ側で新規注文を止める */
 const TTL_SEC = 180
+/**
+ * ブリッジが期限を指定してきたときに認める範囲。
+ * 期限が切れるとブリッジは10秒後に聞き直すので、ここが実質の問い合わせ間隔になる。
+ * 短いほどよく見張るが、そのぶん API を使う。上限は「30分見ていない」を超えさせないため。
+ */
+const TTL_MIN = 60
+const TTL_MAX = 1800
+
+function pickTtl(asked: unknown): number {
+  const n = Number(asked)
+  if (!Number.isFinite(n) || n <= 0) return TTL_SEC
+  return Math.min(TTL_MAX, Math.max(TTL_MIN, Math.round(n)))
+}
 /** Gemini の応答待ちの上限。ここで諦めても EA は前の判定を期限まで使う */
 const TIMEOUT_MS = 12_000
 /** ブリッジ1台あたりの呼び出し上限（1分） */
@@ -62,6 +75,11 @@ export interface RiskRequest {
   strategy_profile: Record<string, unknown>
   /** ブリッジが計算した数値。evidence はこの項目名しか使えない */
   features: Record<string, number | string | null>
+  /**
+   * 判定を何秒もたせたいか（任意）。長くすると聞く回数が減るぶん、
+   * 相場を見ていない時間も延びる。決めるのはここ（TTL_MIN〜TTL_MAX に丸める）。
+   */
+  ttl_sec?: number
 }
 
 export interface RiskDecision {
@@ -472,12 +490,13 @@ export async function handleRisk(
   const guarded = applyGuards({ buy: raw.buy, sell: raw.sell, buyCodes: raw.buyCodes, sellCodes: raw.sellCodes }, ev.kept)
 
   const now = new Date()
+  const ttl = pickTtl(req.ttl_sec)
   const decision: RiskDecision = {
     // 期限・口座・銘柄・連番・版は AI に作らせず、ここで付ける
     seq: Number(req.seq),
     issued_at: now.toISOString(),
-    expires_at: new Date(now.getTime() + TTL_SEC * 1000).toISOString(),
-    ttl_sec: TTL_SEC,
+    expires_at: new Date(now.getTime() + ttl * 1000).toISOString(),
+    ttl_sec: ttl,
     account: req.account,
     symbol: req.symbol,
     bar_time: Number(req.bar_time) || 0,
