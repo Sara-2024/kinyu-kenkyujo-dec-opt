@@ -16,6 +16,10 @@ export const PROMPT_VERSION = '2026-09-09.1'
 const DEFAULT_MODEL = 'gemini-3.5-flash'
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
+/** DeepSeek は OpenAI 互換の口。RISK_PROVIDER=deepseek で切り替える */
+const DEEPSEEK_BASE = 'https://api.deepseek.com/v1'
+const DEEPSEEK_DEFAULT_MODEL = 'deepseek-chat'
+
 /** 判定の有効期限（秒）。切れたらブリッジ側で新規注文を止める */
 const TTL_SEC = 180
 /** Gemini の応答待ちの上限。ここで諦めても EA は前の判定を期限まで使う */
@@ -146,6 +150,21 @@ const CONFIG_VARIANTS = [
 ] as const
 let workingVariant = 0
 
+/**
+ * responseSchema を受け付けない相手（DeepSeek など）に、同じ形を言葉で伝えるための説明。
+ * RESPONSE_SCHEMA と食い違わせないこと。返ってきた中身は結局この後の検証で確かめる。
+ */
+const JSON_SHAPE_NOTE = `
+【返す JSON の形】次のキーだけを持つ JSON オブジェクトを返してください。前置きも解説も付けません。
+{
+  "buy_assessment":  "ALLOW" | "BLOCK" | "INSUFFICIENT_DATA",
+  "sell_assessment": "ALLOW" | "BLOCK" | "INSUFFICIENT_DATA",
+  "buy_reason_codes":  [${REASON_CODES.map((c) => `"${c}"`).join(', ')}] のうち該当するものだけ,
+  "sell_reason_codes": 同上,
+  "evidence": [{ "field": "入力の features に実在する項目名", "value": 入力の値 }],
+  "summary": "日本語1〜2文"
+}`
+
 // ────────────────────────────────
 // 検証
 // ────────────────────────────────
@@ -220,22 +239,49 @@ export function applyGuards(
 // ────────────────────────────────
 // Gemini 呼び出し
 // ────────────────────────────────
+export type RiskProvider = 'gemini' | 'deepseek'
+
 export interface RiskEnv {
+  provider: RiskProvider
   geminiKey?: string
   geminiBase?: string
   model?: string
+  deepseekKey?: string
+  deepseekBase?: string
+  deepseekModel?: string
+  timeoutMs?: number
   bridgeToken?: string
 }
 
 export function riskEnvFrom(source: Record<string, string | undefined>): RiskEnv {
+  const deepseekKey = (source.DEEPSEEK_API_KEY || '').trim()
+  // RISK_PROVIDER の指定が最優先。無ければ DeepSeek の鍵がある側を使う。
+  // 黙って別の会社に落とさない（どちらで判定したかは decision.model に残る）。
+  const asked = (source.RISK_PROVIDER || '').trim().toLowerCase()
+  const provider: RiskProvider = asked === 'deepseek' || asked === 'gemini' ? asked : deepseekKey ? 'deepseek' : 'gemini'
+  const timeout = Number((source.RISK_TIMEOUT_MS || '').trim())
   return {
+    provider,
     // 見張り専用のキー。研究員のチャットと分けておくと、商談中の会話で
     // 見張りの枠を食い潰さない。未設定なら今までどおり共通のキーを使う。
     geminiKey: (source.GEMINI_RISK_API_KEY || '').trim() || source.GEMINI_API_KEY,
     geminiBase: source.GEMINI_BASE_URL,
     model: (source.GEMINI_RISK_MODEL || '').trim() || DEFAULT_MODEL,
+    deepseekKey: deepseekKey || undefined,
+    deepseekBase: (source.DEEPSEEK_BASE_URL || '').trim() || undefined,
+    deepseekModel: (source.DEEPSEEK_RISK_MODEL || '').trim() || DEEPSEEK_DEFAULT_MODEL,
+    timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : undefined,
     bridgeToken: (source.TRELAB_RISK_TOKEN || '').trim(),
   }
+}
+
+/** いま判定に使う会社と鍵とモデル。表示・記録・鍵チェックで同じものを見る */
+export function activeModel(env: RiskEnv): string {
+  return env.provider === 'deepseek' ? env.deepseekModel || DEEPSEEK_DEFAULT_MODEL : env.model || DEFAULT_MODEL
+}
+
+function activeKey(env: RiskEnv): string | undefined {
+  return env.provider === 'deepseek' ? env.deepseekKey : env.geminiKey
 }
 
 interface RawVerdict {
@@ -257,10 +303,9 @@ function asAssessment(value: unknown): Assessment {
   return s === 'BLOCK' || s === 'INSUFFICIENT_DATA' ? (s as Assessment) : 'ALLOW'
 }
 
-async function askGemini(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
-  const model = env.model || DEFAULT_MODEL
-  const url = `${env.geminiBase || GEMINI_BASE}/models/${model}:generateContent?key=${encodeURIComponent(env.geminiKey ?? '')}`
-  const user = [
+/** AI に見せる本文。会社が変わっても同じものを見せる（判定を比べられるように） */
+function buildUserPrompt(body: RiskRequest): string {
+  return [
     '【戦略プロフィール（EAの実際の設定）】',
     JSON.stringify(body.strategy_profile, null, 1),
     '',
@@ -269,6 +314,68 @@ async function askGemini(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
     '',
     `【銘柄】${body.symbol}  【サーバー時刻】${body.server_time}`,
   ].join('\n')
+}
+
+/** 返ってきた JSON を判定の形にする。ここでは形を整えるだけで、中身の検証は後段でやる */
+function toVerdict(parsed: Record<string, unknown>): RawVerdict {
+  const evidence = Array.isArray(parsed.evidence) ? (parsed.evidence as EvidenceItem[]) : []
+  return {
+    buy: asAssessment(parsed.buy_assessment),
+    sell: asAssessment(parsed.sell_assessment),
+    buyCodes: (Array.isArray(parsed.buy_reason_codes) ? parsed.buy_reason_codes : []).map((c) => String(c) as ReasonCode),
+    sellCodes: (Array.isArray(parsed.sell_reason_codes) ? parsed.sell_reason_codes : []).map((c) => String(c) as ReasonCode),
+    evidence,
+    summary: String(parsed.summary ?? '').slice(0, 300),
+  }
+}
+
+function parseOrThrow(who: string, text: string): Record<string, unknown> {
+  try {
+    return JSON.parse(stripFence(text)) as Record<string, unknown>
+  } catch {
+    throw new Error(`${who}: JSONとして読めない応答（${text.slice(0, 120)}）`)
+  }
+}
+
+/**
+ * DeepSeek（OpenAI 互換）。responseSchema が無いので、形は JSON_SHAPE_NOTE で言葉で伝え、
+ * JSON モードだけ指定する。中身は Gemini のときと同じ検証に通す。
+ */
+async function askDeepSeek(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
+  const model = env.deepseekModel || DEEPSEEK_DEFAULT_MODEL
+  const url = `${env.deepseekBase || DEEPSEEK_BASE}/chat/completions`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), env.timeoutMs ?? TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${env.deepseekKey ?? ''}` },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: `${SYSTEM_PROMPT}\n${JSON_SHAPE_NOTE}` },
+          { role: 'user', content: buildUserPrompt(body) },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
+        max_tokens: 900,
+      }),
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+  if (!res.ok) throw new Error(`deepseek ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] }
+  const text = data.choices?.[0]?.message?.content ?? ''
+  return toVerdict(parseOrThrow('deepseek', text))
+}
+
+async function askGemini(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
+  const model = env.model || DEFAULT_MODEL
+  const url = `${env.geminiBase || GEMINI_BASE}/models/${model}:generateContent?key=${encodeURIComponent(env.geminiKey ?? '')}`
+  const user = buildUserPrompt(body)
 
   let lastError = ''
   for (let i = workingVariant; i < CONFIG_VARIANTS.length; i++) {
@@ -302,23 +409,14 @@ async function askGemini(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
     }
     const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] }
     const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('')
-    let parsed: Record<string, unknown>
-    try {
-      parsed = JSON.parse(stripFence(text)) as Record<string, unknown>
-    } catch {
-      throw new Error(`gemini: JSONとして読めない応答（${text.slice(0, 120)}）`)
-    }
-    const evidence = Array.isArray(parsed.evidence) ? (parsed.evidence as EvidenceItem[]) : []
-    return {
-      buy: asAssessment(parsed.buy_assessment),
-      sell: asAssessment(parsed.sell_assessment),
-      buyCodes: (Array.isArray(parsed.buy_reason_codes) ? parsed.buy_reason_codes : []).map((c) => String(c) as ReasonCode),
-      sellCodes: (Array.isArray(parsed.sell_reason_codes) ? parsed.sell_reason_codes : []).map((c) => String(c) as ReasonCode),
-      evidence,
-      summary: String(parsed.summary ?? '').slice(0, 300),
-    }
+    return toVerdict(parseOrThrow('gemini', text))
   }
   throw new Error(lastError || 'gemini: no response')
+}
+
+/** どちらの会社に聞くかの分かれ道。ここ以外に会社ごとの分岐を作らない */
+function askModel(env: RiskEnv, body: RiskRequest): Promise<RawVerdict> {
+  return env.provider === 'deepseek' ? askDeepSeek(env, body) : askGemini(env, body)
 }
 
 // ────────────────────────────────
@@ -354,16 +452,16 @@ export async function handleRisk(
   if (bad) return { status: 400, body: { error: `bad ${bad}` } }
   const req = body as RiskRequest
 
-  // 鍵が無い／合言葉を決めていないときは動かさない（Gemini の踏み台にしない）
-  if (!env.geminiKey) return { status: 503, body: { error: 'NOT_CONFIGURED' } }
+  // 鍵が無い／合言葉を決めていないときは動かさない（AI の踏み台にしない）
+  if (!activeKey(env)) return { status: 503, body: { error: 'NOT_CONFIGURED' } }
   if (!env.bridgeToken) return { status: 503, body: { error: 'NOT_CONFIGURED' } }
   if (authToken !== env.bridgeToken) return { status: 401, body: { error: 'UNAUTHORIZED' } }
   if (tooMany(String(req.bridge_id || 'unknown'))) return { status: 429, body: { error: 'BUSY' } }
 
-  const model = env.model || DEFAULT_MODEL
+  const model = activeModel(env)
   let raw: RawVerdict
   try {
-    raw = await askGemini(env, req)
+    raw = await askModel(env, req)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[risk] bridge=${req.bridge_id} ${message}`)

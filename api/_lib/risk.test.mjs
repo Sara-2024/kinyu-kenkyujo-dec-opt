@@ -173,6 +173,93 @@ check('checkEvidence が未知項目を落とす', ev.kept.length === 1 && ev.dr
 const g = applyGuards({ buy: 'BLOCK', sell: 'ALLOW', buyCodes: ['NEAR_RESISTANCE'], sellCodes: [] }, [])
 check('根拠ゼロの停止は成立しない', g.buy === 'ALLOW')
 
+// 11) DeepSeek（OpenAI 互換）に切り替えたときも、同じ検証を通ること
+let dsSeen = null
+const dsFake = createServer((rq, rs) => {
+  let b = ''
+  rq.on('data', (c) => (b += c))
+  rq.on('end', () => {
+    dsSeen = { path: rq.url, auth: rq.headers.authorization, body: JSON.parse(b) }
+    rs.setHeader('content-type', 'application/json')
+    if (dsReply.status && dsReply.status !== 200) {
+      rs.statusCode = dsReply.status
+      rs.end(JSON.stringify({ error: 'nope' }))
+      return
+    }
+    rs.end(JSON.stringify({ choices: [{ message: { content: dsReply.raw ?? JSON.stringify(dsReply.body) } }] }))
+  })
+})
+let dsReply = {}
+await new Promise((r) => dsFake.listen(0, r))
+const dsEnv = {
+  provider: 'deepseek',
+  deepseekKey: 'ds-key',
+  deepseekBase: `http://127.0.0.1:${dsFake.address().port}/v1`,
+  deepseekModel: 'deepseek-chat',
+  bridgeToken: 'secret',
+}
+
+dsReply = {
+  body: {
+    buy_assessment: 'BLOCK',
+    sell_assessment: 'ALLOW',
+    buy_reason_codes: ['NEAR_RESISTANCE'],
+    sell_reason_codes: [],
+    evidence: [{ field: 'dist_to_resistance_atr', value: 0.92, why: '近い' }],
+    summary: '高値が近い',
+  },
+}
+r = await handleRisk(req, dsEnv, 'secret')
+check('DeepSeek で判定が返る', r.status === 200 && r.body.decision.buy === 'BLOCK', JSON.stringify(r.body).slice(0, 120))
+check('DeepSeek のモデル名が記録される', r.body?.decision?.model === 'deepseek-chat', r.body?.decision?.model)
+check('OpenAI 互換の口を叩く', dsSeen?.path === '/v1/chat/completions', dsSeen?.path)
+check('Bearer で鍵を送る', dsSeen?.auth === 'Bearer ds-key', dsSeen?.auth)
+check('JSON モードを指定する', dsSeen?.body?.response_format?.type === 'json_object')
+check('system と user の2通を送る', dsSeen?.body?.messages?.length === 2 && dsSeen.body.messages[0].role === 'system')
+
+// 根拠のない停止は、会社が変わっても成立しない
+dsReply = {
+  body: {
+    buy_assessment: 'BLOCK',
+    sell_assessment: 'ALLOW',
+    buy_reason_codes: ['NEAR_RESISTANCE'],
+    evidence: [],
+    summary: 'なんとなく',
+  },
+}
+r = await handleRisk(req, dsEnv, 'secret')
+check('DeepSeek でも根拠ゼロの停止は通さない', r.body?.decision?.buy === 'ALLOW', r.body?.decision?.buy)
+
+// 事実でない項目は、会社が変わっても落ちる
+dsReply = {
+  body: {
+    buy_assessment: 'BLOCK',
+    sell_assessment: 'ALLOW',
+    buy_reason_codes: ['NEAR_RESISTANCE'],
+    evidence: [{ field: 'shinjitsu_no_atai', value: 1, why: 'でっちあげ' }],
+    summary: 'x',
+  },
+}
+r = await handleRisk(req, dsEnv, 'secret')
+check('DeepSeek でも存在しない項目は落とす', (r.body?.decision?.dropped ?? []).length > 0)
+
+dsReply = { raw: 'これはJSONではありません' }
+r = await handleRisk(req, dsEnv, 'secret')
+check('DeepSeek の壊れた応答は502', r.status === 502)
+
+dsReply = { status: 500 }
+r = await handleRisk(req, dsEnv, 'secret')
+check('DeepSeek の障害は502', r.status === 502)
+
+r = await handleRisk(req, { ...dsEnv, deepseekKey: '' }, 'secret')
+check('DeepSeek の鍵が無ければ動かさない', r.status === 503)
+
+// 指定が無ければ今までどおり Gemini
+reply = { body: { buy_assessment: 'ALLOW', sell_assessment: 'ALLOW', buy_reason_codes: [], sell_reason_codes: [], evidence: [], summary: 'ok' } }
+r = await handleRisk(req, env, 'secret')
+check('指定が無ければ Gemini のまま', r.status === 200 && r.body?.decision?.model === 'gemini-3.5-flash', r.body?.decision?.model)
+
+dsFake.close()
 fake.close()
 console.log(`\n${pass} ok / ${fail} NG`)
 process.exit(fail ? 1 : 0)
