@@ -55,6 +55,8 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
   const expired = enforced && gate.decided_at != null && left == null
   const commsBad = gate.comms === 'error'
   const skipped = gate.metrics?.skipped ?? {}
+  // 合言葉が無いと、ブリッジ側が「切」に固定するので押せないようにする
+  const locked = gate.configured === false
 
   const setMode = async (mode: AiGateMode) => {
     if (mode === gate.mode || busy) return
@@ -88,7 +90,7 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
             <button
               key={mode}
               type="button"
-              disabled={busy}
+              disabled={busy || (locked && mode !== 'off')}
               onClick={() => void setMode(mode)}
               className="rounded-[5px] border px-3 py-2 text-[13px] font-bold transition hover:brightness-110 disabled:opacity-50"
               style={
@@ -148,7 +150,13 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
           ⚠ 判定が期限切れです。新規注文は止まりますが、保有中の決済とSL/TPの管理は続いています
         </p>
       )}
-      {sent && sent !== gate.mode && (
+      {locked && (
+        <p className="mt-2 text-[13px]" style={{ color: '#ffd23e' }}>
+          ⚠ この端末の接続ツールに合言葉が入っていないため、「切」から変えられません。
+          %LOCALAPPDATA%\AITrader\bridge.env に TRELAB_RISK_TOKEN を書いて、接続ツールを開き直してください
+        </p>
+      )}
+      {!locked && sent && sent !== gate.mode && (
         <p className="mt-2 text-[13px] text-slate-400">
           「{MODE_LABEL[sent]}」に切り替えています…（MT5へ伝わるまで数秒）
         </p>

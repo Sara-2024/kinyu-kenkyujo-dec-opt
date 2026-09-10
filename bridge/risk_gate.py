@@ -606,6 +606,8 @@ class RiskGate:
         return {
             "mode": MODE_NAMES.get(self.mode, "off"),
             "mode_reason": self.mode_reason,
+            # 合言葉が無いと、押しても「切」から動かない。画面で押せなくするために返す
+            "configured": bool(self.cfg.token and self.cfg.endpoint and self.cfg.enabled),
             "account_mode": self.account_mode,
             "symbol": self.symbol,
             "buy": self.buy.as_dict(now),

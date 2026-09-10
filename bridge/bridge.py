@@ -780,7 +780,20 @@ class MT5Controller:
         try:
             if not path.is_file():
                 return {"ea_state": None}
-            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            # EA(MQL5)の書き出しは環境によって文字コードが変わる。読めるもので読む
+            raw = path.read_bytes()
+            text = ""
+            for encoding in ("utf-8", "utf-16", "cp932"):
+                try:
+                    candidate = raw.decode(encoding)
+                except (UnicodeDecodeError, LookupError):
+                    continue
+                if "state=" in candidate:
+                    text = candidate
+                    break
+            if not text:
+                text = raw.decode("utf-8", "ignore")
+            for line in text.splitlines():
                 if "=" not in line:
                     continue
                 key, raw = line.split("=", 1)

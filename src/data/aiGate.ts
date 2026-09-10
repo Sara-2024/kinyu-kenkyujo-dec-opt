@@ -29,6 +29,8 @@ export interface AiGateHistoryItem {
 export interface AiGateState {
   mode: AiGateMode
   mode_reason?: string
+  /** false のときは「切」から動かせない（接続ツールに合言葉が入っていない） */
+  configured?: boolean
   account_mode?: string
   symbol?: string
   buy: AiGateSide
