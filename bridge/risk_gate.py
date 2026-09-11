@@ -90,6 +90,10 @@ class RiskConfig:
     # 判定を取り直す間隔。確定 M1 足ごと（60秒）にすると費用が倍になるため、
     # 既定は 120 秒。重要水準への接近や急な伸びは、この間隔を待たずに見る。
     eval_sec: float = field(default_factory=lambda: _env_float("RISK_EVAL_SEC", 120.0))
+    # 判定を何秒もたせるか。0 ならサイト任せ（既定 180 秒）。
+    # 期限が切れるとすぐ聞き直すので、ここが実質の問い合わせ間隔になる。
+    # 長くすると API の消費は減るが、相場を見ていない時間も延びる。
+    ttl_sec: float = field(default_factory=lambda: _env_float("RISK_TTL_SEC", 0.0))
     # 重要水準まで ATR 1個ぶんより近ければ、足の途中でも見直す
     near_level_atr: float = field(default_factory=lambda: _env_float("RISK_NEAR_LEVEL_ATR", 1.0))
     # AI に聞く条件。ゴールドの1分足（9/3〜9/9 の実データ）で、聞く回数が
@@ -496,6 +500,8 @@ class RiskGate:
                 "strategy_profile": snapshot["profile"],
                 "features": features,
             }
+            if self.cfg.ttl_sec > 0:
+                payload["ttl_sec"] = self.cfg.ttl_sec
             self.data_error = ""
             decision = await self._ask(payload)
             if not decision:

@@ -69,6 +69,10 @@ check(
     connect.site_room_from_args([url(ME + "x")]) == "",
 )
 check("部屋の指定が無ければ空", connect.site_room_from_args([f"aitrader://connect?from={SITE}"]) == "")
+check(
+    "from が無い部屋指定は受け取らない（悪意あるページが from を省略する経路）",
+    connect.site_room_from_args([url(OTHER, None)]) == "",
+)
 check("プロトコル以外の引数は見ない", connect.site_room_from_args(["--status", ME]) == "")
 
 # ── 覚えるとき（bridge.env に書くとき）にも同じ検査をする ──

@@ -19,6 +19,7 @@ import {
   InfoCenter,
   MiniRates,
   NoticesList,
+  CalendarList,
   Overlay,
   ReportsList,
   Sparkline,
@@ -284,7 +285,7 @@ function HudButton({
   )
 }
 
-type OverlayKind = 'chart' | 'reports' | 'notices'
+type OverlayKind = 'chart' | 'reports' | 'notices' | 'calendar'
 type Room = 'main' | 'system'
 
 export function Lab() {
@@ -1184,6 +1185,11 @@ export function Lab() {
       {overlay === 'reports' && (
         <Overlay title="運用報告" sub={`${CHARACTERS.algo.name} ─ 自動売買`} onClose={() => setOverlay(null)} width="min(92vw, 760px)">
           <ReportsList reports={algoReports.reports} name={CHARACTERS.algo.name} />
+        </Overlay>
+      )}
+      {overlay === 'calendar' && (
+        <Overlay title="経済指標" sub={`${CHARACTERS.jin.name} ─ 経済指標・金利`} onClose={() => setOverlay(null)} width="min(92vw, 760px)">
+          <CalendarList events={econ.events} />
         </Overlay>
       )}
       {overlay === 'notices' && (

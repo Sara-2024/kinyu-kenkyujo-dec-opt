@@ -79,7 +79,7 @@ ROOM_RE = re.compile(r"^[A-Za-z0-9._:-]{1,80}$")
 # お客様のブリッジを他人の部屋へ移せた（しかも bridge.env に残るので恒久的に）。
 MEMBER_ROOM_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 # 部屋を渡してよいのは、自分たちのサイトから開かれたときだけ（`from=` を照合する）。
-# 増やすときはここに足す。空文字は「from が付いていない古い版のサイト」用。
+# 増やすときはここに足す。from が無い指定は受け取らない。
 TRUSTED_SITES = (
     "https://kinyu-kenkyujo-dec-opt.vercel.app",
     "http://localhost:5181",
@@ -584,8 +584,9 @@ def trusted_site(origin: str) -> bool:
     """その `from=` は自分たちのサイトか。"""
     origin = (origin or "").strip().rstrip("/").lower()
     if not origin:
-        # 古い版のサイトは from を付けない。部屋を渡してこないので、ここは通してよい
-        return True
+        # from が無い URL でも room は付けられる。ここを通すと、悪意あるページが
+        # `aitrader://connect?room=<他人のID>` だけで部屋を移せる。
+        return False
     return origin in tuple(s.lower() for s in TRUSTED_SITES)
 
 

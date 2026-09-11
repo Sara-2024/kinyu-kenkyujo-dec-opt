@@ -274,7 +274,6 @@ reply = { body: { buy_assessment: 'ALLOW', sell_assessment: 'ALLOW', buy_reason_
 r = await handleRisk(req, env, 'secret')
 check('指定が無ければ Gemini のまま', r.status === 200 && r.body?.decision?.model === 'gemini-3.5-flash', r.body?.decision?.model)
 
-
 console.log('\n── 根拠の検証（作り話で止めさせない）')
 // ── 根拠の検証（ここが緩いと、AI の作り話で新規注文が止まる／止まらなくなる）──
 // 実際に「全部でっちあげの evidence」が素通りしていたので、そのままの形を試験にする。
@@ -339,6 +338,23 @@ console.log('\n── 根拠の検証（作り話で止めさせない）')
   )
   check('上の水準だけを根拠にした売り停止は通さない', sellOff.sell === 'ALLOW', sellOff.sell)
 }
+
+// 判定の有効期限（聞く回数を減らすための指定）。main 側で入れた検査を残す。
+const okBody = { buy_assessment: 'ALLOW', sell_assessment: 'ALLOW', buy_reason_codes: [], sell_reason_codes: [], evidence: [], summary: 'ok' }
+reply = { body: okBody }
+r = await handleRisk(req, env, 'secret')
+check('指定が無ければ既定の180秒', r.body?.decision?.ttl_sec === 180, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 900 }, env, 'secret')
+check('指定した期限が通る', r.body?.decision?.ttl_sec === 900, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 99999 }, env, 'secret')
+check('長すぎる指定は30分に丸める', r.body?.decision?.ttl_sec === 1800, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 5 }, env, 'secret')
+check('短すぎる指定は60秒に丸める', r.body?.decision?.ttl_sec === 60, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 'いたずら' }, env, 'secret')
+check('数値でない指定は既定に戻す', r.body?.decision?.ttl_sec === 180, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 900 }, env, 'secret')
+const life = (new Date(r.body.decision.expires_at) - new Date(r.body.decision.issued_at)) / 1000
+check('expires_at が期限と一致する', Math.abs(life - 900) < 2, life)
 
 dsFake.close()
 fake.close()
