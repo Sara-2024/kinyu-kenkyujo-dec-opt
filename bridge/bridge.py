@@ -98,6 +98,17 @@ if getattr(sys, "frozen", False):
 # 以前の版が使っていたロック名。名前が変わったせいで、
 # 古いブリッジと新しいブリッジが同時に動けてしまっていた。
 LOCK_NAMES = ("aitrader-bridge.lock", "trelab-bridge.lock")
+
+# サイトから書き換えてよい変数と、その範囲（下限, 上限）。
+# 画面の `src/data/eaSettings.ts` と同じ値をここにも置く。
+# 画面だけの制限にしないのは、中継に直接つないだ相手を通さないため。
+# 項目を増やすときは両方に足すこと。
+ALLOWED_VARIABLES: dict[str, tuple[float, float]] = {
+    "AI_TRADING_ALLOWED": (0.0, 1.0),
+    "AI_LOT": (0.01, 5.0),
+    "AI_MAX_POSITIONS": (1.0, 10.0),
+    "AI_DAY_LOSS_LIMIT": (5000.0, 200000.0),
+}
 LOCK_RECORD_LEN = 128  # 番号・版・部屋を固定長で書く（切り詰めない）
 
 
@@ -606,7 +617,17 @@ class MT5Controller:
 
     def _save_gate(self, values: dict[str, float]) -> Path:
         path = self._gate_path()
-        body = "".join(f"{k}={v}\n" for k, v in sorted(values.items()))
+        # 「名前=数値」1行の形しか書かない。名前に改行が混じると、
+        # 指令ファイルに好きな行を足せてしまう（EA はそれを設定として読む）。
+        safe = {
+            k: float(v)
+            for k, v in values.items()
+            if isinstance(k, str) and k.replace("_", "").isalnum() and isinstance(v, (int, float))
+        }
+        for k in values.keys() - safe.keys():
+            log.warning("指令ファイルに書けない名前を捨てました: %r", str(k)[:40])
+        path_values = safe
+        body = "".join(f"{k}={v}\n" for k, v in sorted(path_values.items()))
         tmp = path.with_suffix(".tmp")
         tmp.write_text(body, encoding="utf-8")
         tmp.replace(path)
@@ -1518,10 +1539,23 @@ class CommandRouter:
             name = str(payload.get("name", "")).strip()
             if not name:
                 return self._ack(command, request_id, False, error="name が空です")
+            # 書き換えてよい変数と、その値の範囲は、このお客様のPCの側でも必ず確かめる。
+            # 画面（eaSettings.ts）にしか制限が無いと、中継に直接つないだ誰かが
+            # ロット 100 のような値を書き込めてしまう。
+            limits = ALLOWED_VARIABLES.get(name)
+            if limits is None:
+                log.warning("知らない変数への書き込みを断りました: %r", name[:40])
+                return self._ack(command, request_id, False, error=f"{name} は変更できません")
             try:
                 value = float(payload.get("value"))
             except (TypeError, ValueError):
                 return self._ack(command, request_id, False, error="value が数値ではありません")
+            if not (value == value and abs(value) != float("inf")):  # NaN / inf を弾く
+                return self._ack(command, request_id, False, error="value が数値ではありません")
+            low, high = limits
+            if not (low <= value <= high):
+                log.warning("範囲外の値を断りました: %s=%s（%s〜%s）", name, value, low, high)
+                return self._ack(command, request_id, False, error=f"{name} は {low}〜{high} の範囲で指定してください")
             log.info("指令: グローバル変数 %s = %s", name, value)
             ok, readback = await self.mt.set_variable(name, value)
             if ok and name == self.cfg.gv_name:

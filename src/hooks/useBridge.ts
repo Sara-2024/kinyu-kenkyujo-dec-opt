@@ -71,10 +71,13 @@ export type BridgePhase = 'connecting' | 'live' | 'no_bridge' | 'error'
 /** 接続先。未設定ならローカルの中継サーバー */
 export const WS_URL = import.meta.env.VITE_RELAY_URL || 'ws://localhost:8080/app'
 
-function appUrl(roomId?: string | null): string {
+function appUrl(roomId?: string | null, session?: string | null): string {
   if (!roomId) return WS_URL
   const sep = WS_URL.includes('?') ? '&' : '?'
-  return `${WS_URL}${sep}room=${encodeURIComponent(roomId)}`
+  // 合言葉（ログインのセッション）も渡す。中継はこれで「その部屋の本人か」を確かめる。
+  // 中継に Supabase の設定が無いときは無視されるので、付けても害はない。
+  const session_ = session ? `&session=${encodeURIComponent(session)}` : ''
+  return `${WS_URL}${sep}room=${encodeURIComponent(roomId)}${session_}`
 }
 
 const STATUS_KEYS: (keyof BridgeStatus)[] = [
@@ -112,9 +115,23 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'ai_gate',
 ]
 
+/**
+ * `status.value` は「自動売買が動いているか」だけを入れる枠。
+ *
+ * ブリッジは set_variable の応答でも、書き込んだ変数の読み返しを `value` で返す
+ * （`bridge.py` の `_ack(..., value=readback, name=name)`）。ロットを 0.11 に変えた応答を
+ * そのまま取り込むと、停止中でも `value = 0.11` になって画面が「稼働中」に化ける。
+ * 変数名が付いている応答（＝set_variable）は、その `value` を状態に混ぜない。
+ */
+function isVariableAck(extra: Record<string, unknown>): boolean {
+  return extra.command === 'set_variable' || typeof extra.variable === 'string' || typeof extra.name === 'string'
+}
+
 function definedFields(extra: Partial<BridgeStatus> & Record<string, unknown>): Partial<BridgeStatus> {
   const out: Partial<BridgeStatus> = {}
+  const skipValue = isVariableAck(extra)
   for (const key of STATUS_KEYS) {
+    if (key === 'value' && skipValue) continue
     if (extra[key] !== undefined) {
       ;(out as Record<string, unknown>)[key] = extra[key]
     }
@@ -132,7 +149,7 @@ function mergeStatus(prev: BridgeStatus | null, extra: Partial<BridgeStatus> & {
   }
 }
 
-export function useBridge(roomId?: string | null) {
+export function useBridge(roomId?: string | null, session?: string | null) {
   const [phase, setPhase] = useState<BridgePhase>('connecting')
   const [error, setError] = useState<BridgeError | null>(null)
   const [status, setStatus] = useState<BridgeStatus | null>(null)
@@ -160,7 +177,7 @@ export function useBridge(roomId?: string | null) {
     let closed = false
     let retry: ReturnType<typeof setTimeout> | null = null
 
-    const target = appUrl(roomId)
+    const target = appUrl(roomId, session)
 
     const connect = () => {
       if (closed) return
@@ -250,7 +267,8 @@ export function useBridge(roomId?: string | null) {
           }
           if (ack.ok) {
             setStatus((s) => mergeStatus(s, ack))
-          } else if (typeof ack.value === 'number') {
+          } else if (typeof ack.value === 'number' && !isVariableAck(ack as unknown as Record<string, unknown>)) {
+            // 失敗しても、売買フラグの読み返しだけは「MT5 のいまの値」として受け取る
             setStatus((s) => (s ? { ...s, value: ack.value } : s))
           }
         }
@@ -276,7 +294,7 @@ export function useBridge(roomId?: string | null) {
       if (offlineTimer.current) clearTimeout(offlineTimer.current)
       wsRef.current?.close()
     }
-  }, [roomId])
+  }, [roomId, session])
 
   const send = useCallback(
     (command: string, extra: Record<string, unknown> = {}): Promise<Ack> =>
@@ -303,5 +321,5 @@ export function useBridge(roomId?: string | null) {
     [phase, roomId],
   )
 
-  return { live, phase, status, error, wsUrl: appUrl(roomId), send }
+  return { live, phase, status, error, wsUrl: appUrl(roomId, session), send }
 }

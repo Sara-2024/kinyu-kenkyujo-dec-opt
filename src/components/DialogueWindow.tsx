@@ -337,7 +337,7 @@ export function DialogueWindow({
   //   リン: 直近の高値と安値は？   ジン: 次の指標はいつ？ / 今週の重要指標は？
   const localAnswer = (question: string): string | null => {
     if (character.id === 'rin' && question === '直近の高値と安値は？') {
-      const c = rinContext(market)
+      const c = rinContext(market.marketForAi())
       if (!c) return null
       const maLine = c.ma20 ? fill(c.ma20.priceIs === 'above' ? AI_TEXT.maAbove : AI_TEXT.maBelow, { ma: c.ma20.value }) : ''
       return fill(AI_TEXT.highLow, {
@@ -378,7 +378,7 @@ export function DialogueWindow({
     let context: unknown = null
     let dataError: string | null = null
     if (role === 'rin') {
-      context = rinContext(market)
+      context = rinContext(market.marketForAi())
       if (!context) dataError = AI_TEXT.noData
     } else if (role === 'jin') {
       context = jinContext(econ.events, market.quoteMap)

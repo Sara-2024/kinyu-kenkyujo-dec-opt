@@ -74,6 +74,17 @@ LEGACY_PROTOCOL = "trelab"
 LEGACY_APP_NAMES = ("TrelabConnect",)
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 ROOM_RE = re.compile(r"^[A-Za-z0-9._:-]{1,80}$")
+# サイトから受け取る「部屋」は会員ID（UUID）だけ。ここを緩くしていたので、
+# 悪意あるページが `aitrader://connect?room=<自分のID>` を開かせるだけで、
+# お客様のブリッジを他人の部屋へ移せた（しかも bridge.env に残るので恒久的に）。
+MEMBER_ROOM_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+# 部屋を渡してよいのは、自分たちのサイトから開かれたときだけ（`from=` を照合する）。
+# 増やすときはここに足す。from が無い指定は受け取らない。
+TRUSTED_SITES = (
+    "https://kinyu-kenkyujo-dec-opt.vercel.app",
+    "http://localhost:5181",
+    "http://127.0.0.1:5181",
+)
 
 SEARCH_EXES = [
     Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "MetaTrader 5" / "terminal64.exe",
@@ -551,8 +562,14 @@ def write_bridge_env(session: dict) -> None:
 
 def adopt_room(room: str) -> None:
     """サイトから渡された会員IDを、このPCのブリッジ名として覚える。"""
-    if not ROOM_RE.match(room):
+    if not MEMBER_ROOM_RE.match(room):
+        log(f"会員IDの形でない部屋は覚えません: {room[:40]}")
         return
+    before = env_value("BRIDGE_ID")
+    if before and before != room and MEMBER_ROOM_RE.match(before):
+        # 別の会員の部屋へ移す指示。ふつうは起きない（起きるのは、同じPCを
+        # 別の会員が使うときか、他人のサイトから開かせられたとき）。記録に残す。
+        log(f"部屋を切り替えます: {before} → {room}")
     write_env_key("BRIDGE_ID", room)
     os.environ["BRIDGE_ID"] = room
     log(f"このPCの部屋: {room}")
@@ -563,8 +580,26 @@ def is_protocol_url(raw: str) -> bool:
     return lower.startswith(f"{PROTOCOL}:") or lower.startswith(f"{LEGACY_PROTOCOL}:")
 
 
+def trusted_site(origin: str) -> bool:
+    """その `from=` は自分たちのサイトか。"""
+    origin = (origin or "").strip().rstrip("/").lower()
+    if not origin:
+        # from が無い URL でも room は付けられる。ここを通すと、悪意あるページが
+        # `aitrader://connect?room=<他人のID>` だけで部屋を移せる。
+        return False
+    return origin in tuple(s.lower() for s in TRUSTED_SITES)
+
+
 def site_room_from_args(argv: list[str]) -> str:
-    """aitrader://connect?room=<会員ID> から部屋を読む。"""
+    """aitrader://connect?room=<会員ID>&from=<サイト> から部屋を読む。
+
+    このURLは、その気になれば**どのページからでも**開かせられる。
+    そのまま採用すると、お客様のブリッジを他人の部屋（＝他人の管理画面）に
+    つなぎ替えられてしまうので、
+      * 会員ID（UUID）の形であること
+      * 自分たちのサイトから開かれたこと（`from`）
+    の両方を満たすときだけ受け取る。
+    """
     for raw in argv:
         if not is_protocol_url(raw):
             continue
@@ -572,8 +607,16 @@ def site_room_from_args(argv: list[str]) -> str:
             parsed = urllib.parse.urlparse(raw.replace("\\", "/"))
             query = urllib.parse.parse_qs(parsed.query)
             room = (query.get("room") or [""])[0].strip()
-            if ROOM_RE.match(room):
-                return room
+            origin = (query.get("from") or [""])[0].strip()
+            if not room:
+                continue
+            if not MEMBER_ROOM_RE.match(room):
+                log(f"会員IDの形でない部屋は受け取りません: {room[:40]}")
+                continue
+            if not trusted_site(origin):
+                log(f"知らないサイトからの指定なので部屋を受け取りません: {origin[:60]}")
+                continue
+            return room
         except Exception:  # noqa: BLE001
             continue
     return ""

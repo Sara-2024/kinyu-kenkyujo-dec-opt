@@ -78,6 +78,14 @@ export function Login() {
   const sceneRef = useRef<HTMLDivElement | null>(null)
   const spriteScale = useSpriteScale(sceneRef)
   const firstInput = useRef<HTMLInputElement | null>(null)
+  /** 「驚いた顔」を戻すタイマー。画面が外れたあとに触らないよう片付ける */
+  const surpriseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (surpriseTimer.current) clearTimeout(surpriseTimer.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     firstInput.current?.focus()
@@ -98,7 +106,8 @@ export function Login() {
     setTone(warn ? 'warn' : 'normal')
     if (warn) {
       setSurprised(true)
-      setTimeout(() => setSurprised(false), 1400)
+      if (surpriseTimer.current) clearTimeout(surpriseTimer.current)
+      surpriseTimer.current = setTimeout(() => setSurprised(false), 1400)
     }
   }
 

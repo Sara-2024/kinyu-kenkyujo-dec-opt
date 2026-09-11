@@ -86,17 +86,27 @@ export interface ChatResult {
   body: { answer: string; redirect: Role | null } | { error: string }
 }
 
-// ── 会員の確認（5分だけ覚えて RPC を減らす） ──
+// ── 会員の確認（少しだけ覚えて RPC を減らす） ──
+//
+// 覚える時間はできるだけ短くする。長いと、管理画面で「停止」にした会員や
+// ログアウトした人が、その時間だけ AI を使い続けられる（費用が出続ける）。
 const verified = new Map<string, number>()
-const VERIFY_KEEP_MS = 5 * 60 * 1000
+const VERIFY_KEEP_MS = 60 * 1000
+const VERIFY_MAX = 5000
 
-async function verifyMember(token: string | null, env: ChatEnv): Promise<'ok' | 'unauthorized' | 'skip'> {
+async function verifyMember(token: string | null, env: ChatEnv): Promise<'ok' | 'unauthorized' | 'not_configured'> {
   const url = env.supabaseUrl?.trim()
   const key = env.supabaseKey?.trim()
-  if (!url || !key || !url.startsWith('https://') || url.includes('xxxxxxxx')) return 'skip'
+  // 設定が無いときは通さない。ここを素通りにしていたので、環境変数を入れ忘れると
+  // 誰でも使える Gemini の踏み台になっていた（気づく手立ても無い）。
+  if (!url || !key || !url.startsWith('https://') || url.includes('xxxxxxxx')) return 'not_configured'
   if (!token) return 'unauthorized'
   const seen = verified.get(token)
   if (seen && Date.now() - seen < VERIFY_KEEP_MS) return 'ok'
+  if (verified.size > VERIFY_MAX) {
+    const now = Date.now()
+    for (const [k, at] of verified) if (now - at >= VERIFY_KEEP_MS) verified.delete(k)
+  }
   const res = await fetch(`${url}/rest/v1/rpc/auth_me`, {
     method: 'POST',
     headers: { apikey: key, authorization: `Bearer ${key}`, 'content-type': 'application/json' },
@@ -247,6 +257,11 @@ export async function handleChat(req: ChatRequest, token: string | null, env: Ch
 
   const auth = await verifyMember(token, env)
   if (auth === 'unauthorized') return { status: 401, body: { error: 'UNAUTHORIZED' } }
+  if (auth === 'not_configured') {
+    // 画面は 503 を「鍵が無い」と同じ扱いにして定型文で答える（お客様には見えない）
+    console.error('[chat] Supabase の設定が無いので会員を確認できません（VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY）')
+    return { status: 503, body: { error: 'NOT_CONFIGURED' } }
+  }
   if (tooMany(token ?? 'anonymous')) return { status: 429, body: { error: 'BUSY' } }
 
   const names = namesOf(req.names)
