@@ -95,7 +95,7 @@ export function DialogueWindow({
   /** メンバー紹介中、カメラをその研究員に向ける。null で受付に戻す */
   onFocus?: (id: string | null) => void
 }) {
-  const { member } = useAuth()
+  const { member, token: sessionToken } = useAuth()
   const { characters, t } = useSiteSettings()
   // はじめての方には、ユイが最初にメンバー紹介から入る（会員ごとに一度だけ）
   const introKey = member ? `lab-intro-done:${member.id}` : 'lab-intro-done'
@@ -303,7 +303,7 @@ export function DialogueWindow({
     }
     setPhase('launching')
     setAiText(t(SETUP.checking))
-    launchConnector(member?.id)
+    void launchConnector(sessionToken)
   }
 
   const startTour = () => {
@@ -533,7 +533,7 @@ export function DialogueWindow({
       // 古い置き去りのブリッジ（別のPC）に反応しないよう、最近つながったものだけ
       if (probe.since != null && probe.since < startedAt - DEFAULT_ROOM_FRESH_MS) return
       firstRunRelaunched.current = true
-      launchConnector(member?.id)
+      void launchConnector(sessionToken)
       setAiText(t(SETUP.firstRunDetected))
     }
     void check()
@@ -667,7 +667,7 @@ export function DialogueWindow({
     if (bridge.phase !== 'no_bridge') return
     if (reconnectTried.current || bridgeSeenLive.current) return
     reconnectTried.current = true
-    launchConnector(member?.id)
+    void launchConnector(sessionToken)
     if (character.reconnecting) setAiText(character.reconnecting)
   }, [character, phase, conn, bridge.live, bridge.phase, member?.id])
 
@@ -690,7 +690,7 @@ export function DialogueWindow({
   }
 
   const reconnect = () => {
-    launchConnector(member?.id)
+    void launchConnector(sessionToken)
     if (character.reconnecting) setAiText(character.reconnecting)
   }
 
@@ -1168,7 +1168,7 @@ export function DialogueWindow({
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <SetupButton onClick={startDownload}>⬇ {SETUP.redownload}</SetupButton>
-              <SetupButton onClick={() => launchConnector(member?.id)}>{SETUP.retry}</SetupButton>
+              <SetupButton onClick={() => void launchConnector(sessionToken)}>{SETUP.retry}</SetupButton>
               <button type="button" onClick={backToTalk} className="font-mono ml-auto text-[12px] text-slate-400 underline-offset-4 hover:underline">
                 {SETUP.back}
               </button>

@@ -18,8 +18,17 @@ MetaEditor を起動しないし、コンパイルもしない。ソース（.mq
   ERROR             … フォルダが読めない／配布物が壊れている
 
 版（6.10 など）は .ex5 からは読めないので、同梱の ea_manifest.json に書く。
-置いたときの版と中身は ea_installed.json に控え、次回それと見比べる。
 manifest は tools/make-ea-manifest.py が作る（Windows でコンパイルした後）。
+
+**3つを混同しないこと。**
+
+  ea_manifest.json … 正式な配布物はどれか（版と SHA-256）
+  ea_installed.json … Connect が最後に置いたのはどれか（あくまで控え）
+  実ファイルの SHA-256 … いま本当に入っているのはどれか
+
+状態を決めるのは**必ず実ファイルの SHA-256**。控えは「入っている版の名前」を
+言うためだけに使い、控えと実ファイルが食い違っていたら控えの方を捨てる。
+そうしないと、お客様が手で .ex5 を差し替えたときに「最新です」と嘘をつく。
 """
 from __future__ import annotations
 
@@ -217,13 +226,23 @@ def status(data_path: Path, source: Source | None) -> Status:
     except OSError as exc:  # noqa: BLE001
         return Status(ERROR, detail=str(exc))
 
-    # 控えが今のファイルのものなら、そこに書いてある版を「入っている版」とする
+    # 版の名前だけは控えから取る。ただし控えが「いま入っているファイル」の
+    # ものであるときに限る。食い違っていれば、控えは当てにしない。
     record = read_record(Path(data_path))
-    installed_version = str(record.get("version") or "") if record.get("sha256") == digest else ""
+    record_matches_file = record.get("sha256") == digest
+    installed_version = str(record.get("version") or "") if record_matches_file else ""
 
+    # 最新かどうかは、控えではなく実ファイルの中身で決める
     if digest == source.sha256 and _includes_are_current(Path(data_path), source):
         return Status(LATEST, installed_version=installed_version or src_version, source_version=src_version)
-    return Status(UPDATE_AVAILABLE, installed_version=installed_version, source_version=src_version)
+
+    detail = ""
+    if not record_matches_file and record.get("sha256"):
+        # Connect が置いたものと、いま入っているものが違う
+        detail = "置いたあとに入れ替えられている"
+    return Status(
+        UPDATE_AVAILABLE, installed_version=installed_version, source_version=src_version, detail=detail
+    )
 
 
 def _includes_are_current(data_path: Path, source: Source) -> bool:

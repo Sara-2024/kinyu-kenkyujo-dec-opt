@@ -164,3 +164,14 @@ export async function memberClearConnection(token: string): Promise<void> {
 export async function memberSaveLead(token: string, email: string): Promise<void> {
   await rpc('member_save_lead', { p_token: token, p_email: email, p_source: 'algo-connect' })
 }
+
+/**
+ * MT5と連携するための、短命の合図をもらう。
+ *
+ * ログイン中のときだけ作れる。会員IDそのものを接続ツールへ渡さないために使う。
+ * 数分で切れ、一度使ったら無効。
+ */
+export async function issueConnectToken(token: string): Promise<string | null> {
+  const data = await rpc<{ token?: string }>('connect_token_issue', { p_token: token })
+  return typeof data?.token === 'string' ? data.token : null
+}

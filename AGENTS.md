@@ -130,6 +130,8 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   `python3 bridge/tests/phase1_test.py` … MT5の検出・EAの状態判定・連携状態
   `python3 bridge/tests/phase1_offline_test.py` … 初回の設定が通信しないこと（通し）
   `python3 bridge/tests/installer_ui_test.py` … 初回の設定画面（専門用語・文字の大きさ）
+  `python3 bridge/tests/phase2_test.py` … サイトからの連携（合図の読み取り・検証・状態）
+  `node --experimental-strip-types api/_lib/connect.test.mjs` … 合図を確かめる所
 - **AI に聞くのは「入りうる場面」だけ。** EA はブレイク後のリテスト成立でしか入らないので、
   水準から遠く伸びも小さい時間帯に聞いても、その判定は使われない（費用だけ増える）。
   条件は `RiskGate._entry_possible`：重要水準まで ATR 1個以内／直近15本で ATR 4個以上動いた／
@@ -183,6 +185,23 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   「次に何をすればいいか」だけを出す。ボタンは高さ 44px 以上。
 - **インストーラーは `tools/AITraderConnect.iss`**（Inno Setup 6）。
   管理者権限を要求せず、`aitrader://` の登録とアンインストールまで面倒を見る。
+
+### サイトとの連携（Phase 2）
+
+- **連携はサイトからしか始められない。** 接続ツール単体では合図を作れない。
+  `supabase/schema.sql` の `connect_token_issue` はログイン中のセッションが要る。
+- **URL に載せるのは短命の合図だけ。** `aitrader://connect?token=<64桁>`。
+  会員IDそのもの・パスワード・API キー・永続トークンは載せない。
+  合図は 32バイトの乱数、5分で失効、一度使ったら無効（`connect_tokens`）。
+- **確かめるのはサイトのサーバー関数。** `/api/connect`（`api/_lib/connect.ts`）が
+  Supabase の `connect_token_redeem` に取り次ぎ、会員IDを返す。
+  接続ツールは Supabase を直接叩かない（鍵を配らないため）。
+  宛先は `PRODUCTION_SITE` の決め打ち。`aitrader://` の `from=` は当てにしない。
+- **新しい環境変数は要らない。** すでにある `VITE_SUPABASE_URL` /
+  `VITE_SUPABASE_ANON_KEY` をそのまま使う。
+- **合図は記録に残さない。** ログにも応答にも、伏せた形でしか出さない。
+- **`room=` は互換のためだけに残してある。** サイトからは絶対に発行しない
+  （`src/data/connector.ts` は `token=` しか作らない）。
 
 ## お客様のPCで動くもの（接続ツール）
 

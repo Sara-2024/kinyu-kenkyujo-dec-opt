@@ -32,6 +32,11 @@
 | `VITE_RELAY_URL` | `wss://kinyu-relay.onrender.com/app` |
 | `VITE_SUPABASE_URL` | Supabase Project URL（ログインに必須） |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key（ログインに必須） |
+
+> MT5連携（`/api/connect`）も、この2つをそのまま使う。新しい環境変数は要らない。
+> ただし **`supabase/schema.sql` を流し直す**こと（`connect_tokens` テーブルと
+> `connect_token_issue` / `connect_token_redeem` が追加されている）。
+> 既存のテーブルは `create table if not exists` なので、流しても消えない。
 | `GEMINI_API_KEY` | Google AI Studio の API キー（研究員の AI 回答。未設定なら定型文） |
 
 ```bash

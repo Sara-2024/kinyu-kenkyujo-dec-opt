@@ -5,6 +5,8 @@
 // このURLを開くとブラウザがツールを起動してくれる。
 // （ツールがまだ入っていないPCでは何も起きない。その場合はここからダウンロードしてもらう）
 
+import { issueConnectToken } from './auth'
+
 export const CONNECTOR_SCHEME = 'aitrader'
 
 /**
@@ -51,17 +53,38 @@ export async function probeRoom(room: string): Promise<RoomProbe | null> {
 // EA のコンパイルと MT5 の初期化を挟むので、12秒だと足りないことがある
 export const CONNECTOR_WAIT_MS = 30_000
 
-export function launchConnector(roomId?: string | null): void {
-  if (typeof window === 'undefined') return
+/**
+ * 接続ツールを呼び出す。
+ *
+ * URL に載せるのは、その場で作った短命の合図（token）だけ。
+ * 会員IDそのものは載せない（記録や履歴に残ると、他人に使われうるため）。
+ *
+ * 合図をもらえなかったときは何もしない。呼び出し側は false を見て案内を出す。
+ * 古い形（room=）はツール側に互換として残してあるが、ここからは発行しない。
+ */
+export async function launchConnector(sessionToken?: string | null): Promise<boolean> {
+  if (typeof window === 'undefined') return false
+  if (!sessionToken) return false
+
+  let connectToken: string | null = null
+  try {
+    connectToken = await issueConnectToken(sessionToken)
+  } catch {
+    connectToken = null
+  }
+  if (!connectToken) return false
+
   const params = new URLSearchParams()
   params.set('from', window.location.origin)
-  if (roomId) params.set('room', roomId)
+  params.set('token', connectToken)
   const url = `${CONNECTOR_SCHEME}://connect?${params.toString()}`
   try {
     // location を書き換えると、未登録のPCでは何も起きずにページも遷移しない
     window.location.href = url
+    return true
   } catch {
     // 起動できなくても画面は続ける（ダウンロードの案内に切り替わる）
+    return false
   }
 }
 

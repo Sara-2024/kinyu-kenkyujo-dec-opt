@@ -143,6 +143,20 @@ check("新しい版に入れ替わる", after_new.state == ea_manager.LATEST and
       after_new.as_dict())
 ea_manager.install(hfm, source)  # 元に戻しておく
 
+# 控えは「最新」でも、実ファイルが別物なら最新と言わない
+#（お客様が手で .ex5 を差し替えた場合。控えを信じると嘘をつく）
+check("この時点では最新", ea_manager.status(hfm, source).state == ea_manager.LATEST)
+record = ea_manager.read_record(hfm)
+check("控えは最新版のまま", record.get("version") == "6.10" and record.get("sha256") == source.sha256)
+(hfm / "MQL5" / "Experts" / source.file_name).write_bytes(b"HAND-REPLACED")
+swapped = ea_manager.status(hfm, source)
+check("実ファイルが別物なら最新と言わない", swapped.state == ea_manager.UPDATE_AVAILABLE, swapped.as_dict())
+check("控えの版は使わない", swapped.installed_version == "", swapped.installed_version)
+check("入れ替えられたことが分かる", "入れ替え" in swapped.detail, swapped.detail)
+check("控え自体は残っている", ea_manager.read_record(hfm).get("sha256") == source.sha256)
+ea_manager.install(hfm, source)
+check("置き直せば最新に戻る", ea_manager.status(hfm, source).state == ea_manager.LATEST)
+
 # ── 6) Include だけ消えても気づく（EA だけ新しくても動かないため） ──
 (hfm / "MQL5" / "Include" / "TradingGate.mqh").unlink()
 check("Include が欠けたら要更新", ea_manager.status(hfm, source).state == ea_manager.UPDATE_AVAILABLE)

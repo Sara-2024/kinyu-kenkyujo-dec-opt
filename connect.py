@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -62,6 +63,9 @@ MT5_SETUP_URL = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/
 # exe は開発機の bridge/.env を持ち込まない（127.0.0.1 が焼き込まれて、お客様のPCで
 # どこにも繋がらなくなった前例がある）。
 PRODUCTION_RELAY = "wss://kinyu-relay.onrender.com/bridge"
+# 合図を確かめる先。攻撃者の用意した URL へ向かわないよう、ここで決め打ちにする
+# （aitrader:// の from= は当てにしない）。手元で試すときだけ環境変数で差し替える。
+PRODUCTION_SITE = "https://kinyu-kenkyujo-dec-opt.vercel.app"
 LOCAL_RELAY = "ws://127.0.0.1:8080/bridge"
 
 # お客様の MT5 に送るシステムは、これ1つだけ（Orbit GOLD 2軸エンジン。XAUUSD 専用）
@@ -520,6 +524,58 @@ def adopt_room(room: str) -> None:
 def is_protocol_url(raw: str) -> bool:
     lower = raw.lower()
     return lower.startswith(f"{PROTOCOL}:") or lower.startswith(f"{LEGACY_PROTOCOL}:")
+
+
+# 合図の形。サイトが gen_random_bytes(32) を16進で作る
+TOKEN_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def connect_token_from_args(argv: list[str]) -> str:
+    """aitrader://connect?token=... から合図を読む（いまの連携のしかた）。"""
+    for raw in argv:
+        if not is_protocol_url(raw):
+            continue
+        try:
+            parsed = urllib.parse.urlparse(raw.replace("\\", "/"))
+            query = urllib.parse.parse_qs(parsed.query)
+            token = (query.get("token") or [""])[0].strip()
+            if TOKEN_RE.match(token):
+                return token
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
+
+
+def site_url() -> str:
+    return (env_value("TRELAB_SITE_URL") or PRODUCTION_SITE).rstrip("/")
+
+
+def redeem_connect_token(token: str) -> str:
+    """合図をサイトに確かめてもらい、この PC の部屋（会員ID）を受け取る。
+
+    合図は一度しか使えない。ここで失敗したら連携しない（＝通信も始めない）。
+    合言葉そのものは記録に残さない。
+    """
+    url = f"{site_url()}/api/connect"
+    body = json.dumps({"token": token, "bridge_id": env_value("BRIDGE_ID") or ""}).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            data = json.loads(res.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:  # サイトが断った
+        log(f"連携の合図を確かめられませんでした（{exc.code}）")
+        return ""
+    except Exception as exc:  # noqa: BLE001 通信できない
+        log(f"サイトに問い合わせできませんでした: {type(exc).__name__}")
+        return ""
+    room = str(data.get("room") or "").strip()
+    if not ROOM_RE.match(room):
+        log("サイトの返事に部屋が入っていませんでした")
+        return ""
+    log("連携の合図を確認しました")
+    return room
 
 
 def site_room_from_args(argv: list[str]) -> str:
@@ -1215,6 +1271,8 @@ def connect_all(room: str = "") -> int:
 def main() -> int:
     global CONSOLE
     raw_args = [a for a in sys.argv[1:]]
+    # いまの連携は合図（token）。room= は古い形で、互換のためだけに読む
+    connect_token = connect_token_from_args(raw_args)
     room = site_room_from_args(raw_args)
     args = [a for a in raw_args if not is_protocol_url(a)]
     CONSOLE = "--console" in args or "--self-test" in args
@@ -1257,6 +1315,15 @@ def main() -> int:
 
     if "--setup" in args:
         return setup_phase1()
+
+    # サイトの「MT5と連携する」から呼ばれたとき。
+    # 合図が正しいときだけ連携する（アプリ単体では連携できない）。
+    if connect_token:
+        banner("サイトとの連携")
+        room = redeem_connect_token(connect_token)
+        if not room:
+            log("連携できませんでした。サイトでもう一度お試しください")
+            return 1
 
     # すでにサイトと連携して使っている PC を引き継ぐ（state.json がまだ無い場合）
     if connect_state.adopt_legacy(env_value("BRIDGE_ID")):
