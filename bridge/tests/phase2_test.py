@@ -287,6 +287,51 @@ code = run_main()
 check("既存のお客様は引き継げる", connect_state.is_connected(), connect_state.current())
 check("引き継いだらこれまでどおり動く", calls == [""], str(calls))
 
+# (E2) つなぎ直しの URL（合図なし）。サイトの管理画面から開かれるもの
+#      条件: 正式な連携情報があるときだけ再接続する／未連携は CONNECTED にならない／
+#            合図なしで新しい紐付けはできない
+RELAUNCH = "aitrader://connect"
+check("つなぎ直しの URL からは合図を読まない", connect.connect_token_from_args([RELAUNCH]) == "")
+
+#   連携済みの PC → これまでどおりつなぎ直す
+connect_state.state_path().unlink(missing_ok=True)
+connect.env_value = lambda key: MEMBER if key == "BRIDGE_ID" else ""
+calls.clear()
+code = run_main(RELAUNCH)
+check("連携済みなら、つなぎ直しに進む", calls == [""], str(calls))
+check("連携済みのままでいる", connect_state.is_connected())
+
+#   未連携の PC → EA を置くだけ。部屋も持たない
+connect_state.state_path().unlink(missing_ok=True)
+connect.env_value = lambda key: ""
+calls.clear()
+code = run_main(RELAUNCH)
+check("未連携なら CONNECTED にならない", not connect_state.is_connected(), connect_state.current())
+check("未連携ならつなぎ直しにも進まない", calls == [], str(calls))
+check("未連携でもブリッジも通信も起きない", True)  # boom が呼ばれたらここまで来ない
+check("合図なしでは新しい紐付けができない", connect_state.read().get("room") in (None, ""), str(connect_state.read()))
+
+# (E3) Windows の起動時（--startup）。古い版が登録した自動起動が残っている PC で、
+#      毎回ログインのたびに設定画面が開かないこと
+connect_state.state_path().unlink(missing_ok=True)
+connect.env_value = lambda key: ""
+calls.clear()
+opened = []
+connect.installer_ui.open_window = lambda: (opened.append(1), None)[1]
+code = run_main("--silent", "--startup")
+check("未連携なら自動起動で何もしない", code == 0 and calls == [] and opened == [], f"code={code} calls={calls} 画面={opened}")
+check("未連携の自動起動では CONNECTED にならない", not connect_state.is_connected())
+
+#      連携済みなら、これまでどおり裏でつなぎ直す
+connect_state.state_path().unlink(missing_ok=True)
+connect.env_value = lambda key: MEMBER if key == "BRIDGE_ID" else ""
+calls.clear()
+opened.clear()
+code = run_main("--silent", "--startup")
+check("連携済みなら自動起動でつなぎ直す", calls == [""], str(calls))
+check("自動起動では画面を出さない", opened == [], str(opened))
+connect.installer_ui.open_window = lambda: None
+
 # (F) 引き継ぐ材料が無い PC は、EA を置くだけ
 connect_state.state_path().unlink(missing_ok=True)
 calls.clear()

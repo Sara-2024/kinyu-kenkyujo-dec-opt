@@ -1335,6 +1335,14 @@ def main() -> int:
     if connect_state.adopt_legacy(env_value("BRIDGE_ID")):
         log("これまでの設定から、連携済みとして引き継ぎました")
 
+    # Windows の起動時に呼ばれたとき（--startup）。
+    # 自動起動は「つながっていたものを戻す」ためのもの。まだ連携していない PC では
+    # 戻すものが無いので、何もしないで終わる。ここで初回の設定を始めると、
+    # ログインのたびに画面が開いてしまう（古い版が登録した自動起動が残っている PC）。
+    if "--startup" in args and not connect_state.is_connected():
+        log("自動起動で呼ばれたが、まだ連携していないので何もしない")
+        return 0
+
     # 部屋が渡されていない（＝サイトからではなく、自分で開いた）とき。
     # 連携が済んでいなければ、EA を置くだけで終わる。
     if not room and not connect_state.is_connected():
