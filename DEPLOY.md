@@ -56,7 +56,7 @@ TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
 
 1. MT5 を起動してログイン
 2. `AITrader.exe`（または `AITrader.vbs`）を**一度だけ**開く
-   - 黒い画面は出ない。中では EA 配置 → コンパイル → ブリッジ起動まで進む
+   - 黒い画面は出ない。中では EA 配置 → ブリッジ起動まで進む（EA はコンパイル済みを配るので、お客様のPCではコンパイルしない）
    - あわせて `aitrader://` とスタートアップを登録するので、
      次回からは**サイトのボタン1つ**、PC再起動後は**自動**でつながる
 3. ゴールド（XAUUSD）のチャートに OrbitGoldEA_v6 を載せ、自動売買 ON

@@ -138,10 +138,12 @@ def probe_ea_files(data_path: str) -> dict[str, Any]:
     found: list[str] = []
     compiled: list[str] = []
     for name in EA_NAMES:
-        if (experts / f"{name}.mq5").is_file():
-            found.append(name)
+        # 配るのはコンパイル済み(.ex5)。以前の方式で置いた .mq5 が残っていることもある
         if (experts / f"{name}.ex5").is_file():
             compiled.append(name)
+            found.append(name)
+        elif (experts / f"{name}.mq5").is_file():
+            found.append(name)
     return {
         "experts_dir": str(experts),
         "include_dir": str(include),

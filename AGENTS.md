@@ -167,8 +167,17 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   状態判定と配置は `bridge/ea_manager.py` に集約し、`NOT_INSTALLED` /
   `INSTALLED` / `UPDATE_AVAILABLE` / `LATEST` / `ERROR` を返す。
   **無条件に上書き・削除しない。** 中身（SHA-256）が同じなら触らない。
-- **`.ex5` へ切り替えるときは `ea_manager.EA_SOURCE_SUFFIX` と `ea_manifest.json` だけ。**
-  判定も配置もそこだけを見ているので、他は変えなくてよい。
+- **配るのはコンパイル済み（`.ex5`）だけ。** お客様の PC で MetaEditor を起動しない、
+  コンパイルもしない、ソース（`.mq5`）も配らない。
+  `.ex5` から版は読めないので、同梱の `ea_manifest.json` に版と SHA-256 を書く。
+  作り方は Windows で MetaEditor コンパイル →
+  `py -3 tools\make-ea-manifest.py` → `.ex5` と `ea_manifest.json` をコミット。
+  `tools\build-windows.bat` は、この2つが無ければ exe を作らずに止まる。
+- **同梱物の SHA-256 は置く前に確かめる。** manifest と食い違っていたら置かない
+  （`Source.ok`）。置いたあとも、置いたファイルを取り直して確かめる。
+- **お客様の PC に入っている版は `ea_installed.json` に控える。**
+  `.ex5` は中身から版を読めないため、置いたときの版と SHA-256 を覚えておき、
+  次回それと見比べて「更新が要るか」を決める。
 - **画面に技術用語を出さない。** `bridge/installer_ui.py`。MQL5・Experts・
   ブリッジ・API・Python・Socket は書かない。失敗しても原因ではなく
   「次に何をすればいいか」だけを出す。ボタンは高さ 44px 以上。

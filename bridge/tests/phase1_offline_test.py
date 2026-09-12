@@ -43,8 +43,22 @@ def no_spawn(*a, **k):
 
 import connect
 connect.spawn_hidden = no_spawn
-connect.run_hidden = lambda *a, **k: 1   # MetaEditor は無いので 1（失敗）を返す
+connect.run_hidden = no_spawn            # 外のプログラムは一切起こさない
 connect.installer_ui.open_window = lambda: None  # 画面は出さない
+
+# 配る EA（コンパイル済み）をでっち上げて、同梱物の置き場として渡す。
+# 本物の .ex5 は Windows でコンパイルしないと作れないため。
+import hashlib, json  # noqa: E402
+ASSETS = pathlib.Path(WORK) / "assets"
+ASSETS.mkdir(parents=True, exist_ok=True)
+BODY = b"EX5-BODY-for-test"
+(ASSETS / "OrbitGoldEA_v6.ex5").write_bytes(BODY)
+(ASSETS / "TradingGate.mqh").write_text("// 共通部品", encoding="utf-8")
+(ASSETS / "ea_manifest.json").write_text(json.dumps({
+    "ea": "OrbitGoldEA_v6", "file": "OrbitGoldEA_v6.ex5", "version": "6.10",
+    "sha256": hashlib.sha256(BODY).hexdigest()}), encoding="utf-8")
+REAL_ASSETS = connect.BRIDGE_DIR
+connect.BRIDGE_DIR = ASSETS
 
 ok = fail = 0
 def check(name, cond, extra=""):
@@ -55,11 +69,12 @@ def check(name, cond, extra=""):
 code = connect.setup_phase1()
 check("初回の設定が成功で終わる", code == 0, f"code={code}")
 
-ea = hfm / "MQL5" / "Experts" / "OrbitGoldEA_v6.mq5"
+ea = hfm / "MQL5" / "Experts" / "OrbitGoldEA_v6.ex5"
 inc = hfm / "MQL5" / "Include" / "TradingGate.mqh"
-check("EA が置かれた", ea.is_file())
+check("コンパイル済みの EA が置かれた", ea.is_file())
 check("Include が置かれた", inc.is_file())
-check("EA の中身が配布物と同じ", ea.read_bytes() == (ROOT/"bridge"/"OrbitGoldEA_v6.mq5").read_bytes())
+check("EA の中身が配布物と同じ", ea.read_bytes() == BODY)
+check("ソース(.mq5)は置かない", not (hfm / "MQL5" / "Experts" / "OrbitGoldEA_v6.mq5").is_file())
 
 import connect_state
 check("状態は INSTALL_ONLY", connect_state.current() == "INSTALL_ONLY", connect_state.current())
@@ -81,6 +96,16 @@ check("最新なら置き直さない", ea.stat().st_mtime_ns == before)
 # 連携していない状態でブリッジを起こそうとしても、起きない
 connect.start_bridge(None)   # no_spawn が呼ばれたら AssertionError で落ちる
 check("連携前はブリッジを起動しない", True)
+
+# 同梱の EA が無いときは、何もせずに案内して終わる（壊れたまま置かない）
+empty = pathlib.Path(WORK) / "empty"
+empty.mkdir(exist_ok=True)
+connect.BRIDGE_DIR = empty
+shutil.rmtree(hfm / "MQL5", ignore_errors=True)
+code3 = connect.setup_phase1()
+check("配布物が無ければ失敗で終わる", code3 == 1, f"code={code3}")
+check("配布物が無ければ何も置かない", not (hfm / "MQL5" / "Experts").exists())
+connect.BRIDGE_DIR = ASSETS
 
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{ok} ok / {fail} NG")

@@ -1,30 +1,34 @@
 """EA の状態を見て、必要なときだけ置き直す。
 
-置く場所も EA の名前も、これまでと同じ（MQL5/Experts/OrbitGoldEA_v6.mq5）。
+配るのは**コンパイル済みの `OrbitGoldEA_v6.ex5`**。お客様の PC では
+MetaEditor を起動しないし、コンパイルもしない。ソース（.mq5）も配らない。
+
+  ・MetaEditor が無い PC でも確実に置ける
+  ・コンパイルの失敗が起きない
+  ・置く処理は「ファイルを1つ置く」だけになる
+
+置く場所と名前はこれまでどおり（MQL5/Experts/OrbitGoldEA_v6.ex5）。
 すでに使っているお客様のチャート設定を動かさないため、今回は変えない。
 
 状態は5つ:
   NOT_INSTALLED     … まだ置かれていない
   LATEST            … 置かれていて、中身も配布物と同じ
-  UPDATE_AVAILABLE  … 置かれているが中身が古い
+  UPDATE_AVAILABLE  … 置かれているが中身が違う（古い）
   INSTALLED         … 置かれているが、配布物と比べられない（同梱物が無い等）
-  ERROR             … フォルダが読めない等
+  ERROR             … フォルダが読めない／配布物が壊れている
 
-いまは .mq5 を配って現地の MetaEditor でコンパイルしている。
-将来 .ex5（コンパイル済み）に切り替えるときは、
-
-  ・EA_SOURCE_SUFFIX を ".ex5" にする
-  ・ea_manifest.json に版を書く（.ex5 からは #property version を読めないため）
-
-の2点で済むようにしてある。判定も設置もここだけを見ている。
+版（6.10 など）は .ex5 からは読めないので、同梱の ea_manifest.json に書く。
+置いたときの版と中身は ea_installed.json に控え、次回それと見比べる。
+manifest は tools/make-ea-manifest.py が作る（Windows でコンパイルした後）。
 """
 from __future__ import annotations
 
 import hashlib
 import json
-import re
+import os
 import shutil
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -40,13 +44,12 @@ LATEST = "LATEST"
 ERROR = "ERROR"
 
 EA_NAME = EA_NAMES[0]
-# いま配っている形式。コンパイル済みに切り替えるときはここを ".ex5" にする
-EA_SOURCE_SUFFIX = ".mq5"
+# 配る形式。コンパイル済みだけを配る（ソースは配らない）
+EA_SOURCE_SUFFIX = ".ex5"
+# EA が読む共通部品。これも一緒に置く
 INCLUDE_FILES = ("TradingGate.mqh",)
-# 版と中身の照合表。.ex5 を配るようになったら同梱する（無くても動く）
 MANIFEST_NAME = "ea_manifest.json"
-
-_VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
+RECORD_NAME = "ea_installed.json"
 
 
 def sha256_of(path: Path) -> str:
@@ -57,49 +60,118 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _version_from_source(path: Path) -> str:
-    """.mq5 なら #property version を読む。.ex5 では読めないので空を返す。"""
-    if path.suffix.lower() != ".mq5":
-        return ""
+def _config_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("TMPDIR") or "/tmp"
+    path = Path(base) / "AITrader"
     try:
-        head = path.read_text(encoding="utf-8", errors="ignore")[:4000]
+        path.mkdir(parents=True, exist_ok=True)
     except OSError:
-        return ""
-    found = _VERSION_RE.search(head)
-    return found.group(1) if found else ""
+        pass
+    return path
 
 
+# ────────────────────────────────
+# 配布物（exe に同梱している EA）
+# ────────────────────────────────
 @dataclass
 class Source:
-    """配布物側（exe に同梱している EA）。"""
-
     ea_path: Path
     version: str
     sha256: str
     includes: tuple[Path, ...]
+    #: manifest と中身が食い違っていたら、その理由。空なら健全
+    broken: str = ""
 
     @property
     def file_name(self) -> str:
         return self.ea_path.name
 
+    @property
+    def ok(self) -> bool:
+        return not self.broken
+
 
 def load_source(assets_dir: Path) -> Source | None:
-    """同梱している EA を読む。無ければ None（置くものが無い）。"""
-    ea = assets_dir / f"{EA_NAME}{EA_SOURCE_SUFFIX}"
+    """同梱している EA を読む。
+
+    manifest に SHA-256 が書いてあれば、同梱物が途中で壊れていないかをここで確かめる。
+    食い違っていたら broken を立てる。壊れたものは置かない。
+    """
+    ea = Path(assets_dir) / f"{EA_NAME}{EA_SOURCE_SUFFIX}"
     if not ea.is_file():
         return None
+
     manifest: dict[str, Any] = {}
-    path = assets_dir / MANIFEST_NAME
+    path = Path(assets_dir) / MANIFEST_NAME
     if path.is_file():
         try:
             manifest = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             manifest = {}
-    version = str(manifest.get("version") or "") or _version_from_source(ea)
-    includes = tuple(assets_dir / name for name in INCLUDE_FILES if (assets_dir / name).is_file())
-    return Source(ea_path=ea, version=version, sha256=sha256_of(ea), includes=includes)
+
+    try:
+        digest = sha256_of(ea)
+    except OSError as exc:  # noqa: BLE001
+        return Source(ea_path=ea, version="", sha256="", includes=(), broken=f"読めない: {exc}")
+
+    broken = ""
+    expected = str(manifest.get("sha256") or "").strip().lower()
+    if expected and expected != digest:
+        broken = "同梱の EA が manifest と違う（壊れている可能性）"
+
+    includes = tuple(Path(assets_dir) / name for name in INCLUDE_FILES if (Path(assets_dir) / name).is_file())
+    missing = [name for name in INCLUDE_FILES if not (Path(assets_dir) / name).is_file()]
+    if missing and not broken:
+        broken = f"同梱物が足りない: {'・'.join(missing)}"
+
+    return Source(
+        ea_path=ea,
+        version=str(manifest.get("version") or ""),
+        sha256=digest,
+        includes=includes,
+        broken=broken,
+    )
 
 
+# ────────────────────────────────
+# 置いたときの控え（.ex5 からは版を読めないため）
+# ────────────────────────────────
+def _record_path() -> Path:
+    return _config_dir() / RECORD_NAME
+
+
+def read_record(data_path: Path) -> dict[str, Any]:
+    try:
+        raw = json.loads(_record_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    got = raw.get(str(data_path))
+    return got if isinstance(got, dict) else {}
+
+
+def write_record(data_path: Path, *, version: str, digest: str) -> None:
+    try:
+        raw = json.loads(_record_path().read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raw = {}
+    except (OSError, ValueError):
+        raw = {}
+    raw[str(data_path)] = {
+        "version": version,
+        "sha256": digest,
+        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    try:
+        _record_path().write_text(json.dumps(raw, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+
+
+# ────────────────────────────────
+# いま置かれているものの状態
+# ────────────────────────────────
 @dataclass
 class Status:
     state: str
@@ -120,10 +192,13 @@ class Status:
         }
 
 
+def installed_path(data_path: Path) -> Path:
+    return Path(data_path) / "MQL5" / "Experts" / f"{EA_NAME}{EA_SOURCE_SUFFIX}"
+
+
 def status(data_path: Path, source: Source | None) -> Status:
     """その MT5 に置かれている EA の状態。MT5 を起動しなくても分かる。"""
-    experts = Path(data_path) / "MQL5" / "Experts"
-    target = experts / f"{EA_NAME}{EA_SOURCE_SUFFIX}"
+    target = installed_path(data_path)
     src_version = source.version if source else ""
     try:
         exists = target.is_file()
@@ -133,22 +208,27 @@ def status(data_path: Path, source: Source | None) -> Status:
     if not exists:
         return Status(NOT_INSTALLED, source_version=src_version)
     if source is None:
-        return Status(INSTALLED, installed_version=_version_from_source(target), detail="配布物が読めない")
+        return Status(INSTALLED, detail="配布物が読めない")
+    if not source.ok:
+        return Status(ERROR, source_version=src_version, detail=source.broken)
 
     try:
-        same = sha256_of(target) == source.sha256
+        digest = sha256_of(target)
     except OSError as exc:  # noqa: BLE001
         return Status(ERROR, detail=str(exc))
 
-    installed_version = _version_from_source(target)
-    if same and _includes_are_current(Path(data_path), source):
-        return Status(LATEST, installed_version=installed_version, source_version=src_version)
+    # 控えが今のファイルのものなら、そこに書いてある版を「入っている版」とする
+    record = read_record(Path(data_path))
+    installed_version = str(record.get("version") or "") if record.get("sha256") == digest else ""
+
+    if digest == source.sha256 and _includes_are_current(Path(data_path), source):
+        return Status(LATEST, installed_version=installed_version or src_version, source_version=src_version)
     return Status(UPDATE_AVAILABLE, installed_version=installed_version, source_version=src_version)
 
 
 def _includes_are_current(data_path: Path, source: Source) -> bool:
     """EA が読む TradingGate.mqh も揃っているか。片方だけ古いと動かない。"""
-    include_dir = data_path / "MQL5" / "Include"
+    include_dir = Path(data_path) / "MQL5" / "Include"
     for src in source.includes:
         target = include_dir / src.name
         if not target.is_file():
@@ -161,6 +241,9 @@ def _includes_are_current(data_path: Path, source: Source) -> bool:
     return True
 
 
+# ────────────────────────────────
+# 置く
+# ────────────────────────────────
 def install(
     data_path: Path,
     source: Source,
@@ -168,10 +251,15 @@ def install(
     old_names: tuple[str, ...] = (),
     log: Callable[[str], None] = lambda _m: None,
 ) -> Status:
-    """EA と Include を置く。すでに入っていても、中身が同じなら触らない。
+    """EA と Include を置く。中身が同じなら触らない。
 
-    無条件の削除・上書きはしない。古い版の EA だけ、名前で指定されたものを片づける。
+    無条件の削除・上書きはしない。壊れた配布物は置かない。
+    置いたあとは、もう一度ハッシュを取り直して正しく置けたかを確かめる。
     """
+    if not source.ok:
+        log(f"配布物が使えないので置かない: {source.broken}")
+        return Status(ERROR, source_version=source.version, detail=source.broken)
+
     data_root = Path(data_path)
     experts = data_root / "MQL5" / "Experts"
     include = data_root / "MQL5" / "Include"
@@ -190,14 +278,24 @@ def install(
             log(f"置いた Include/{src.name}")
 
         target = experts / source.file_name
-        if not (target.is_file() and sha256_of(target) == source.sha256):
+        if target.is_file() and sha256_of(target) == source.sha256:
+            log(f"そのまま Experts/{source.file_name}（中身が同じ）")
+        else:
             shutil.copy2(source.ea_path, target)
             log(f"置いた Experts/{source.file_name}")
-        else:
-            log(f"そのまま Experts/{source.file_name}（中身が同じ）")
     except OSError as exc:  # noqa: BLE001
         return Status(ERROR, detail=str(exc))
 
+    # 正しく置けたかを、置いたファイルそのものから確かめる
+    try:
+        placed = sha256_of(experts / source.file_name)
+    except OSError as exc:  # noqa: BLE001
+        return Status(ERROR, detail=str(exc))
+    if placed != source.sha256:
+        log("置いた EA の中身が配布物と違う")
+        return Status(ERROR, source_version=source.version, detail="置いたファイルが配布物と違う")
+
+    write_record(data_root, version=source.version, digest=placed)
     cleanup_old(experts, old_names, log=log)
     return status(data_root, source)
 
@@ -208,9 +306,14 @@ def cleanup_old(
     *,
     log: Callable[[str], None] = lambda _m: None,
 ) -> list[str]:
-    """以前配っていた EA を片づける。チャートに載っていると消せないことがある。"""
+    """以前配っていた EA を片づける。チャートに載っていると消せないことがある。
+
+    いま使っている EA（EA_NAME）は、ここには渡さないこと。
+    """
     removed: list[str] = []
     for name in old_names:
+        if name == EA_NAME:
+            continue  # 取り違えても今の EA は消さない
         for suffix in (".mq5", ".ex5"):
             stale = experts / f"{name}{suffix}"
             if not stale.is_file():
@@ -224,11 +327,11 @@ def cleanup_old(
     return removed
 
 
-def compiled_exists(data_path: Path) -> bool:
-    """コンパイル済み（.ex5）が置かれているか。MT5 が実際に動かすのはこちら。"""
-    return (Path(data_path) / "MQL5" / "Experts" / f"{EA_NAME}.ex5").is_file()
+def stale_source_exists(data_path: Path) -> bool:
+    """以前の方式で置いた .mq5 が残っているか（コンパイル済みに移行したあとの掃除用）。"""
+    return (Path(data_path) / "MQL5" / "Experts" / f"{EA_NAME}.mq5").is_file()
 
 
 def needs_compile() -> bool:
-    """いま配っているのが .mq5 なら、現地でコンパイルが要る。"""
+    """お客様の PC でコンパイルが要るか。コンパイル済みを配るので常に False。"""
     return EA_SOURCE_SUFFIX == ".mq5"

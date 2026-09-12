@@ -124,14 +124,6 @@ def pick_default(terminals: list[Terminal]) -> Terminal | None:
     return terminals[0]
 
 
-def find_metaeditor(terminal: Terminal) -> Path | None:
-    """その MT5 専用の MetaEditor。別ブローカーの Editor は使わない。"""
-    if terminal.install_dir is None:
-        return None
-    editor = terminal.install_dir / "metaeditor64.exe"
-    return editor if editor.is_file() else None
-
-
 def describe(terminals: list[Terminal]) -> str:
     """記録用の1行。お客様には見せない。"""
     if not terminals:

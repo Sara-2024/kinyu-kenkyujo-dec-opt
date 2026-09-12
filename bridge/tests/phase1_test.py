@@ -62,6 +62,28 @@ import connect_state  # noqa: E402
 import ea_manager  # noqa: E402
 import mt5_detect  # noqa: E402
 
+
+def make_assets(version: str = "6.10", *, sha_ok: bool = True, ea_body: bytes = b"EX5-BODY-v6.10") -> pathlib.Path:
+    """にせの配布物（コンパイル済み EA ＋ 控え）を作る。
+
+    本物の .ex5 は Windows でコンパイルしないと作れないので、試験では中身を
+    でっち上げる。ea_manager は中身を解釈せず、SHA-256 だけを見ている。
+    """
+    import hashlib
+    import json
+
+    assets = pathlib.Path(tempfile.mkdtemp(prefix="assets-", dir=WORK))
+    ea = assets / "OrbitGoldEA_v6.ex5"
+    ea.write_bytes(ea_body)
+    (assets / "TradingGate.mqh").write_text("// 共通部品", encoding="utf-8")
+    digest = hashlib.sha256(ea_body).hexdigest()
+    (assets / "ea_manifest.json").write_text(
+        json.dumps({"ea": "OrbitGoldEA_v6", "file": ea.name, "version": version,
+                    "sha256": digest if sha_ok else "0" * 64}),
+        encoding="utf-8",
+    )
+    return assets
+
 # ── 1) MT5 を全部見つけられる（起動もログインも不要） ──
 terminals = mt5_detect.list_terminals()
 check("MT5 を2台とも見つける", len(terminals) == 2, str(mt5_detect.describe(terminals)))
@@ -70,14 +92,24 @@ check("ブローカー名を出せる", labels == ["HFM", "XM"], str(labels))
 check("データフォルダを持っている", all(t.data_path.is_dir() for t in terminals))
 
 # ── 2) 配布物（同梱の EA）を読める ──
-source = ea_manager.load_source(BRIDGE)
-check("同梱の EA を読める", source is not None)
+assets = make_assets()
+source = ea_manager.load_source(assets)
+check("配布物を読める", source is not None)
 if source is None:
     print("\n配布物が読めないので以降は省略")
     sys.exit(1)
-check("EA の版を読める", bool(source.version), source.version)
-check("EA の名前は変えていない", source.file_name == "OrbitGoldEA_v6.mq5", source.file_name)
+check("配るのはコンパイル済み", source.file_name == "OrbitGoldEA_v6.ex5", source.file_name)
+check("版は控えから読む", source.version == "6.10", source.version)
+check("SHA-256 が合っている", source.ok, source.broken)
 check("Include も同梱している", len(source.includes) == 1, str(source.includes))
+check("お客様のPCでコンパイルしない", not ea_manager.needs_compile())
+
+# 中身が控えと違う配布物は使わない
+bad = ea_manager.load_source(make_assets(sha_ok=False))
+check("中身が控えと違えば使わない", bad is not None and not bad.ok, str(bad.broken if bad else None))
+st_bad = ea_manager.install(xm, bad) if bad else None
+check("壊れた配布物は置かない", st_bad is not None and st_bad.state == ea_manager.ERROR)
+check("壊れていたら何も置かれない", not (xm / "MQL5" / "Experts" / "OrbitGoldEA_v6.ex5").is_file())
 
 # ── 3) 置く前は「未設置」 ──
 st = ea_manager.status(hfm, source)
@@ -93,11 +125,23 @@ check("もう置く必要は無い", not after.needs_install)
 
 # ── 5) 中身が古いと「要更新」。無条件に上書きしない ──
 target = hfm / "MQL5" / "Experts" / source.file_name
-target.write_text("古い中身", encoding="utf-8")
+target.write_bytes(b"EX5-BODY-v6.00")
 st = ea_manager.status(hfm, source)
 check("中身が違えば要更新", st.state == ea_manager.UPDATE_AVAILABLE, st.state)
 again = ea_manager.install(hfm, source)
 check("更新すると最新に戻る", again.state == ea_manager.LATEST, again.state)
+check("置いた版が分かる", again.installed_version == "6.10", again.installed_version)
+
+# 新しい版の配布物に差し替えたら、更新が要ると分かる
+newer = ea_manager.load_source(make_assets(version="6.20", ea_body=b"EX5-BODY-v6.20"))
+st = ea_manager.status(hfm, newer)
+check("新しい版が来たら要更新", st.state == ea_manager.UPDATE_AVAILABLE, st.state)
+check("入っている版も言える", st.installed_version == "6.10", st.installed_version)
+check("配布物の版も言える", st.source_version == "6.20", st.source_version)
+after_new = ea_manager.install(hfm, newer)
+check("新しい版に入れ替わる", after_new.state == ea_manager.LATEST and after_new.installed_version == "6.20",
+      after_new.as_dict())
+ea_manager.install(hfm, source)  # 元に戻しておく
 
 # ── 6) Include だけ消えても気づく（EA だけ新しくても動かないため） ──
 (hfm / "MQL5" / "Include" / "TradingGate.mqh").unlink()
@@ -111,6 +155,8 @@ experts = hfm / "MQL5" / "Experts"
 removed = ea_manager.cleanup_old(experts, ("OrbitGoldEA_v5",))
 check("古い版を片づける", removed == ["OrbitGoldEA_v5.mq5"], str(removed))
 check("いまの EA は残る", (experts / source.file_name).is_file())
+ea_manager.cleanup_old(experts, ("OrbitGoldEA_v6",))
+check("取り違えても今の EA は消さない", (experts / source.file_name).is_file())
 
 # ── 8) 触っていない MT5 は未設置のまま（勝手に全部へ置かない） ──
 check("選ばなかった MT5 は未設置のまま", ea_manager.status(xm, source).state == ea_manager.NOT_INSTALLED)
@@ -156,6 +202,19 @@ if main is not None:
     dumped = ast.dump(main)
     check("初回は setup_phase1 を通る", "setup_phase1" in dumped)
     check("引き継ぎも見ている", "adopt_legacy" in dumped)
+
+# ── 13) リポジトリに置いてある本物の配布物（あれば）を確かめる ──
+real_ea = BRIDGE / "OrbitGoldEA_v6.ex5"
+real_manifest = BRIDGE / "ea_manifest.json"
+if real_ea.is_file() and real_manifest.is_file():
+    real = ea_manager.load_source(BRIDGE)
+    check("同梱の EA が控えと一致している", real is not None and real.ok, str(real.broken if real else None))
+    check("同梱の EA に版が入っている", bool(real and real.version), str(real.version if real else ""))
+elif real_ea.is_file() or real_manifest.is_file():
+    check("EA と控えは両方そろえる", False, "片方しかない")
+else:
+    print("  --   コンパイル済みの EA はまだ置かれていません")
+    print("       Windows で MetaEditor コンパイル → py -3 tools/make-ea-manifest.py")
 
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{PASS} ok / {FAIL} NG")

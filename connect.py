@@ -49,10 +49,8 @@ sys.path.insert(0, str(BRIDGE_DIR))
 from mt5_terminal import (  # noqa: E402
     EA_NAMES,
     find_logged_in_terminal,
-    find_metaeditor,
     probe_ea_files,
     resolve_terminal_exe,
-    terminal_dir_from_data_path,
 )
 import connect_state  # noqa: E402  INSTALL_ONLY / CONNECTED
 import ea_manager  # noqa: E402  EA の状態判定と配置
@@ -68,7 +66,8 @@ LOCAL_RELAY = "ws://127.0.0.1:8080/bridge"
 
 # お客様の MT5 に送るシステムは、これ1つだけ（Orbit GOLD 2軸エンジン。XAUUSD 専用）
 EA_NAME = EA_NAMES[0]
-EA_FILES = (f"{EA_NAME}.mq5",)
+# 配るのはコンパイル済みだけ。お客様の PC ではコンパイルしない（ソースも配らない）
+EA_FILES = (f"{EA_NAME}{ea_manager.EA_SOURCE_SUFFIX}",)
 # 以前に配っていたもの。1つに絞ったので、見つけたら片づける。
 # 残っていると同じ指令ファイルを二重に読み書きして紛らわしい。
 OLD_EA_NAMES = ("TrelabEA", "TrelabGate", "SiteTestEA", "OrbitGoldEA_v5")
@@ -403,53 +402,10 @@ def wait_for_login(timeout_sec: int = 600) -> dict | None:
     return None
 
 
-def read_compile_log(mq5: Path) -> str:
-    for candidate in (mq5.with_suffix(".log"), mq5.parent / "MQL5" / "Logs" / "metaeditor.log"):
-        if not candidate.is_file():
-            continue
-        for encoding in ("utf-16", "utf-8", "cp932"):
-            try:
-                text = candidate.read_text(encoding=encoding, errors="ignore")
-            except OSError:
-                continue
-            if text.strip():
-                return text.strip()[-2500:]
-    return ""
-
-
-def compile_mq5(editor: Path, mq5: Path, terminal_dir: Path | None) -> bool:
-    log(f"コンパイル: {mq5.name}")
-    ex5 = mq5.with_suffix(".ex5")
-    if ex5.is_file():
-        try:
-            ex5.unlink()
-        except OSError:
-            pass
-
-    run_hidden(
-        [str(editor), f"/compile:{mq5}", "/log"],
-        cwd=str(terminal_dir) if terminal_dir else None,
-        timeout=180,
-    )
-
-    for _ in range(120):
-        if ex5.is_file():
-            log(f"OK  {ex5.name}")
-            return True
-        time.sleep(0.25)
-
-    log(f"注意  {ex5.name} ができませんでした")
-    tail = read_compile_log(mq5)
-    for line in tail.splitlines()[-12:]:
-        log(f"  | {line}")
-    return False
-
-
 def verify_ea_install(data_path: str) -> tuple[bool, dict]:
     probe = probe_ea_files(data_path)
-    ok = probe["include_ok"] and EA_NAME in probe["ea_found"]
-    if ok and EA_NAME not in probe["ea_compiled"]:
-        log(f"注意  {EA_NAME}.mq5 はありますが .ex5 がまだありません")
+    # コンパイル済みが置けていることが条件。MetaEditor には頼らない
+    ok = probe["include_ok"] and EA_NAME in probe["ea_compiled"]
     return ok, probe
 
 
@@ -466,9 +422,6 @@ def copy_ea_files(session: dict) -> Path:
     include = mql5 / "Include"
     experts.mkdir(parents=True, exist_ok=True)
     include.mkdir(parents=True, exist_ok=True)
-
-    terminal_exe = resolve_terminal_exe(session)
-    terminal_dir = terminal_exe.parent if terminal_exe else terminal_dir_from_data_path(data_path)
 
     banner("システムの配置")
     log(f"口座 {session.get('account')} / {session.get('server')}")
@@ -500,18 +453,9 @@ def copy_ea_files(session: dict) -> Path:
             except OSError:
                 log(f"注意  {name}{suffix} を消せません（チャートから外してから開き直してください）")
 
-    editor = find_metaeditor(data_path, terminal_exe)
-    if editor:
-        for name in EA_FILES:
-            compile_mq5(editor, experts / name, terminal_dir)
-    else:
-        log("注意  metaeditor64.exe が見つかりません（MT5 の F4 から手動コンパイル）")
-
+    # コンパイルはしない。配っているものがすでにコンパイル済みのため。
     ok, probe = verify_ea_install(data_path)
-    if editor and EA_NAME not in probe["ea_compiled"]:
-        ok = False
     log(f"確認 Include/TradingGate.mqh : {'OK' if probe['include_ok'] else 'なし'}")
-    log(f"確認 Experts/{EA_NAME}.mq5 : {'OK' if EA_NAME in probe['ea_found'] else 'なし'}")
     log(f"確認 Experts/{EA_NAME}.ex5 : {'OK' if EA_NAME in probe['ea_compiled'] else 'なし'}")
 
     # 画面に出さない方針なので、エクスプローラは調査モードのときだけ開く
@@ -1057,22 +1001,6 @@ def self_test() -> int:
 #   MT5 を探して EA を置くところまで。サイトとは一切通信しない。
 #   サイトから正式に連携されるまで、この状態のまま動く。
 # ────────────────────────────────────────────────
-def _compile_if_possible(terminal: "mt5_detect.Terminal") -> bool:
-    """現地の MetaEditor で EA をコンパイルする。
-
-    いまは .mq5 を配っているのでこれが要る。コンパイル済み（.ex5）を
-    配るようになったら ea_manager.needs_compile() が False になり、丸ごと飛ぶ。
-    """
-    if not ea_manager.needs_compile():
-        return True
-    editor = mt5_detect.find_metaeditor(terminal)
-    if editor is None:
-        log("MetaEditor が見つからないので、コンパイルは MT5 側にまかせます")
-        return False
-    mq5 = terminal.experts_dir / f"{ea_manager.EA_NAME}{ea_manager.EA_SOURCE_SUFFIX}"
-    return compile_mq5(editor, mq5, terminal.install_dir)
-
-
 def setup_phase1() -> int:
     """お客様が exe を開いたときの既定の動き。EA を置いて終わる。"""
     banner("初回の設定")
@@ -1137,7 +1065,6 @@ def setup_phase1() -> int:
             ui.fail("設定を保存できませんでした。", "MT5を閉じてから、もう一度このアプリを開いてください。")
         return 1
 
-    compiled = _compile_if_possible(target)
     if ui:
         ui.mark("ea", True)
 
@@ -1150,8 +1077,8 @@ def setup_phase1() -> int:
         notes.append("AI Trader を新しい内容に更新しました。")
     else:
         notes.append("AI Trader はすでに最新でした。")
-    if not compiled and not ea_manager.compiled_exists(target.data_path):
-        notes.append("MT5を次に開いたときに、自動で読み込まれます。")
+    if ea_manager.stale_source_exists(target.data_path):
+        notes.append("MT5を開いているときは、一度閉じて開き直してください。")
     notes.append("このアプリは閉じていただいて構いません。")
 
     if ui:
