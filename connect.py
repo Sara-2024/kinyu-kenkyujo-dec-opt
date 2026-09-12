@@ -12,8 +12,11 @@
 
 サイトに口座パスワードは一切渡さない。
 
+  AITrader.exe をダブルクリック        … 初回は MT5 を探して EA を置くだけ（画面つき）
+                                         連携済みなら、これまでどおり裏でつなぎ直す
   AITrader.vbs をダブルクリック       … 画面を出さずに全部やる
   python connect.py --console          … 経過を画面に出す（調査用）
+  python connect.py --setup            … 初回の設定（MT5を探して EA を置く。画面つき）
   python connect.py --install-ea       … システムの配置だけ
   python connect.py --register         … サイト連携の登録だけ
   python connect.py --stop             … 裏で動いているブリッジを止める
@@ -51,6 +54,10 @@ from mt5_terminal import (  # noqa: E402
     resolve_terminal_exe,
     terminal_dir_from_data_path,
 )
+import connect_state  # noqa: E402  INSTALL_ONLY / CONNECTED
+import ea_manager  # noqa: E402  EA の状態判定と配置
+import installer_ui  # noqa: E402  初回の設定画面
+import mt5_detect  # noqa: E402  PC の中の MT5 を全部探す
 
 MT5_SETUP_URL = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 # お客様に配る exe が向かう中継。開発機（.py のまま動かすとき）はローカルの中継。
@@ -305,6 +312,8 @@ def unregister() -> int:
     if LEGACY_PROTOCOL != PROTOCOL:
         _delete_protocol(LEGACY_PROTOCOL)
     log(f"{PROTOCOL}:// の登録を消しました")
+    # EA は MT5 に置いたまま。サイトとの通信だけ止める
+    connect_state.mark_install_only("登録を消した")
     return 0
 
 
@@ -550,11 +559,17 @@ def write_bridge_env(session: dict) -> None:
 
 
 def adopt_room(room: str) -> None:
-    """サイトから渡された会員IDを、このPCのブリッジ名として覚える。"""
+    """サイトから部屋（会員ID）を受け取る。これまでの連携のしかた（互換用）。
+
+    新しい導線は token 方式（Phase 2）を使う。こちらは、すでに使っている
+    お客様の PC が古い URL で呼ばれたときのために残してある。
+    サイトから呼ばれた時点で「連携された」とみなし、通信を始められる状態にする。
+    """
     if not ROOM_RE.match(room):
         return
     write_env_key("BRIDGE_ID", room)
     os.environ["BRIDGE_ID"] = room
+    connect_state.mark_connected(room)
     log(f"このPCの部屋: {room}")
 
 
@@ -983,6 +998,11 @@ def bridge_env(session: dict | None) -> dict[str, str]:
 
 
 def start_bridge(session: dict | None = None) -> None:
+    # サイトから正式に連携されるまでは、口座の情報を外へ出さない。
+    # ここが最後の歯止め。呼び出し口が増えても、これで必ず止まる。
+    if not connect_state.is_connected():
+        log("まだサイトと連携していないので、通信は始めません（EA の設置だけ）")
+        return
     our_id = env_value("BRIDGE_ID") or "vps-01"
     if bridge_already_running():
         local_missing = (
@@ -1032,6 +1052,114 @@ def self_test() -> int:
         shutil.rmtree(fake, ignore_errors=True)
 
 
+# ────────────────────────────────────────────────
+# 初回の設定（Phase 1）
+#   MT5 を探して EA を置くところまで。サイトとは一切通信しない。
+#   サイトから正式に連携されるまで、この状態のまま動く。
+# ────────────────────────────────────────────────
+def _compile_if_possible(terminal: "mt5_detect.Terminal") -> bool:
+    """現地の MetaEditor で EA をコンパイルする。
+
+    いまは .mq5 を配っているのでこれが要る。コンパイル済み（.ex5）を
+    配るようになったら ea_manager.needs_compile() が False になり、丸ごと飛ぶ。
+    """
+    if not ea_manager.needs_compile():
+        return True
+    editor = mt5_detect.find_metaeditor(terminal)
+    if editor is None:
+        log("MetaEditor が見つからないので、コンパイルは MT5 側にまかせます")
+        return False
+    mq5 = terminal.experts_dir / f"{ea_manager.EA_NAME}{ea_manager.EA_SOURCE_SUFFIX}"
+    return compile_mq5(editor, mq5, terminal.install_dir)
+
+
+def setup_phase1() -> int:
+    """お客様が exe を開いたときの既定の動き。EA を置いて終わる。"""
+    banner("初回の設定")
+    ui = installer_ui.open_window()
+
+    def say(text: str) -> None:
+        log(text)
+        if ui:
+            ui.say(text)
+
+    # 次にサイトから呼べるように、URL の登録だけしておく（お客様には見えない）。
+    # 自動起動（スタートアップ）は連携が済むまで登録しない。
+    register_protocol()
+
+    say("MT5を確認しています…")
+    terminals = mt5_detect.list_terminals()
+    log(f"見つかった MT5: {mt5_detect.describe(terminals)}")
+    if not terminals:
+        log("MT5 のデータフォルダが1つも無い")
+        if ui:
+            ui.fail(
+                "MT5が見つかりませんでした。",
+                "MT5を一度起動してログインしてから、もう一度このアプリを開いてください。",
+            )
+        return 1
+
+    target = terminals[0]
+    if len(terminals) > 1:
+        if ui:
+            picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+            for t in terminals:
+                if str(t.data_path) == picked:
+                    target = t
+                    break
+        else:
+            log("画面を出せないので、最後に使った MT5 を選びます")
+    say(f"{target.label} が見つかりました。")
+    log(f"対象 {target.data_path}")
+
+    source = ea_manager.load_source(BRIDGE_DIR)
+    if source is None:
+        log(f"同梱の EA が読めない: {BRIDGE_DIR}")
+        if ui:
+            ui.fail("設定に必要なファイルが見つかりませんでした。", "アプリを入れ直してから、もう一度お試しください。")
+        return 1
+
+    before = ea_manager.status(target.data_path, source)
+    log(f"EA の状態: {before.as_dict()}")
+
+    if ui:
+        ui.clear_body()
+        ui.add_step("mt5", "MT5の確認")
+        ui.mark("mt5", True)
+        ui.add_step("ea", "AI Traderの設定")
+    say("AI Traderを設定しています…")
+
+    after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, log=log)
+    log(f"配置のあとの状態: {after.as_dict()}")
+    if after.state == ea_manager.ERROR:
+        if ui:
+            ui.mark("ea", False)
+            ui.fail("設定を保存できませんでした。", "MT5を閉じてから、もう一度このアプリを開いてください。")
+        return 1
+
+    compiled = _compile_if_possible(target)
+    if ui:
+        ui.mark("ea", True)
+
+    connect_state.write(connect_state.INSTALL_ONLY, terminal=str(target.data_path), ea=after.state)
+
+    notes: list[str] = []
+    if before.state == ea_manager.NOT_INSTALLED:
+        notes.append("AI Trader をMT5に追加しました。")
+    elif before.state == ea_manager.UPDATE_AVAILABLE:
+        notes.append("AI Trader を新しい内容に更新しました。")
+    else:
+        notes.append("AI Trader はすでに最新でした。")
+    if not compiled and not ea_manager.compiled_exists(target.data_path):
+        notes.append("MT5を次に開いたときに、自動で読み込まれます。")
+    notes.append("このアプリは閉じていただいて構いません。")
+
+    if ui:
+        ui.finish(notes, ok=True)
+    log("初回の設定が終わりました（サイトとは接続していません）")
+    return 0
+
+
 def install_ea_only() -> int:
     banner("システムの配置だけ")
     session = find_logged_in_terminal()
@@ -1066,6 +1194,15 @@ def _protocol_command() -> str:
 def show_status() -> int:
     """つながらないとき、原因を一目で見られるように、いまの状態を全部出す。"""
     banner("いまの状態")
+    state = connect_state.read()
+    log(f"連携            : {state.get('state')}"
+        + (f"（{state.get('room')}）" if state.get("room") else "")
+        + "  ※ INSTALL_ONLY はEAを置くだけ／CONNECTED はサイトと通信する")
+    terminals = mt5_detect.list_terminals()
+    log(f"見つかった MT5  : {mt5_detect.describe(terminals)}")
+    source = ea_manager.load_source(BRIDGE_DIR)
+    for t in terminals:
+        log(f"  {t.label}: EA {ea_manager.status(t.data_path, source).state}")
     log(f"手元の版        : {source_version() or '不明'}")
     log(f"中継の接続先    : {relay_url()}")
     log(f"この PC の部屋  : {env_value('BRIDGE_ID') or '（未設定 → vps-01）'}")
@@ -1190,6 +1327,22 @@ def main() -> int:
         banner("登録をすべて消す")
         stop_all_bridges()
         return unregister()
+
+    if "--setup" in args:
+        return setup_phase1()
+
+    # すでにサイトと連携して使っている PC を引き継ぐ（state.json がまだ無い場合）
+    if connect_state.adopt_legacy(env_value("BRIDGE_ID")):
+        log("これまでの設定から、連携済みとして引き継ぎました")
+
+    # 部屋が渡されていない（＝サイトからではなく、自分で開いた）とき。
+    # 連携が済んでいなければ、EA を置くだけで終わる。
+    if not room and not connect_state.is_connected():
+        code = setup_phase1()
+        if CONSOLE:
+            print()
+            input("  続けるには Enter を押してください...")
+        return code
 
     code = connect_all(room)
     if CONSOLE:

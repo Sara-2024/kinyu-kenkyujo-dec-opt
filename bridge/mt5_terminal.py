@@ -26,7 +26,9 @@ def terminal_dir_from_data_path(data_path: str | Path) -> Path | None:
     for encoding in ("utf-16", "utf-8"):
         try:
             text = origin.read_text(encoding=encoding, errors="ignore").strip()
-        except OSError:
+        except (OSError, UnicodeError):
+            # MT5 は UTF-16 で書くが、そうでないものを渡されても落ちないようにする
+            # （ここで落ちると MT5 の検出そのものが止まる）
             continue
         if text:
             break

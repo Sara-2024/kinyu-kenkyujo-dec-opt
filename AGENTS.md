@@ -127,6 +127,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   `python3 bridge/tests/symbol_test.py` … 金の銘柄選び（GOLD を採り、XAUEUR/XAUJPY を弾く）
   `python3 bridge/tests/settings_restore_test.py` … 指令ファイルが消えたときの設定の書き戻し
   `python3 bridge/tests/history_test.py` … 口座履歴の取りこぼし（ドテン・長期保有・時計のズレ）
+  `python3 bridge/tests/phase1_test.py` … MT5の検出・EAの状態判定・連携状態
+  `python3 bridge/tests/phase1_offline_test.py` … 初回の設定が通信しないこと（通し）
+  `python3 bridge/tests/installer_ui_test.py` … 初回の設定画面（専門用語・文字の大きさ）
 - **AI に聞くのは「入りうる場面」だけ。** EA はブレイク後のリテスト成立でしか入らないので、
   水準から遠く伸びも小さい時間帯に聞いても、その判定は使われない（費用だけ増える）。
   条件は `RiskGate._entry_possible`：重要水準まで ATR 1個以内／直近15本で ATR 4個以上動いた／
@@ -140,6 +143,37 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   1台あたりの呼び出し回数を制限している（`api/_lib/risk.ts` の `RATE_LIMIT`）。
 - 戦略プロフィールは EA が自分の設定を状態ファイルへ書き出したものを使う
   （`GateProfile`）。ここを増やしたら `bridge/bridge.py` の `DEFAULT_PROFILE` も合わせる。
+
+## AI Trader Connect（お客様に配る Windows アプリ）
+
+配るのは1つの exe（`AITrader.exe`／表示名は AI Trader Connect）。
+中身は接続ツールとブリッジで、**状態で動きが変わる**。
+
+- **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。
+  記録は `%LOCALAPPDATA%\AITrader\state.json`。
+  - `INSTALL_ONLY` … MT5 を探して EA を置くところまで。**サイトとは一切通信しない。**
+    配った直後はここから始まる。サイトの存在をお客様に見せない。
+  - `CONNECTED` … サイトから正式に連携されたあと。これまでどおりブリッジが動く。
+- **通信の歯止めは `start_bridge()` の先頭1か所。** 連携前は必ずそこで止まる。
+  呼び出し口を増やしても漏れないよう、判定はここに集約する。
+- **すでに使っているお客様は引き継ぐ。** `state.json` が無く `bridge.env` の
+  `BRIDGE_ID` が会員ID なら CONNECTED とみなす（`connect_state.adopt_legacy`）。
+  これが無いと、更新した瞬間に既存のお客様が「EAを置くだけ」に戻る。
+- **初回は EA を置くだけ。** `setup_phase1()`。MT5 の検出はログインも起動も要らない
+  （`bridge/mt5_detect.py` が AppData のデータフォルダを数えるだけ）。
+  MT5 が複数あるときだけ選択画面を出す。
+- **EA の置き場と名前は変えない。** `MQL5/Experts/OrbitGoldEA_v6.mq5` のまま。
+  すでに使っているお客様のチャート設定を動かさないため。
+  状態判定と配置は `bridge/ea_manager.py` に集約し、`NOT_INSTALLED` /
+  `INSTALLED` / `UPDATE_AVAILABLE` / `LATEST` / `ERROR` を返す。
+  **無条件に上書き・削除しない。** 中身（SHA-256）が同じなら触らない。
+- **`.ex5` へ切り替えるときは `ea_manager.EA_SOURCE_SUFFIX` と `ea_manifest.json` だけ。**
+  判定も配置もそこだけを見ているので、他は変えなくてよい。
+- **画面に技術用語を出さない。** `bridge/installer_ui.py`。MQL5・Experts・
+  ブリッジ・API・Python・Socket は書かない。失敗しても原因ではなく
+  「次に何をすればいいか」だけを出す。ボタンは高さ 44px 以上。
+- **インストーラーは `tools/AITraderConnect.iss`**（Inno Setup 6）。
+  管理者権限を要求せず、`aitrader://` の登録とアンインストールまで面倒を見る。
 
 ## お客様のPCで動くもの（接続ツール）
 

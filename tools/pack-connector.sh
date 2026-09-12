@@ -20,6 +20,7 @@ mkdir -p "$OUT" "$STAGE/bridge" "$STAGE/tools"
 # お客様のPCで使うものだけ。venv・.env・ログ・中継サーバー・画面は入れない
 cp AITrader.vbs connect.py はじめる.bat "$STAGE/"
 cp bridge/bridge.py bridge/mt5_terminal.py bridge/OrbitGoldEA_v6.mq5 bridge/TradingGate.mqh \
+   bridge/mt5_detect.py bridge/ea_manager.py bridge/connect_state.py bridge/installer_ui.py \
    bridge/requirements.txt bridge/README.md "$STAGE/bridge/"
 cp tools/run-hidden.vbs tools/start-connect.bat tools/停止する.bat tools/状態を見る.bat tools/連携を解除する.bat "$STAGE/tools/"
 

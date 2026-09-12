@@ -53,6 +53,10 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --name AITrader ^
   --add-data "bridge\bridge.py;bridge" ^
   --add-data "bridge\mt5_terminal.py;bridge" ^
+  --add-data "bridge\mt5_detect.py;bridge" ^
+  --add-data "bridge\ea_manager.py;bridge" ^
+  --add-data "bridge\connect_state.py;bridge" ^
+  --add-data "bridge\installer_ui.py;bridge" ^
   --add-data "bridge\risk_gate.py;bridge" ^
   --add-data "bridge\risk_features.py;bridge" ^
   --paths bridge ^
@@ -60,6 +64,10 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --add-data "bridge\TradingGate.mqh;bridge" ^
   --hidden-import bridge ^
   --hidden-import mt5_terminal ^
+  --hidden-import mt5_detect ^
+  --hidden-import ea_manager ^
+  --hidden-import connect_state ^
+  --hidden-import installer_ui ^
   --hidden-import MetaTrader5 ^
   --collect-all numpy ^
   --hidden-import logging.handlers ^
