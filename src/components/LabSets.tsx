@@ -6,6 +6,7 @@
 // 数字はすべて useBridge / useMarket が持っている値をそのまま出す。ここでは作らない。
 import type { CSSProperties, ReactNode } from 'react'
 import { EXTENSIONS, NOTICES, type Notice } from '../data/infoCenter'
+import { STATUS_LOG } from '../data/characters'
 import { eventLabel, formatEventDate, formatEventTime, upcoming, type EconomicEvent } from '../data/calendar'
 import { TICKER_SYMBOLS, formatMarketPrice, type Candle, type Quote } from '../data/market'
 import { formatSigned, formatStamp, winRate } from '../data/setupFlow'
@@ -136,11 +137,14 @@ export function ConsoleMonitors({
   state,
   style,
   reacting = false,
+  onOpenStatus,
 }: {
   bridge: Bridge
   state: SystemState
   style?: CSSProperties
   reacting?: boolean
+  /** 中央の稼働モニターを押したとき（稼働状況の画面を開く） */
+  onOpenStatus?: () => void
 }) {
   const s = bridge.live ? bridge.status : null
   const today = s?.today
@@ -155,10 +159,15 @@ export function ConsoleMonitors({
 
   return (
     <div className={`absolute ${reacting ? 'hop' : ''}`} style={style}>
-      {/* 中央：稼働状況（いちばん目立つ） */}
+      {/* 中央：稼働状況（いちばん目立つ）。押すと稼働状況の画面が開く */}
       <div className="absolute left-1/2 top-0 w-[62%] -translate-x-1/2">
         <div
-          className={`relative overflow-hidden rounded-[5px] border px-4 py-3 text-center ${state.key === 'alert' ? 'anim-alarm-border' : ''}`}
+          onClick={onOpenStatus}
+          onKeyDown={onOpenStatus ? (e) => { if (e.key === 'Enter' || e.key === ' ') onOpenStatus() } : undefined}
+          role={onOpenStatus ? 'button' : undefined}
+          tabIndex={onOpenStatus ? 0 : undefined}
+          aria-label={onOpenStatus ? '稼働状況を開く' : undefined}
+          className={`relative overflow-hidden rounded-[5px] border px-4 py-3 text-center ${state.key === 'alert' ? 'anim-alarm-border' : ''}${onOpenStatus ? ' cursor-pointer transition hover:brightness-125' : ''}`}
           style={{ background: 'rgba(6,12,24,0.94)', borderColor: `${glow}88`, boxShadow: `0 0 26px ${glow}33, inset 0 0 24px rgba(0,0,0,0.5)` }}
         >
           <div className="scan-line pointer-events-none absolute inset-x-0 top-0 h-8" style={{ background: `linear-gradient(${glow}00, ${glow}18, ${glow}00)` }} />
@@ -174,6 +183,7 @@ export function ConsoleMonitors({
               </span>
             )}
           </p>
+          {onOpenStatus && <p className={`font-mono mt-1 ${T.xs} text-slate-500`}>▸ 稼働状況</p>}
         </div>
         <div className="mx-auto h-2 w-8" style={{ background: '#0a1220' }} />
       </div>
@@ -361,7 +371,7 @@ export function InfoCenter({
   events: EconomicEvent[] | null
   eventsFailed?: boolean
   unread?: number
-  onOpen: (what: 'reports' | 'notices') => void
+  onOpen: (what: 'trades' | 'notices') => void
   style?: CSSProperties
 }) {
   const s = bridge.live ? bridge.status : null
@@ -371,7 +381,7 @@ export function InfoCenter({
 
   return (
     <div className="absolute flex flex-col gap-3" style={style}>
-      <Card title="TRADE LOG ／ 取引" color={state.color} onClick={() => onOpen('reports')}>
+      <Card title="TRADE LOG ／ 取引履歴" color={state.color} onClick={() => onOpen('trades')}>
         <div className="flex items-center justify-between gap-2">
           <p className={`${T.md} font-bold text-slate-100`}>自動売買 {state.jp}</p>
           <span className="relative">
@@ -623,11 +633,70 @@ export function Overlay({
   )
 }
 
+/**
+ * 「取引履歴」と「稼働状況」を行き来するボタン。
+ * 二つの画面に分けたので、どちらを開いていても、もう一方へ1回で移れるようにする。
+ */
+export function ReportTabs({
+  now,
+  onSwitch,
+  unread = 0,
+}: {
+  now: 'trades' | 'status'
+  onSwitch: (what: 'trades' | 'status') => void
+  /** 稼働状況のほうに、まだ見ていない記録がいくつあるか */
+  unread?: number
+}) {
+  const tabs = [
+    { key: 'trades', label: '📊 取引履歴' },
+    { key: 'status', label: '⚙ 稼働状況' },
+  ] as const
+  return (
+    <div className="flex shrink-0 gap-2 border-b px-5 py-2.5" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+      {tabs.map((t) => {
+        const active = now === t.key
+        return (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => !active && onSwitch(t.key)}
+            className="relative h-11 rounded-[5px] border px-5 text-[14px] font-bold transition hover:brightness-125 active:translate-y-px"
+            style={
+              active
+                ? {
+                    borderColor: 'var(--accent)',
+                    background: 'rgba(94,204,255,0.16)',
+                    color: '#fff',
+                    boxShadow: '0 0 12px rgba(94,204,255,0.25)',
+                  }
+                : { borderColor: 'rgba(148,163,184,0.35)', background: 'rgba(10,18,32,0.6)', color: '#94a3b8' }
+            }
+          >
+            {t.label}
+            {t.key === 'status' && !active && unread > 0 && (
+              <span
+                className="font-mono absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold text-[#1c1607]"
+                style={{ background: YELLOW, boxShadow: `0 0 8px ${YELLOW}` }}
+              >
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * アルゴが残した報告の一覧。
+ * 取引の話と稼働の話は別々の画面に出すので、渡す前に topic で絞っておく。
+ */
 export function ReportsList({ reports, name }: { reports: AlgoReport[]; name: string }) {
   if (reports.length === 0) {
     return (
       <p className="px-6 py-8 text-center text-[16px] font-bold text-slate-400">
-        まだ報告はありません。MT5とつながると、{name}がここに運用報告を残していきます。
+        {STATUS_LOG.empty.replace('{name}', name)}
       </p>
     )
   }

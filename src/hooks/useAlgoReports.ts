@@ -11,6 +11,14 @@ export interface AlgoReport {
   id: number
   at: Date
   kind: 'trade' | 'system' | 'periodic'
+  /**
+   * どちらの画面に出す報告か。
+   *   trade  … 取引の話（決済した・本日の損益・勝率・ポジション）
+   *   status … 稼働の話（つながった・切れた・はじめた・止めた・監視中）
+   * kind とは別に持つ。定期報告（periodic）は、回ってくる文面によって
+   * 取引の話にも稼働の話にもなるため、kind では分けられない。
+   */
+  topic: 'trade' | 'status'
   text: string
   tone: 'info' | 'good' | 'bad'
 }
@@ -42,8 +50,13 @@ export function useAlgoReports(bridge: ReturnType<typeof useBridge>, quiet: bool
   const rotate = useRef(0)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const push = (kind: AlgoReport['kind'], text: string, tone: AlgoReport['tone'] = 'info') => {
-    const item: AlgoReport = { id: ++seq.current, at: new Date(), kind, text, tone }
+  const push = (
+    kind: AlgoReport['kind'],
+    text: string,
+    tone: AlgoReport['tone'] = 'info',
+    topic: AlgoReport['topic'] = kind === 'trade' ? 'trade' : 'status',
+  ) => {
+    const item: AlgoReport = { id: ++seq.current, at: new Date(), kind, text, tone, topic }
     setReports((list) => [item, ...list].slice(0, MAX_HISTORY))
     setCurrent(item)
     if (hideTimer.current) clearTimeout(hideTimer.current)
@@ -124,21 +137,22 @@ export function useAlgoReports(bridge: ReturnType<typeof useBridge>, quiet: bool
       const cur = s?.currency
       const rate = winRate(wins, closed)
 
-      const menu: Array<[string, AlgoReport['tone']]> = [
+      type Line = [string, AlgoReport['tone'], AlgoReport['topic']]
+      const menu: Line[] = [
         closed > 0
-          ? [fill(ALGO_REPORT.todayProfit, { today: formatSigned(profit, cur), count: closed }), toneOf(profit)]
-          : [ALGO_REPORT.todayNone, 'info'],
+          ? [fill(ALGO_REPORT.todayProfit, { today: formatSigned(profit, cur), count: closed }), toneOf(profit), 'trade']
+          : [ALGO_REPORT.todayNone, 'info', 'trade'],
         positions > 0
-          ? [fill(ALGO_REPORT.positions, { positions, floating: formatSigned(floating, cur) }), toneOf(floating)]
-          : [ALGO_REPORT.positionsNone, 'info'],
+          ? [fill(ALGO_REPORT.positions, { positions, floating: formatSigned(floating, cur) }), toneOf(floating), 'trade']
+          : [ALGO_REPORT.positionsNone, 'info', 'trade'],
         ...(closed > 0 && rate != null
-          ? [[fill(ALGO_REPORT.winRate, { rate, wins, losses }), 'info'] as [string, AlgoReport['tone']]]
+          ? [[fill(ALGO_REPORT.winRate, { rate, wins, losses }), 'info', 'trade'] as Line]
           : []),
-        running ? [ALGO_REPORT.watching, 'info'] : [ALGO_REPORT.paused, 'info'],
+        running ? ([ALGO_REPORT.watching, 'info', 'status'] as Line) : ([ALGO_REPORT.paused, 'info', 'status'] as Line),
       ]
-      const [text, tone] = menu[rotate.current % menu.length]
+      const [text, tone, topic] = menu[rotate.current % menu.length]
       rotate.current++
-      pushRef.current('periodic', text, tone)
+      pushRef.current('periodic', text, tone, topic)
       timer = setTimeout(tick, PERIODIC_MS)
     }
     timer = setTimeout(tick, FIRST_DELAY_MS)

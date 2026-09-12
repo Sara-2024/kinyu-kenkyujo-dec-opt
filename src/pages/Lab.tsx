@@ -23,9 +23,11 @@ import {
   ReportsList,
   Sparkline,
   SystemBoard,
+  ReportTabs,
   systemName,
   systemStateOf,
 } from '../components/LabSets'
+import { TradeHistoryView } from '../components/TradeHistory'
 import { PixelPerson } from '../components/PixelPerson'
 import { BigChart, Desk, ServerRack, ToolBox } from '../components/Panels'
 import { YUI_GUIDE, YUI_HINTS, type Character } from '../data/characters'
@@ -284,7 +286,9 @@ function HudButton({
   )
 }
 
-type OverlayKind = 'chart' | 'reports' | 'notices'
+// 取引履歴（口座の履歴そのもの）と稼働状況（つないだ・はじめた・止めた）は
+// 別々の画面にする。混ざっていると、どちらを見ているのか分からなくなる。
+type OverlayKind = 'chart' | 'trades' | 'status' | 'notices'
 type Room = 'main' | 'system'
 
 export function Lab() {
@@ -306,7 +310,7 @@ export function Lab() {
   /** ユイの案内。-1 = 出していない */
   const [guideStep, setGuideStep] = useState(() => (localStorage.getItem(guideKey) ? -1 : 0))
   const [yuiHint, setYuiHint] = useState<string | null>(null)
-  const [seenReports, setSeenReports] = useState(0)
+  const [seenStatusLog, setSeenStatusLog] = useState(0)
   const [reacting, setReacting] = useState(false)
 
   const state = systemStateOf(bridge, shocked)
@@ -532,9 +536,10 @@ export function Lab() {
   const openOverlay = useCallback(
     (kind: OverlayKind) => {
       setOverlay(kind)
-      if (kind === 'reports') {
-        setSeenReports(algoReports.reports.length)
-        sayHint(YUI_HINTS.reportsOpened)
+      if (kind === 'trades') sayHint(YUI_HINTS.tradesOpened)
+      if (kind === 'status') {
+        setSeenStatusLog(algoReports.reports.length)
+        sayHint(YUI_HINTS.statusOpened)
       }
       if (kind === 'chart') sayHint(YUI_HINTS.chartOpened)
     },
@@ -577,7 +582,8 @@ export function Lab() {
     return () => clearTimeout(timer)
   }, [reactKey, bridge.live])
 
-  const unread = Math.max(0, algoReports.reports.length - seenReports)
+  // 稼働状況の画面に、まだ見ていない記録がいくつあるか
+  const unread = Math.max(0, algoReports.reports.length - seenStatusLog)
   const showGuide = guideStep >= 0 && !tutorial && !dialogueId && room === 'main' && !overlay
   const guideLine = showGuide ? t(YUI_GUIDE[Math.min(guideStep, YUI_GUIDE.length - 1)]) : null
   const guideLast = guideStep >= YUI_GUIDE.length - 1
@@ -601,7 +607,7 @@ export function Lab() {
         label: r.kind === 'trade' ? '決済' : r.kind === 'system' ? 'システム' : '運用報告',
         text: r.text,
         tone: r.tone,
-        onClick: () => openOverlay('reports'),
+        onClick: () => openOverlay(r.topic === 'trade' ? 'trades' : 'status'),
       }
     }
     if (id === 'yui' && yuiHint && !showGuide) return { label: '案内', text: yuiHint, tone: 'info' }
@@ -878,6 +884,7 @@ export function Lab() {
                 bridge={bridge}
                 state={state}
                 reacting={reacting}
+                onOpenStatus={() => openOverlay('status')}
                 style={{ left: '42%', width: '30%', top: 48, ...dimStyle(0.45) }}
               />
 
@@ -1181,9 +1188,17 @@ export function Lab() {
           </div>
         </Overlay>
       )}
-      {overlay === 'reports' && (
-        <Overlay title="運用報告" sub={`${CHARACTERS.algo.name} ─ 自動売買`} onClose={() => setOverlay(null)} width="min(92vw, 760px)">
-          <ReportsList reports={algoReports.reports} name={CHARACTERS.algo.name} />
+      {overlay === 'trades' && (
+        <Overlay title="取引履歴" sub={`${CHARACTERS.algo.name} ─ MT5の口座履歴`} onClose={() => setOverlay(null)} width="min(92vw, 980px)">
+          <ReportTabs now="trades" onSwitch={openOverlay} unread={unread} />
+          <TradeHistoryView bridge={bridge} />
+        </Overlay>
+      )}
+      {/* 幅は取引履歴と揃える。タブで行き来したときに窓の大きさが変わらないように */}
+      {overlay === 'status' && (
+        <Overlay title="稼働状況" sub={`${CHARACTERS.algo.name} ─ 自動売買`} onClose={() => setOverlay(null)} width="min(92vw, 980px)">
+          <ReportTabs now="status" onSwitch={openOverlay} unread={0} />
+          <ReportsList reports={algoReports.reports.filter((r) => r.topic === 'status')} name={CHARACTERS.algo.name} />
         </Overlay>
       )}
       {overlay === 'notices' && (
