@@ -299,6 +299,57 @@ def register_startup() -> bool:
         return False
 
 
+def startup_command() -> str:
+    """いま登録されている自動起動のコマンド。無ければ空。"""
+    if os.name != "nt":
+        return ""
+    try:
+        import winreg
+    except ImportError:
+        return ""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            for name in (APP_NAME, *LEGACY_APP_NAMES):
+                try:
+                    value, _ = winreg.QueryValueEx(key, name)
+                    if value:
+                        return str(value)
+                except OSError:
+                    continue
+    except OSError:
+        pass
+    return ""
+
+
+def unregister_startup(why: str = "") -> bool:
+    """Windows の起動時に立ち上がる登録を消す（aitrader:// の登録は残す）。
+
+    古い版が「そのときの exe の置き場」を指したまま登録しているので、
+    新しい版を入れても、Windows は古い exe を起こし続けてしまう。
+    連携していない PC では自動起動そのものが要らないので、見つけたら消す。
+    """
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+    except ImportError:
+        return False
+    removed = False
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+            for name in (APP_NAME, *LEGACY_APP_NAMES):
+                try:
+                    winreg.DeleteValue(key, name)
+                    removed = True
+                except OSError:
+                    pass
+    except OSError:
+        return False
+    if removed:
+        log(f"自動起動の登録を消しました{f'（{why}）' if why else ''}")
+    return removed
+
+
 def unregister() -> int:
     if os.name != "nt":
         return 0
@@ -306,16 +357,7 @@ def unregister() -> int:
         import winreg
     except ImportError:
         return 0
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
-            for name in (APP_NAME, *LEGACY_APP_NAMES):
-                try:
-                    winreg.DeleteValue(key, name)
-                except OSError:
-                    pass
-        log("スタートアップの登録を消しました")
-    except OSError:
-        pass
+    unregister_startup("登録をすべて消した")
     _delete_protocol(PROTOCOL)
     if LEGACY_PROTOCOL != PROTOCOL:
         _delete_protocol(LEGACY_PROTOCOL)
@@ -1073,6 +1115,12 @@ def setup_phase1() -> int:
     # 次にサイトから呼べるように、URL の登録だけしておく（お客様には見えない）。
     # 自動起動（スタートアップ）は連携が済むまで登録しない。
     register_protocol()
+    # 古い版が登録した自動起動が残っていると、Windows は古い exe を起こし続ける。
+    # まだ連携していないこの状態では、自動起動そのものが要らないので消しておく。
+    stale = startup_command()
+    if stale:
+        log(f"古い自動起動の登録が残っていました: {stale[:120]}")
+        unregister_startup("まだ連携していない")
 
     say("MT5を確認しています…")
     terminals = mt5_detect.list_terminals()

@@ -66,8 +66,16 @@ def check(name, cond, extra=""):
     if cond: ok += 1; print(f"  ok   {name}")
     else: fail += 1; print(f"  NG   {name} {extra}")
 
+# 古い版が登録した自動起動が残っている状態にしておく
+#（Windows のレジストリは触れないので、読み書きの入口を身代わりにする）
+removed: list[str] = []
+connect.startup_command = lambda: r'"C:\Users\x\Downloads\AITrader.exe" "--silent" "--startup"'
+connect.unregister_startup = lambda why="": (removed.append(why), True)[1]
+
 code = connect.setup_phase1()
 check("初回の設定が成功で終わる", code == 0, f"code={code}")
+check("古い自動起動の登録を片づける", removed == ["まだ連携していない"], str(removed))
+connect.startup_command = lambda: ""
 
 ea = hfm / "MQL5" / "Experts" / "OrbitGoldEA_v6.ex5"
 inc = hfm / "MQL5" / "Include" / "TradingGate.mqh"

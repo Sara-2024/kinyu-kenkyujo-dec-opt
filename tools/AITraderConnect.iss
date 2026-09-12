@@ -52,6 +52,17 @@ Name: "{userdesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 Name: "desktopicon"; Description: "デスクトップにショートカットを作る"; GroupDescription: "追加の設定:"
 
 [Registry]
+; 古い版が登録した「Windows起動時の自動起動」を消す。
+;
+; 古い版は、そのとき置かれていた exe の場所（ダウンロードフォルダなど）を
+; 指したまま登録している。新しい版を入れても、この登録が残っていると
+; Windows は古い exe を起こし続けてしまう。
+; 連携済みのお客様の場合は、このあと新しいアプリが自分の場所で登録し直す
+; （[Run] でアプリを開くため）。まだ連携していない PC では、そもそも
+; 自動起動は要らないので、消えたままでよい。
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "AIトレーダー"; Flags: deletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "TrelabConnect"; Flags: deletevalue
+
 ; サイトのボタンからこのアプリを呼べるようにする（aitrader://）。
 ; アプリ自身も起動時に登録するが、インストーラーで入れておけば
 ; 一度も開かないうちからサイト側の導線が使える。
@@ -65,6 +76,9 @@ Root: HKCU; Subkey: "Software\Classes\aitrader\shell\open\command"; ValueType: s
 ; 入れ終わったらそのまま開く。ここで MT5 を探して EA を置く（サイトとは通信しない）
 Filename: "{app}\{#AppExe}"; Description: "{#AppName} を開いて設定する"; Flags: nowait postinstall skipifsilent
 
+; お客様の設定と記録（%LOCALAPPDATA%\AITrader）は消さない。
+; 入れ直したときに、連携済みかどうかが分からなくなるため。
+
 [UninstallRun]
-; 裏で動いているものがあれば止めてから消す
-Filename: "{app}\{#AppExe}"; Parameters: "--stop"; Flags: runhidden; RunOnceId: "StopBridge"
+; 裏で動いているものを止め、自動起動と aitrader:// の登録も消してから消す
+Filename: "{app}\{#AppExe}"; Parameters: "--uninstall"; Flags: runhidden; RunOnceId: "StopAndUnregister"
