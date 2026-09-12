@@ -29,7 +29,7 @@ import {
 } from '../data/setupFlow'
 import { LiveReportView, type LiveReport } from './LiveReport'
 import { SetupFigure } from './SetupFigures'
-import { CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, DEFAULT_ROOM, DEFAULT_ROOM_FRESH_MS, DEFAULT_ROOM_POLL_MS, downloadConnector, launchConnector, probeRoom } from '../data/connector'
+import { CONNECT_PAUSED, CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, DEFAULT_ROOM, DEFAULT_ROOM_FRESH_MS, DEFAULT_ROOM_POLL_MS, downloadConnector, launchConnector, relaunchConnector, probeRoom } from '../data/connector'
 import { formatReviewAnswer, reviewTrades, type TradeHistory } from '../data/tradeReview'
 import { PixelPerson } from './PixelPerson'
 import { AI_FAILURE_TEXT, askAi, setPendingQuestion, takePendingQuestion, type AiRole } from '../data/ai'
@@ -299,6 +299,12 @@ export function DialogueWindow({
     if (bridge.live) {
       setPhase('connecting')
       setAiText(CONNECT_WAIT)
+      return
+    }
+    // 受付を止めているあいだは、ここで引き返す。
+    // 先へ進めないので、接続ツールの呼び出しも、30秒後のダウンロード案内も出ない。
+    if (CONNECT_PAUSED) {
+      setAiText(t(SETUP.paused))
       return
     }
     setPhase('launching')
@@ -667,7 +673,7 @@ export function DialogueWindow({
     if (bridge.phase !== 'no_bridge') return
     if (reconnectTried.current || bridgeSeenLive.current) return
     reconnectTried.current = true
-    void launchConnector(sessionToken)
+    relaunchConnector()
     if (character.reconnecting) setAiText(character.reconnecting)
   }, [character, phase, conn, bridge.live, bridge.phase, member?.id])
 
@@ -690,7 +696,8 @@ export function DialogueWindow({
   }
 
   const reconnect = () => {
-    void launchConnector(sessionToken)
+    // すでに連携済みのお客様だけが通る道。新しい連携はここからは始まらない
+    relaunchConnector()
     if (character.reconnecting) setAiText(character.reconnecting)
   }
 

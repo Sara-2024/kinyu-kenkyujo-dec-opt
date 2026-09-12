@@ -10,6 +10,20 @@ import { issueConnectToken } from './auth'
 export const CONNECTOR_SCHEME = 'aitrader'
 
 /**
+ * 新しいMT5連携の受付を、一時的に止めるスイッチ。
+ *
+ * サイトは合図（token）方式に切り替わったが、配っている接続ツールがまだ古い。
+ * 古いツールは合図を読めず、そのまま既定の部屋でブリッジを動かしてしまうので、
+ * 新しいツールを配り終えるまで、新規の連携を受け付けない。
+ *
+ * 止まるのは「これから連携する人」だけ。すでに連携済みのお客様のブリッジは
+ * サイトとは関係なく動き続けるし、つなぎ直し（relaunchConnector）も使える。
+ *
+ * 再開するときは、ここを false に戻すだけでよい（他は何も変えなくてよい）。
+ */
+export const CONNECT_PAUSED = true
+
+/**
  * 部屋（会員ID）を知らずに起動した接続ツールが入る、既定の部屋。
  * ダウンロードした exe を「開くだけ」の初回は aitrader:// を通らないので、ここに来る。
  * サイトはこの部屋にブリッジが現れたら、登録の済んだ aitrader:// で部屋を伝えて呼び直す。
@@ -64,6 +78,7 @@ export const CONNECTOR_WAIT_MS = 30_000
  */
 export async function launchConnector(sessionToken?: string | null): Promise<boolean> {
   if (typeof window === 'undefined') return false
+  if (CONNECT_PAUSED) return false
   if (!sessionToken) return false
 
   let connectToken: string | null = null
@@ -85,6 +100,25 @@ export async function launchConnector(sessionToken?: string | null): Promise<boo
   } catch {
     // 起動できなくても画面は続ける（ダウンロードの案内に切り替わる）
     return false
+  }
+}
+
+/**
+ * すでに連携しているPCに「つなぎ直して」と伝える。
+ *
+ * 合図（token）を付けないので、この URL では新しい連携はできない。
+ *   古いツール … 覚えている部屋（会員ID）につなぎ直すだけ
+ *   新しいツール … 連携済みならつなぎ直し、未連携なら EA を置くだけで終わる
+ * どちらでも、これで新しく連携されることはない。
+ *
+ * 使うのは「一度つないだことがあるお客様」の画面だけ（管理画面の再接続）。
+ */
+export function relaunchConnector(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.location.href = `${CONNECTOR_SCHEME}://connect`
+  } catch {
+    // 起動できなくても画面は続ける
   }
 }
 
@@ -120,6 +154,8 @@ export const CONNECTOR_DOWNLOAD: ConnectorDownload = (() => {
 /** ブラウザに保存ダイアログを出す（普通のダウンロード） */
 export function downloadConnector(): void {
   if (typeof document === 'undefined') return
+  // 古い接続ツールを新しく配らない（受付を止めているあいだ）
+  if (CONNECT_PAUSED) return
   const a = document.createElement('a')
   a.href = CONNECTOR_DOWNLOAD.url
   a.download = CONNECTOR_DOWNLOAD.saveAs
