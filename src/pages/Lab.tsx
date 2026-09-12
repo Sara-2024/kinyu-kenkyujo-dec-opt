@@ -19,6 +19,7 @@ import {
   InfoCenter,
   MiniRates,
   NoticesList,
+  CalendarList,
   Overlay,
   ReportsList,
   Sparkline,
@@ -288,11 +289,11 @@ function HudButton({
 
 // 取引履歴（口座の履歴そのもの）と稼働状況（つないだ・はじめた・止めた）は
 // 別々の画面にする。混ざっていると、どちらを見ているのか分からなくなる。
-type OverlayKind = 'chart' | 'trades' | 'status' | 'notices'
+type OverlayKind = 'chart' | 'trades' | 'status' | 'notices' | 'calendar'
 type Room = 'main' | 'system'
 
 export function Lab() {
-  const { member, logout } = useAuth()
+  const { member, token, logout } = useAuth()
   const { characters: CHARACTERS, t } = useSiteSettings()
   const tutorialKey = member ? `lab-tutorial-done:${member.id}` : 'lab-tutorial-done'
   const guideKey = member ? `lab-guide-done:${member.id}` : 'lab-guide-done'
@@ -300,7 +301,7 @@ export function Lab() {
   const [tutorial, setTutorial] = useState(() => !localStorage.getItem(tutorialKey))
   const market = useMarket()
   const { shocked, triggerShock } = market
-  const bridge = useBridge(member?.id)
+  const bridge = useBridge(member?.id, token)
   const [news, setNews] = useState<NewsItem | null>(null)
   const [dialogueId, setDialogueId] = useState<string | null>(null)
 
@@ -1199,6 +1200,11 @@ export function Lab() {
         <Overlay title="稼働状況" sub={`${CHARACTERS.algo.name} ─ 自動売買`} onClose={() => setOverlay(null)} width="min(92vw, 980px)">
           <ReportTabs now="status" onSwitch={openOverlay} unread={0} />
           <ReportsList reports={algoReports.reports.filter((r) => r.topic === 'status')} name={CHARACTERS.algo.name} />
+        </Overlay>
+      )}
+      {overlay === 'calendar' && (
+        <Overlay title="経済指標" sub={`${CHARACTERS.jin.name} ─ 経済指標・金利`} onClose={() => setOverlay(null)} width="min(92vw, 760px)">
+          <CalendarList events={econ.events} />
         </Overlay>
       )}
       {overlay === 'notices' && (

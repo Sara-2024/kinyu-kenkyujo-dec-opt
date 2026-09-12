@@ -338,6 +338,41 @@ async def main() -> None:
     check("静かな場面では問い合わせが1回も出ない", not asked, str(len(asked)))
     check("聞かなくても期限は延ばす（EAを止めない）", quiet.mt.gate.get(GV_UNTIL, 0) > 1757400000)
     check("見送りの回数を数える", quiet.skipped_calls == 1)
+    check("聞かなかったときも画面の期限を進める", bool(quiet.expires_at) and not quiet._expired())
+
+    # 18) 止めている最中は、入る見込みが無くても必ず聞く
+    #     （聞かないと「連続で問題なし」が積み上がらず、危険が去っても永久に止まったまま）
+    stuck = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
+    stuck.account_mode = "demo"
+    stuck._decide_mode()
+    stuck_asked = []
+    stuck._post_blocking = lambda payload: (stuck_asked.append(payload), decision("ALLOW", "ALLOW", 300))[1]  # type: ignore[method-assign]
+    stuck._entry_possible = lambda f, p: (False, "静か")  # type: ignore[method-assign]
+
+    stuck.buy.blocked = True
+    stuck.buy.since = time.time() - 999
+    await stuck.evaluate(reason="test")
+    check("止めている最中は静かでも聞く", len(stuck_asked) == 1, str(len(stuck_asked)))
+    await stuck.evaluate(reason="test")
+    check("問題なしが続けば再開できる", not stuck.buy.blocked, f"streak={stuck.buy.allow_streak}")
+
+    # 19) 材料不足は再開の妨げにしない（ALLOW と交互でも積み上がる）
+    mixed = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
+    mixed.account_mode = "demo"
+    mixed._decide_mode()
+    mixed.buy.blocked = True
+    mixed.buy.since = time.time() - 999
+    mixed._apply(decision("ALLOW", "ALLOW", 400)["decision"], {})
+    mixed._apply(decision("INSUFFICIENT_DATA", "ALLOW", 401)["decision"], {})
+    check("材料不足で積み上げを崩さない", mixed.buy.allow_streak == 1, f"streak={mixed.buy.allow_streak}")
+    mixed._apply(decision("ALLOW", "ALLOW", 402)["decision"], {})
+    check("材料不足をはさんでも再開できる", not mixed.buy.blocked, f"streak={mixed.buy.allow_streak}")
+
+    # 20) 通信障害の待ち時間は、判定の期限（180秒）より必ず短い
+    cap = RiskGate(FakeMT(), RiskConfig(), "test-room", tmp)
+    for _ in range(10):
+        cap._back_off("test")
+    check("待ち時間は判定の期限を超えない", cap._error_wait <= 90.0, f"wait={cap._error_wait}")
 
 
 asyncio.run(main())

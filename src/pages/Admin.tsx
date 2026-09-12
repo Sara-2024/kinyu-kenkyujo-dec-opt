@@ -48,18 +48,22 @@ export function Admin() {
   if (ready && !member) return <Navigate to="/login" replace />
   if (ready && member && member.role !== 'admin') return <Navigate to="/" replace />
 
-  const act = async (id: string, run: () => Promise<void>) => {
-    if (!token) return
+  /** 成功したかどうかを返す。呼ぶ側は、成功したときだけ入力を閉じる */
+  const act = async (id: string, run: () => Promise<void>): Promise<boolean> => {
+    if (!token) return false
     setBusyId(id)
     setError(null)
+    let ok = false
     try {
       await run()
       await reload()
+      ok = true
     } catch (err) {
       setError(authErrorMessage(err))
     } finally {
       setBusyId(null)
     }
+    return ok
   }
 
   const changeRole = (row: Member, role: MemberRole) =>
@@ -81,7 +85,10 @@ export function Admin() {
       setError('パスワード（確認）が一致しません。')
       return
     }
-    await act(pwTarget.id, () => adminSetPassword(token, pwTarget.id, pw1))
+    // 失敗（8文字未満など）のときに閉じてしまうと、入力が消えるだけで
+    // 変わったのかどうか分からない。成功したときだけ閉じる。
+    const ok = await act(pwTarget.id, () => adminSetPassword(token, pwTarget.id, pw1))
+    if (!ok) return
     setPwTarget(null)
     setPw1('')
     setPw2('')
@@ -89,8 +96,8 @@ export function Admin() {
 
   const saveEntry = async () => {
     if (!token) return
-    await act('entry', () => adminSetEntryPassword(token, entry))
-    setEntry('')
+    const ok = await act('entry', () => adminSetEntryPassword(token, entry))
+    if (ok) setEntry('')
   }
 
   return (

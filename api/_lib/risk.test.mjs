@@ -1,6 +1,6 @@
 // /api/risk の検証まわりを、偽の Gemini を立てて確かめる。
 import { createServer } from 'node:http'
-import { handleRisk, checkEvidence, applyGuards } from './risk.ts'
+import { handleRisk, checkEvidence, applyGuards, riskEnvFrom } from './risk.ts'
 
 let reply = {}
 const fake = createServer((req, res) => {
@@ -195,7 +195,7 @@ const dsEnv = {
   provider: 'deepseek',
   deepseekKey: 'ds-key',
   deepseekBase: `http://127.0.0.1:${dsFake.address().port}/v1`,
-  deepseekModel: 'deepseek-chat',
+  deepseekModel: 'deepseek-flash',
   bridgeToken: 'secret',
 }
 
@@ -211,7 +211,22 @@ dsReply = {
 }
 r = await handleRisk(req, dsEnv, 'secret')
 check('DeepSeek で判定が返る', r.status === 200 && r.body.decision.buy === 'BLOCK', JSON.stringify(r.body).slice(0, 120))
-check('DeepSeek のモデル名が記録される', r.body?.decision?.model === 'deepseek-chat', r.body?.decision?.model)
+check('DeepSeek のモデル名が記録される', r.body?.decision?.model === 'deepseek-flash', r.body?.decision?.model)
+check(
+  'DeepSeek の既定モデルは deepseek-flash（deepseek-chat は料金表から消えている）',
+  riskEnvFrom({ RISK_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'ds' }).deepseekModel === 'deepseek-flash',
+  riskEnvFrom({ RISK_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'ds' }).deepseekModel,
+)
+check(
+  'DEEPSEEK_RISK_MODEL があればそちらが勝つ',
+  riskEnvFrom({ RISK_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'ds', DEEPSEEK_RISK_MODEL: 'deepseek-v4-pro' })
+    .deepseekModel === 'deepseek-v4-pro',
+)
+check(
+  '市場データは詰めた JSON で送る（入力トークンを増やさない）',
+  (dsSeen?.body?.messages?.[1]?.content ?? '').includes(JSON.stringify(features)),
+  (dsSeen?.body?.messages?.[1]?.content ?? '').slice(0, 80),
+)
 check('OpenAI 互換の口を叩く', dsSeen?.path === '/v1/chat/completions', dsSeen?.path)
 check('Bearer で鍵を送る', dsSeen?.auth === 'Bearer ds-key', dsSeen?.auth)
 check('JSON モードを指定する', dsSeen?.body?.response_format?.type === 'json_object')
@@ -258,6 +273,88 @@ check('DeepSeek の鍵が無ければ動かさない', r.status === 503)
 reply = { body: { buy_assessment: 'ALLOW', sell_assessment: 'ALLOW', buy_reason_codes: [], sell_reason_codes: [], evidence: [], summary: 'ok' } }
 r = await handleRisk(req, env, 'secret')
 check('指定が無ければ Gemini のまま', r.status === 200 && r.body?.decision?.model === 'gemini-3.5-flash', r.body?.decision?.model)
+
+console.log('\n── 根拠の検証（作り話で止めさせない）')
+// ── 根拠の検証（ここが緩いと、AI の作り話で新規注文が止まる／止まらなくなる）──
+// 実際に「全部でっちあげの evidence」が素通りしていたので、そのままの形を試験にする。
+{
+  const f = {
+    price_mid: 3503.0,
+    atr_m1: 1.133,
+    adx_h1: null, // 計算できなかった項目
+    nearest_support_name: 'window_low',
+    nearest_resistance: 3520.5,
+    window_tf: 'H1',
+    dist_to_resistance_atr: null,
+  }
+  const fake = checkEvidence(
+    [
+      { field: 'adx_h1', value: 42, why: '空の項目に数字を書く' },
+      { field: 'nearest_support_name', value: 'window_high', why: '別の名前を言い張る' },
+      { field: 'window_tf', value: 'M1', why: '別の足を言い張る' },
+      { field: 'nearest_resistance', value: 3537.0, why: '$16 ずらす' },
+      { field: 'dist_to_resistance_atr', value: 0.1, why: '空の項目に距離を書く' },
+    ],
+    f,
+  )
+  check('でっちあげの根拠は1件も採用しない', fake.kept.length === 0, JSON.stringify(fake.kept))
+  check('空の項目は根拠にできない', fake.dropped.some((d) => d.includes('adx_h1') && d.includes('空')), fake.dropped.join(' / '))
+  check(
+    '名前の項目を別の名前に言い換えられない',
+    fake.dropped.some((d) => d.includes('nearest_support_name')),
+    fake.dropped.join(' / '),
+  )
+  check(
+    '価格を $16 ずらした主張は通らない',
+    fake.dropped.some((d) => d.includes('nearest_resistance')),
+    fake.dropped.join(' / '),
+  )
+
+  // 正しい根拠は今までどおり通る（厳しくしすぎて正当な停止を捨てない）
+  const good = checkEvidence(
+    [
+      { field: 'nearest_resistance', value: '3520.5', why: '抵抗' },
+      { field: 'nearest_support_name', value: 'window_low（直近の安値）', why: '注記つき' },
+      { field: 'atr_m1', value: 1.133, why: 'ATR' },
+    ],
+    f,
+  )
+  check('入力と一致する根拠は採用する', good.kept.length === 3, JSON.stringify(good.dropped))
+
+  // 方向と噛み合わない根拠だけの停止は成立しない
+  const off = applyGuards(
+    { buy: 'BLOCK', sell: 'ALLOW', buyCodes: ['NEAR_RESISTANCE'], sellCodes: [] },
+    [{ field: 'nearest_support', value: 3400, why: '下の水準' }],
+  )
+  check('下の水準だけを根拠にした買い停止は通さない', off.buy === 'ALLOW', off.buy)
+  const on = applyGuards(
+    { buy: 'BLOCK', sell: 'ALLOW', buyCodes: ['NEAR_RESISTANCE'], sellCodes: [] },
+    [{ field: 'nearest_resistance', value: 3520.5, why: '上の水準' }],
+  )
+  check('上の水準を根拠にした買い停止は通す', on.buy === 'BLOCK', on.buy)
+  const sellOff = applyGuards(
+    { buy: 'ALLOW', sell: 'BLOCK', buyCodes: [], sellCodes: ['NEAR_SUPPORT'] },
+    [{ field: 'nearest_resistance', value: 3520.5, why: '上の水準' }],
+  )
+  check('上の水準だけを根拠にした売り停止は通さない', sellOff.sell === 'ALLOW', sellOff.sell)
+}
+
+// 判定の有効期限（聞く回数を減らすための指定）。main 側で入れた検査を残す。
+const okBody = { buy_assessment: 'ALLOW', sell_assessment: 'ALLOW', buy_reason_codes: [], sell_reason_codes: [], evidence: [], summary: 'ok' }
+reply = { body: okBody }
+r = await handleRisk(req, env, 'secret')
+check('指定が無ければ既定の180秒', r.body?.decision?.ttl_sec === 180, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 900 }, env, 'secret')
+check('指定した期限が通る', r.body?.decision?.ttl_sec === 900, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 99999 }, env, 'secret')
+check('長すぎる指定は30分に丸める', r.body?.decision?.ttl_sec === 1800, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 5 }, env, 'secret')
+check('短すぎる指定は60秒に丸める', r.body?.decision?.ttl_sec === 60, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 'いたずら' }, env, 'secret')
+check('数値でない指定は既定に戻す', r.body?.decision?.ttl_sec === 180, r.body?.decision?.ttl_sec)
+r = await handleRisk({ ...req, ttl_sec: 900 }, env, 'secret')
+const life = (new Date(r.body.decision.expires_at) - new Date(r.body.decision.issued_at)) / 1000
+check('expires_at が期限と一致する', Math.abs(life - 900) < 2, life)
 
 dsFake.close()
 fake.close()

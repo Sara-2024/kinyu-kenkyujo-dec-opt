@@ -83,7 +83,12 @@ PROTOCOL = "aitrader"
 LEGACY_PROTOCOL = "trelab"
 LEGACY_APP_NAMES = ("TrelabConnect",)
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-ROOM_RE = re.compile(r"^[A-Za-z0-9._:-]{1,80}$")
+# このPCの「部屋」は会員ID（UUID）だけ。ここを緩くしていたので、
+# 悪意あるページが `aitrader://connect?room=<自分のID>` を開かせるだけで、
+# お客様のブリッジを他人の部屋へ移せた（しかも bridge.env に残るので恒久的に）。
+# いまは URL から部屋を受け取ること自体をやめ、サイトが合図（token）と
+# 引き換えに返した部屋しか受け取らない。この検査はその最後の関門。
+MEMBER_ROOM_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 SEARCH_EXES = [
     Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "MetaTrader 5" / "terminal64.exe",
@@ -513,8 +518,14 @@ def adopt_room(room: str) -> None:
     URL から直接受け取ってはいけない（会員IDを知っているだけの相手に
     連携されてしまう）。呼び出し口は connect_all 一本にしてある。
     """
-    if not ROOM_RE.match(room):
+    if not MEMBER_ROOM_RE.match(room):
+        log(f"会員IDの形でない部屋は覚えません: {room[:40]}")
         return
+    before = env_value("BRIDGE_ID")
+    if before and before != room and MEMBER_ROOM_RE.match(before):
+        # 別の会員の部屋へ移す指示。ふつうは起きない（起きるのは、同じPCを
+        # 別の会員が使うときか、他人のサイトから開かせられたとき）。記録に残す。
+        log(f"部屋を切り替えます: {before} → {room}")
     write_env_key("BRIDGE_ID", room)
     os.environ["BRIDGE_ID"] = room
     connect_state.mark_connected(room)
@@ -531,7 +542,15 @@ TOKEN_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 def connect_token_from_args(argv: list[str]) -> str:
-    """aitrader://connect?token=... から合図を読む（いまの連携のしかた）。"""
+    """aitrader://connect?token=... から合図を読む。
+
+    連携を始められる入口はここだけ。以前は `?room=<会員ID>` も受けていたが、
+    この URL は**どのページからでも**開かせられるので、会員IDを知っている
+    だけの相手にブリッジを他人の部屋へ移されてしまう。`from=` の照合まで
+    足しても「自分たちのサイトを装って開かせる」余地が残るため、
+    URL から部屋を受け取ること自体をやめた。
+    いまは、サイトがその場で作った短命の合図と引き換えでなければ連携できない。
+    """
     for raw in argv:
         if not is_protocol_url(raw):
             continue
@@ -571,7 +590,7 @@ def redeem_connect_token(token: str) -> str:
         log(f"サイトに問い合わせできませんでした: {type(exc).__name__}")
         return ""
     room = str(data.get("room") or "").strip()
-    if not ROOM_RE.match(room):
+    if not MEMBER_ROOM_RE.match(room):
         log("サイトの返事に部屋が入っていませんでした")
         return ""
     log("連携の合図を確認しました")

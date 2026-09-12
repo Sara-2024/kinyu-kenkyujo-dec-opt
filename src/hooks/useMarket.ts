@@ -22,9 +22,31 @@ function jitterAmount(candles: Candle[]): number {
   return avgRange * 0.05
 }
 
+// 選んだ銘柄はこのPCに覚えておく。商談中に画面を開き直すたび
+// 選び直すのは煩わしいため。知らない銘柄が入っていたら既定に戻す。
+const SYMBOL_KEY = 'trelab.chart.symbol'
+
+function rememberedSymbol(): string {
+  try {
+    const saved = localStorage.getItem(SYMBOL_KEY)
+    if (saved && CHART_SYMBOLS.some((s) => s.symbol === saved)) return saved
+  } catch {
+    // プライベートウィンドウなどで読めないことがある。既定で動けばよい
+  }
+  return CHART_SYMBOLS[0].symbol
+}
+
 export function useMarket() {
   const [quotes, setQuotes] = useState<Quote[]>([])
-  const [symbol, setSymbol] = useState(CHART_SYMBOLS[0].symbol)
+  const [symbol, setSymbolState] = useState(rememberedSymbol)
+  const setSymbol = useCallback((next: string) => {
+    setSymbolState(next)
+    try {
+      localStorage.setItem(SYMBOL_KEY, next)
+    } catch {
+      // 覚えられなくても表示は続ける
+    }
+  }, [])
   const [chart, setChart] = useState<ChartData | null>(null)
   const [live, setLive] = useState<Candle[]>([])
   const [shocked, setShocked] = useState(false)
@@ -115,6 +137,26 @@ export function useMarket() {
     setShocked(true)
   }, [])
 
+  /**
+   * 研究員に渡す「本物の相場」。
+   *
+   * 画面の `candles` は、生きて見えるように直近の足を揺らしてある（急変動の演出もある）。
+   * それをそのまま研究員に渡すと、AI が実在しない高値・安値・現在値を事実として説明する。
+   * AGENTS.md の「数字は作らない」に反するので、AI と受け答えには取得したままの足を使う。
+   */
+  const marketForAi = useCallback(() => {
+    const base = baseRef.current
+    const realLast = base[base.length - 1]
+    const realPrev = chart?.prevClose ?? (base.length > 1 ? base[base.length - 2].c : realLast?.o)
+    return {
+      symbol,
+      candles: base,
+      interval: chart?.interval ?? '15m',
+      price: realLast?.c ?? chart?.price ?? 0,
+      prevClose: realPrev ?? realLast?.c ?? 0,
+    }
+  }, [symbol, chart])
+
   const candles = live
   const last = candles[candles.length - 1]
   const prevClose = chart?.prevClose ?? (candles.length > 1 ? candles[candles.length - 2].c : last?.o)
@@ -136,5 +178,6 @@ export function useMarket() {
     quoteMap,
     shocked,
     triggerShock,
+    marketForAi,
   }
 }

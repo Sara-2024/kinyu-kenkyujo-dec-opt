@@ -21,26 +21,44 @@
 2. **New → Blueprint**
 3. GitHub リポジトリ `Sara-2024/kinyu-kenkyujo-dec-opt` を選択
 4. `render.yaml` の **kinyu-relay** をデプロイ（Starter 推奨。Free はスリープします）
-5. デプロイ完了後、**https://kinyu-relay.onrender.com/health** が `{"ok":true,...}` を返すことを確認
+5. **環境変数を設定する（重要）**
+
+   | キー | 要否 | 値 |
+   |------|------|-----|
+   | `SUPABASE_URL` | **必須** | Supabase Project URL |
+   | `SUPABASE_ANON_KEY` | **必須** | Supabase anon key |
+   | `TRELAB_TOKEN` | 任意 | 設定しない（設定すると画面側も同じ値を送る必要がある） |
+
+   この2つを入れないと、中継は「会員の確認なし」で動きます。その状態では、
+   部屋の名前（＝会員のUUID）を知っている人は誰でもその部屋に入れてしまい、
+   他人の口座を見たり、停止・ロット変更を送れます。起動ログに警告が出るので、
+   デプロイ後に **Logs で「会員の確認 : 有効」と出ていること**を必ず確認してください。
+6. デプロイ完了後、**https://kinyu-relay.onrender.com/health** が `{"ok":true,...}` を返すことを確認
 
 ## 2. 画面（Vercel）
 
 環境変数（Production）:
 
-| キー | 値 |
-|------|-----|
-| `VITE_RELAY_URL` | `wss://kinyu-relay.onrender.com/app` |
-| `VITE_SUPABASE_URL` | Supabase Project URL（ログインに必須） |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key（ログインに必須） |
+| キー | 要否 | 値 |
+|------|------|-----|
+| `VITE_RELAY_URL` | 必須 | `wss://kinyu-relay.onrender.com/app` |
+| `VITE_SUPABASE_URL` | 必須 | Supabase Project URL。ログインだけでなく **`/api/chat` の会員確認にも使う**（サーバー側でも読む） |
+| `VITE_SUPABASE_ANON_KEY` | 必須 | Supabase anon key。`eyJ` で始まるもの（新形式の `sb_publishable_…` は画面側が受け付けない） |
+| `GEMINI_API_KEY` | 必須 | Google AI Studio の API キー。未設定なら研究員は定型文、`/api/risk` は 503 |
+| `TRELAB_RISK_TOKEN` | **AIの見張りに必須** | ブリッジだけが `/api/risk` を呼べるようにする合言葉。`bridge/risk_secret.py` と同じ文字列。空だと見張りは「切」のまま動かない |
+| `GEMINI_CHAT_MODEL` | 任意 | 研究員の会話のモデル（未設定なら `gemini-3.5-flash-lite`） |
+| `GEMINI_RISK_MODEL` | 任意 | 見張りのモデル（未設定なら `gemini-3.5-flash`）。**費用のほとんどはここ**（AGENTS.md 参照） |
+| `GEMINI_RISK_API_KEY` | 任意 | 見張り専用のキー。分けておくと、商談中の会話が見張りの枠を食い潰さない |
+| `RISK_PROVIDER` | 任意 | `deepseek` にすると見張りだけ DeepSeek で判定する。**未指定でも `DEEPSEEK_API_KEY` があれば DeepSeek に倒れる** |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_RISK_MODEL` | 任意 | DeepSeek を使うとき（モデル未指定なら `deepseek-flash`） |
+| `RISK_TIMEOUT_MS` | 任意 | 見張りの応答待ち（既定 12000） |
 
-> MT5連携（`/api/connect`）も、この2つをそのまま使う。新しい環境変数は要らない。
+> MT5連携（`/api/connect`）は、上の Supabase の2つをそのまま使う。新しい環境変数は要らない。
 > ただし、すでに動いている環境には
 > **`supabase/migrations/20260912_add_connect_tokens.sql` だけ**を流すこと
 > （Supabase ダッシュボード → SQL Editor に貼り付け）。
 > 追加だけの内容で、既存のテーブル・関数・権限には触れない。
-> 新しく環境を作るときは、これまでどおり `supabase/schema.sql` を流せばよい
-> （同じ内容が入っている）。
-| `GEMINI_API_KEY` | Google AI Studio の API キー（研究員の AI 回答。未設定なら定型文） |
+> 新しく環境を作るときは、これまでどおり `supabase/schema.sql` を流せばよい。
 
 ```bash
 vercel env add VITE_RELAY_URL production
@@ -53,7 +71,14 @@ vercel --prod
 
 ## 3. Windows（MT5 の横）
 
-`bridge/.env`（接続ツールが `MT5_PATH` を自動で書き込みます）:
+設定ファイルの場所は、exe 版と開発機で違います。
+
+| 使うもの | 設定ファイル |
+|---|---|
+| `AITrader.exe`（お客様に配るもの） | `%LOCALAPPDATA%\AITrader\bridge.env` |
+| `.py` / `.vbs`（開発機） | `bridge/.env` |
+
+中身（接続ツールが `MT5_PATH` を自動で書き込みます）:
 
 ```env
 TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge

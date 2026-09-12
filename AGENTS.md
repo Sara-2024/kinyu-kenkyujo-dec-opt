@@ -48,24 +48,8 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   カレンダーを読むだけ、「トレードを添削して」は `reviewTrades()` で画面側が答える。
 - **鍵が無ければ定型文。** `GEMINI_API_KEY` 未設定のときは `characters.ts` の
   `answers` / `fallback` で返し、画面に「準備中」を出さない。
-- 経済指標は `/api/calendar`（ForexFactory の今週ぶん JSON）だけを使う。
-  来週ぶんは週明けまで届かない。取れないときも予定を作らない。
-
-## 研究員の AI（Gemini）の決まり
-
-- **担当を固定する。** リン＝チャート、ジン＝経済指標・金利、アルゴ＝自動売買システム、
-  ミオ＝お客様のトレードの利益分析。担当の定義は `api/_lib/chat.ts` の `ROLE_SPEC`。
-- **AI に渡すのは担当ぶんのデータだけ。** 画面側が `src/data/aiContext.ts` で
-  「その担当が見る手元のデータ」を組み立てて送る。サーバーは何も調べに行かない。
-  担当外のデータを混ぜない（AI が余計なことまで調べて、費用が増える）。
-- **担当外の質問は調べない。** `redirect` だけ返し、画面は「▶ ○○に聞く」ボタンを出す。
-  押すと質問を持ったまま担当の研究員に切り替わる（`setPendingQuestion`）。
-- **AI を使わずに済むものは使わない。** 「次の指標はいつ？」「今週の重要指標は？」は
-  カレンダーを読むだけ、「トレードを添削して」は `reviewTrades()` で画面側が答える。
-- **鍵が無ければ定型文。** `GEMINI_API_KEY` 未設定のときは `characters.ts` の
-  `answers` / `fallback` で返し、画面に「準備中」を出さない。
-- 経済指標は `/api/calendar`（ForexFactory の今週ぶん JSON）だけを使う。
-  来週ぶんは週明けまで届かない。取れないときも予定を作らない。
+- 経済指標は `/api/calendar` だけを使う（ForexFactory の今週ぶん・来週ぶんの2本。
+  `api/_lib/calendar.ts` の `SOURCES`）。取れないときも予定を作らない。
 
 ## MT5 を読むときの決まり
 
@@ -119,32 +103,50 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   問題なしになり、かつ `RISK_MIN_BLOCK_SEC` を過ぎたときだけ再開する。
 - **本番口座では自動で反映しない。** デモは `on`、本番は `shadow`（記録のみ）で始まる。
   切り替えは管理画面の「反映 / 記録のみ / 切」だけ。切でも既存の安全装置は働く。
-- **試験の走らせ方**（MT5 も鍵も要らない）:
-  `python3 bridge/tests/risk_features_test.py` … 水準・突破・リテストの計算
-  `python3 bridge/tests/risk_gate_test.py` … 停止と再開、通信断、古い応答、重複呼び出し
-  `node --experimental-strip-types api/_lib/risk.test.mjs` … 根拠の検証と方向別の理由コード
-  `python3 bridge/tests/wiring_test.py` … Bridge の配線（未定義の名前・属性違いを捕まえる）
-  `python3 bridge/tests/symbol_test.py` … 金の銘柄選び（GOLD を採り、XAUEUR/XAUJPY を弾く）
-  `python3 bridge/tests/settings_restore_test.py` … 指令ファイルが消えたときの設定の書き戻し
-  `python3 bridge/tests/history_test.py` … 口座履歴の取りこぼし（ドテン・長期保有・時計のズレ）
-  `python3 bridge/tests/phase1_test.py` … MT5の検出・EAの状態判定・連携状態
-  `python3 bridge/tests/phase1_offline_test.py` … 初回の設定が通信しないこと（通し）
-  `python3 bridge/tests/installer_ui_test.py` … 初回の設定画面（専門用語・文字の大きさ）
-  `python3 bridge/tests/phase2_test.py` … サイトからの連携（合図の読み取り・検証・状態）
-  `node --experimental-strip-types api/_lib/connect.test.mjs` … 合図を確かめる所
+- **試験は `npm test` でぜんぶ走る**（MT5 も AI の鍵も要らない）。
+  一覧と実体は `tools/run-tests.sh`。新しい試験を足したらここにも足すこと
+  （足さないと誰も走らせない）。`npm run check` なら型チェックも一緒に通る。
 - **AI に聞くのは「入りうる場面」だけ。** EA はブレイク後のリテスト成立でしか入らないので、
   水準から遠く伸びも小さい時間帯に聞いても、その判定は使われない（費用だけ増える）。
   条件は `RiskGate._entry_possible`：重要水準まで ATR 1個以内／直近15本で ATR 4個以上動いた／
   水準を抜けて `retest_bars` 本以内。ゴールドの実データで聞く回数は全体の 27%。
   聞かなかったときは判定の期限だけ延ばし、EA は止めない（原則は許可）。
+  **ただし、いま止めている最中は必ず聞く。** 聞かないと「連続で問題なし」が積み上がらず、
+  危険が去っても永久に止まったままになる（再開は最新のデータでしか起きない）。
 - **有効にする設定**: Vercel に `TRELAB_RISK_TOKEN`（と `GEMINI_API_KEY`）、
   手元に `bridge/risk_secret.py`（`risk_secret.py.example` をコピーして同じ文字列）。
   `tools\build-windows.bat` がこれを exe に同梱するので、**お客様は何も入力しない**。
   どちらか欠けていれば「切」のまま動かない（`/api/risk` は 503 を返す）。
-  `risk_secret.py` はコミットしない。配布物からは取り出せるので、サイト側で
-  1台あたりの呼び出し回数を制限している（`api/_lib/risk.ts` の `RATE_LIMIT`）。
+  `risk_secret.py` はコミットしない。
+  **ただし、この合言葉は配布物（exe）から取り出せる。** PyInstaller の同梱物を展開すれば
+  数分で復元できるので、`public/download/AITrader.exe` を公開している以上、
+  「誰でも取れる」前提で扱うこと。`api/_lib/risk.ts` の `RATE_LIMIT` は
+  1インスタンスのメモリで数えているだけなので、サーバーレスでは悪用の歯止めにならない
+  （事故で叩きすぎるのを止めるためのもの）。実際の歯止めは AI 提供元の予算上限で作る。
+  中長期では、配布物に共有の合言葉を焼き込む方式をやめて、
+  会員セッションに紐づく1台ごとのトークン（失効・台数管理ができるもの）に置き換える。
 - 戦略プロフィールは EA が自分の設定を状態ファイルへ書き出したものを使う
   （`GateProfile`）。ここを増やしたら `bridge/bridge.py` の `DEFAULT_PROFILE` も合わせる。
+- **費用のほとんどはここ。** 会話（研究員）はお客様が話しかけたときだけだが、見張りは
+  相場が開いているあいだ動き続ける。1台あたり月およそ 4,000 回（120秒ごとに見て、
+  実際に聞くのはその 27%）。人数ぶん増えるので、100人なら月 40万回になる。
+  100万トークンあたりの単価（2026-09 時点）:
+
+  | モデル | 入力 | 出力 |
+  | --- | --- | --- |
+  | `gemini-3.5-flash`（既定） | $1.50 | $9.00 |
+  | `gemini-3.5-flash-lite` | $0.30 | $2.50 |
+  | `deepseek-flash` | $0.15 | $0.60（協定時間帯は倍） |
+
+  安い側に替えると費用は数分の一になるが、**判定の質は安全に直結する**ので、
+  いきなり本番の既定を替えない。手順は「`RISK_LIVE_MODE=shadow`（記録のみ）で
+  `GEMINI_RISK_MODEL` / `RISK_PROVIDER` を替えて走らせ、`risk_gate` が残す判定履歴を
+  いまのモデルと突き合わせる」。止める・止めないが一致することを確かめてから替える。
+  どのモデルで判定したかは `decision.model` に必ず残る（黙って別のモデルに落とさない）。
+- **DeepSeek のモデル名は `deepseek-flash`。** 旧称 `deepseek-chat` は DeepSeek 側の
+  料金表・モデル一覧から消えているので、既定にはしない（`DEEPSEEK_DEFAULT_MODEL`）。
+- **AI へ送る JSON は詰めて書く。** `buildUserPrompt` で整形（インデント）すると、
+  改行と空白のぶんだけ入力トークンが増える。呼ぶ回数が多いので効いてくる。
 
 ## AI Trader Connect（お客様に配る Windows アプリ）
 
@@ -226,6 +228,10 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   - 例外は MT5 公式インストーラだけ（本人の操作が要るため）。
 - サイトからの起動は `aitrader://` プロトコル。接続ツールが初回に自分を登録する。
   呼び出し時に会員ID（部屋）を渡し、中継はその部屋以外へ指令を流さない。
+  **この URL はどのページからでも開かせられる。** そのまま信じるとお客様のブリッジを
+  他人の部屋へ移せてしまうので、`connect.py` は「会員IDの形（UUID）であること」と
+  「`from=` が自分たちのサイトであること」の両方を確かめてからしか受け取らない
+  （`TRUSTED_SITES`）。サイトのドメインを増やしたらここに足す。
   ブラウザは登録なしにPCのソフトを起動できないので、**初回だけツールを一度開いてもらう**
   導線は残しておく。配り方はサイトの「接続ツールをダウンロード」ボタン
   （既定は `public/download/AITrader.exe`。Windows で `tools/build-windows.bat` を実行して
@@ -236,8 +242,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **MT5 に送る EA は `bridge/OrbitGoldEA_v6.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、
   XAUUSD 専用）。v6 はトレンド方向を UP/DOWN の二択にし、ナンピンを既定 OFF にしたもの。
   前の版 `bridge/OrbitGoldEA_v5.mq5` は参照用に残してあるだけで、配りも読み込みもしない
-  （`EA_NAMES` に入っていない。お客様の MT5 にあれば `OLD_EA_NAMES` で片づける）。名前は `bridge/mt5_terminal.py` の `EA_NAMES` が唯一の定義で、
-  connect.py の配置・bridge.py の有無報告・古い EA の片づけ（`OLD_EA_NAMES`）が全部そこを見る。
+  （`EA_NAMES` に入っていない。お客様の MT5 にあれば `OLD_EA_NAMES` で片づける）。いま配る EA の名前は `bridge/mt5_terminal.py` の `EA_NAMES` が唯一の定義で、
+  connect.py の配置と bridge.py の有無報告がそこを見る。片づける旧 EA の名前は
+  `connect.py` の `OLD_EA_NAMES`（別のリスト。EA を上げたら旧名をこちらへ足す）。
   EA を差し替えるときは、`TradingGate.mqh` を include して
   `IsTradingAllowedRaw()` / `GateNumber("AI_LOT")` などをエントリー前に見ることと、
   `OnTimer` で `SyncGateFileToGlobals()` を呼ぶこと（これが無いと `ea_alive` が立たず、
@@ -245,6 +252,24 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **役割分担。** MT5との連携（初期設定・ダウンロード案内・メンバー紹介）は受付のユイ、
   稼働・停止・ロット変更（管理画面）はアルゴ。アルゴの「自動売買をはじめる」は
   未連携ならユイへ案内するだけ。台詞は `characters.ts` の `SETUP` / `TOUR`。
+
+## 部屋（会員ごとの分離）の決まり
+
+- **部屋 = 会員のUUID。** 画面は `useBridge(member.id, token)`、ブリッジは `BRIDGE_ID`。
+  中継（`server/index.js`）は同じ部屋の中だけを行き来させる。
+- **中継は「本人か」を確かめる。** 画面から来たセッションの合言葉を、画面と同じ
+  `auth_me` で確かめ、その会員のIDを部屋にする。自己申告の部屋名は使わない。
+  `SUPABASE_URL` / `SUPABASE_ANON_KEY` を中継に設定していないとこの確認が動かず、
+  部屋の名前を知っている人は誰でも入れてしまう（起動ログで警告が出る）。
+- **画面から来る指令はホワイトリスト。** `READ_COMMANDS` / `WRITE_COMMANDS` /
+  `STOP_COMMANDS` に無いものはブリッジへ流さない。ブリッジは届いた指令を実行するので、
+  ここが最後の関所になる。
+- **`can_trade` はサーバー側で効かせる。** 管理画面で「売買を止める」にした会員は、
+  中継が稼働・設定変更を断る。止める操作だけは通す（安全側にしか動かないため）。
+  画面のボタンを消すだけでは、中継に直接つないだ相手を止められない。
+- **書き換えてよい変数と範囲は、お客様のPC側でも確かめる**（`bridge.py` の
+  `ALLOWED_VARIABLES`）。画面の `eaSettings.ts` と同じ値を置く。片方だけ変えない。
+- **ログに会員IDと口座番号をそのまま残さない。** 中継のログは第三者の手にも渡りうる。
 
 ## 動作確認
 
@@ -264,7 +289,7 @@ npm run build      # 型チェック込み。コミット前に通す
    ブリッジの `ea_alive` / `terminal_trade_allowed` を見て自動で進む（外からは自動化できない）。
    済むと「アルゴのところへ」で管理画面に引き継ぐ
 3. アルゴ → 「今日の成績」「過去の成績」「いまのポジション」→ MT5の実データが出る
-4. リン → 「トレードを添削して」→ 履歴（既定180日）からクセを出す
+4. ミオ → 「トレードを添削して」→ 履歴（既定180日）からクセを出す
 5. 管理画面 → ロットの ＋ − → 「変更を反映する」
 6. 「この端末の連携を解除」で最初の状態に戻せる
 
@@ -274,4 +299,5 @@ npm run build      # 型チェック込み。コミット前に通す
   画面サイズに合わせた拡縮は `base * zoom` で行っているので、
   新しい要素もステージの中に置くこと（画面直下に置くと拡縮から外れる）。
 - `useMarket.ts` は 450ms ごとに再描画する。重い処理を足さない。
-- `pages/Chat.tsx` は現在どこからもリンクされていない（旧実装の名残）。
+- `pages/Chat.tsx` は画面のどこからもリンクされていないが、`/chat/:id` は
+  `App.tsx` で現役のルートとして生きている（直リンク用）。

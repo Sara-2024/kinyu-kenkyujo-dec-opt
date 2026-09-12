@@ -22,7 +22,6 @@ export function setConnectionPersist(fn: ((conn: Connection | null) => void) | n
 
 function parseConnection(raw: string): Connection | null {
   const parsed = JSON.parse(raw) as Connection
-  if (parsed.account === '70418552') return null
   parsed.settings = { ...defaultSettings(), ...(parsed.settings ?? {}) }
   return parsed
 }
