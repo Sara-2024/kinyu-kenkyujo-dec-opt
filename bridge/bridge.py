@@ -347,6 +347,31 @@ def _env_str(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
 
+def _load_clock_offset() -> int:
+    """前回おぼえた「サーバー時計と UTC の差」。
+
+    休場中（週末・お正月）に起動すると、最後のティックが何日も前なので
+    時差を割り出せない。そのとき 0（＝UTC）に戻ると、ブローカーとの時差ぶん
+    日付の境目がずれて、「今日の成績」が前日ぶんになったり、直近の取引が
+    窓から外れたりする。前回の値を覚えておけば、開くまでの間もずれない。
+    """
+    try:
+        raw = json.loads((_config_dir() / "clock.json").read_text(encoding="utf-8"))
+        offset = int(raw.get("server_offset_sec", 0))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 0
+    return offset if abs(offset) <= 14 * 3600 else 0
+
+
+def _save_clock_offset(offset: int) -> None:
+    try:
+        (_config_dir() / "clock.json").write_text(
+            json.dumps({"server_offset_sec": int(offset)}, ensure_ascii=False), encoding="utf-8"
+        )
+    except OSError as exc:  # 書けなくても動作は変わらない
+        log.debug("サーバー時計の覚え書きを保存できません: %s", exc)
+
+
 def _config_dir() -> Path:
     """設定の置き場。intent.json と同じ %LOCALAPPDATA%\\AITrader。
 
@@ -406,7 +431,10 @@ class Config:
 
     # WebSocketのキープアライブ。切断検知はライブラリのpingに任せる
     ping_interval: float = field(default_factory=lambda: _env_float("PING_INTERVAL_SEC", 20.0))
-    ping_timeout: float = field(default_factory=lambda: _env_float("PING_TIMEOUT_SEC", 20.0))
+    # ping_timeout は「返事が来なくて切る」までの猶予。短いと、回線が数十秒
+    # 詰まっただけで切れてしまい、そのたび再接続のやり直しになる。
+    # 切断の検知が遅れても困るのは失効までの数十秒だけなので、長めに取る。
+    ping_timeout: float = field(default_factory=lambda: _env_float("PING_TIMEOUT_SEC", 60.0))
     open_timeout: float = field(default_factory=lambda: _env_float("OPEN_TIMEOUT_SEC", 15.0))
 
     # 見張り
@@ -458,7 +486,7 @@ class MT5Controller:
         # ここでの初期値は「MT5 側にも記録が無かったとき」だけ使われる。
         self.desired_value: float = cfg.gv_default
         # ブローカーのサーバー時刻と UTC の差（秒）。履歴の日付はこれで判断する
-        self._server_offset: int = 0
+        self._server_offset: int = _load_clock_offset()
         self._server_offset_at: float = 0.0
 
     async def _call(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -1080,9 +1108,12 @@ class MT5Controller:
                 offset = stamp - int(now)
                 # 週末は最後のティックが古いので、常識的な時差の範囲だけ信じる
                 if abs(offset) <= 14 * 3600:
-                    self._server_offset = int(round(offset / 900.0) * 900)
+                    learned = int(round(offset / 900.0) * 900)
+                    if learned != self._server_offset:
+                        log.info("サーバー時計との差: %+d 分 (%s)", learned // 60, symbol)
+                        _save_clock_offset(learned)
+                    self._server_offset = learned
                     self._server_offset_at = now
-                    log.debug("サーバー時計との差: %+d 分 (%s)", self._server_offset // 60, symbol)
                     return self._server_offset
             except Exception:  # noqa: BLE001
                 continue
@@ -1100,11 +1131,36 @@ class MT5Controller:
         """約定時刻（サーバー時計）を datetime にする"""
         return datetime.fromtimestamp(int(stamp), tz=timezone.utc).replace(tzinfo=None)
 
-    def _deals_between(self, start: datetime, end: datetime) -> list[Any]:
+    @staticmethod
+    def _closing_entries() -> tuple[int, ...]:
+        """損益が確定する約定の種別。
+
+        DEAL_ENTRY_INOUT は「決済して、その場で反対に建てる」1件（ドテン）で、
+        確定した損益はこの約定に載る。ここを数えないと、その取引の損益が
+        まるごと画面に出ない。EA 側（TodayClosedProfit）は最初から数えている。
+        """
+        return (
+            getattr(mt5, "DEAL_ENTRY_OUT", 1),
+            getattr(mt5, "DEAL_ENTRY_OUT_BY", 3),
+            getattr(mt5, "DEAL_ENTRY_INOUT", 2),
+        )
+
+    @staticmethod
+    def _trade_types() -> tuple[int, ...]:
+        """売買の約定だけ。入出金・振替はここに入らない。"""
+        return (getattr(mt5, "DEAL_TYPE_BUY", 0), getattr(mt5, "DEAL_TYPE_SELL", 1))
+
+    def _deals_between(self, start: datetime, end: datetime, *, open_end: bool = False) -> list[Any]:
         """サーバー時計の [start, end] に入る約定。
 
         MT5 に渡す窓は前後1日ぶん広げ、絞り込みは Python 側で行う。
         こうすると、時差の扱いが環境で違っても取りこぼさない。
+
+        open_end=True は「start から、いまこの瞬間まで」。上限で切らない。
+        サーバー時計との差は気配値から割り出していて、最大15分ぶん粗く、
+        しかも10分間は取り直さない。その差のぶん end が実際より前になり、
+        「たったいま決済したぶんが出てこない」ことがあった。
+        約定が未来に出ることはないので、上限で切る意味がない。
         """
         try:
             rows = mt5.history_deals_get(start - timedelta(days=1), end + timedelta(days=1)) or ()
@@ -1117,9 +1173,32 @@ class MT5Controller:
             if not stamp:
                 continue
             when = self._server_dt(stamp)
-            if start <= when <= end:
-                out.append(deal)
+            if when < start:
+                continue
+            if not open_end and when > end:
+                continue
+            out.append(deal)
         return out
+
+    def _entry_deals_for(self, position_id: int) -> list[Any]:
+        """その建玉を「建てた」ときの約定。窓の外で建てたものを取りに行く。
+
+        180日ぶんを見ていても、200日前に建てて昨日決済した取引は
+        建てた側の約定が窓の外に落ちる。組み直せず、その取引ごと
+        画面から消えていた（損益も出ない）。建玉番号で名指しに取れば拾える。
+        """
+        try:
+            rows = mt5.history_deals_get(position=int(position_id)) or ()
+        except Exception as exc:  # noqa: BLE001
+            log.debug("建玉 %s の約定を読めません: %s", position_id, exc)
+            return []
+        entry_in = getattr(mt5, "DEAL_ENTRY_IN", 0)
+        types = self._trade_types()
+        return [
+            d
+            for d in rows
+            if getattr(d, "type", None) in types and getattr(d, "entry", None) == entry_in
+        ]
 
     def _digits_blocking(self, symbol: str, cache: dict[str, int]) -> int:
         """小数点以下の桁数。銘柄ごとに一度だけ問い合わせる。"""
@@ -1188,11 +1267,9 @@ class MT5Controller:
         try:
             now = self._server_now()
             start = (now - timedelta(days=span - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            deals = self._deals_between(start, now)
-            entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
-            entry_out_by = getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)
-            type_buy = getattr(mt5, "DEAL_TYPE_BUY", 0)
-            type_sell = getattr(mt5, "DEAL_TYPE_SELL", 1)
+            deals = self._deals_between(start, now, open_end=True)
+            closing = self._closing_entries()
+            trade_types = self._trade_types()
             closed = 0
             profit = 0.0
             wins = 0
@@ -1203,9 +1280,9 @@ class MT5Controller:
             worst = 0.0
             per_day: dict[str, dict[str, Any]] = {}
             for deal in deals:
-                if getattr(deal, "type", None) not in (type_buy, type_sell):
+                if getattr(deal, "type", None) not in trade_types:
                     continue
-                if getattr(deal, "entry", None) not in (entry_out, entry_out_by):
+                if getattr(deal, "entry", None) not in closing:
                     continue
                 p = (
                     float(getattr(deal, "profit", 0) or 0)
@@ -1261,19 +1338,17 @@ class MT5Controller:
         try:
             now = self._server_now()
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            deals = self._deals_between(start, now)
-            entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
-            entry_out_by = getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)
-            type_buy = getattr(mt5, "DEAL_TYPE_BUY", 0)
-            type_sell = getattr(mt5, "DEAL_TYPE_SELL", 1)
+            deals = self._deals_between(start, now, open_end=True)
+            closing = self._closing_entries()
+            trade_types = self._trade_types()
             closed = 0
             profit = 0.0
             wins = 0
             losses = 0
             for deal in deals:
-                if getattr(deal, "type", None) not in (type_buy, type_sell):
+                if getattr(deal, "type", None) not in trade_types:
                     continue
-                if getattr(deal, "entry", None) not in (entry_out, entry_out_by):
+                if getattr(deal, "entry", None) not in closing:
                     continue
                 p = (
                     float(getattr(deal, "profit", 0) or 0)
@@ -1336,17 +1411,16 @@ class MT5Controller:
 
         now = self._server_now()
         start = (now - timedelta(days=span)).replace(hour=0, minute=0, second=0, microsecond=0)
-        deals = self._deals_between(start, now)
+        deals = self._deals_between(start, now, open_end=True)
 
         entry_in = getattr(mt5, "DEAL_ENTRY_IN", 0)
-        entry_out = getattr(mt5, "DEAL_ENTRY_OUT", 1)
-        entry_out_by = getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)
-        type_buy = getattr(mt5, "DEAL_TYPE_BUY", 0)
-        type_sell = getattr(mt5, "DEAL_TYPE_SELL", 1)
+        closing = self._closing_entries()
+        trade_types = self._trade_types()
+        type_buy = trade_types[0]
 
         groups: dict[int, dict[str, Any]] = {}
         for deal in deals:
-            if getattr(deal, "type", None) not in (type_buy, type_sell):
+            if getattr(deal, "type", None) not in trade_types:
                 continue  # 入出金・振替は取引ではない
             pid = int(getattr(deal, "position_id", 0) or 0)
             if not pid:
@@ -1357,7 +1431,7 @@ class MT5Controller:
             entry = getattr(deal, "entry", None)
             if entry == entry_in:
                 g["in"].append(deal)
-            elif entry in (entry_out, entry_out_by):
+            elif entry in closing:
                 g["out"].append(deal)
 
         def weighted(rows: list[Any]) -> tuple[float, float]:
@@ -1370,13 +1444,25 @@ class MT5Controller:
         cache: dict[str, int] = {}
         trades: list[dict[str, Any]] = []
         for pid, g in groups.items():
-            if not g["in"] or not g["out"]:
+            if not g["out"]:
                 continue  # まだ決済していない建玉は positions 側で見る
-            first_in = min(g["in"], key=lambda d: getattr(d, "time", 0))
+            if not g["in"]:
+                # 窓より前に建てて、窓の中で決済した取引。建てた側の約定を名指しで取る
+                g["in"] = self._entry_deals_for(pid)
+                g["symbol"] = g["symbol"] or (str(getattr(g["in"][0], "symbol", "") or "") if g["in"] else "")
+                if g["in"] and not g["magic"]:
+                    g["magic"] = int(getattr(g["in"][0], "magic", 0) or 0)
+            first_in = min(g["in"], key=lambda d: getattr(d, "time", 0)) if g["in"] else None
             last_out = max(g["out"], key=lambda d: getattr(d, "time", 0))
-            opened = int(getattr(first_in, "time", 0) or 0)
+            opened = int(getattr(first_in, "time", 0) or 0) if first_in is not None else 0
             closed = int(getattr(last_out, "time", 0) or 0)
-            volume, open_price = weighted(g["in"])
+            if g["in"]:
+                volume, open_price = weighted(g["in"])
+            else:
+                # それでも建てた側が分からないとき。決済ぶんだけで出す。
+                # 建値と保有時間は空にするが、損益は必ず載せる（消さない）。
+                volume = weighted(g["out"])[0]
+                open_price = 0.0
             _, close_price = weighted(g["out"])
             profit = 0.0
             for d in (*g["in"], *g["out"]):
@@ -1385,12 +1471,17 @@ class MT5Controller:
                     + float(getattr(d, "swap", 0) or 0)
                     + float(getattr(d, "commission", 0) or 0)
                 )
-            symbol = g["symbol"]
+            symbol = g["symbol"] or str(getattr(last_out, "symbol", "") or "")
+            # 決済の向きは建玉と逆。建てた側が分からないときはここから起こす
+            if first_in is not None:
+                side = "buy" if getattr(first_in, "type", type_buy) == type_buy else "sell"
+            else:
+                side = "sell" if getattr(last_out, "type", type_buy) == type_buy else "buy"
             trades.append(
                 {
                     "id": pid,
                     "symbol": symbol,
-                    "side": "buy" if getattr(first_in, "type", type_buy) == type_buy else "sell",
+                    "side": side,
                     "volume": volume,
                     "open_price": open_price,
                     "close_price": close_price,
@@ -1398,7 +1489,7 @@ class MT5Controller:
                     "profit": round(profit, 2),
                     "opened_at": self._server_dt(opened).isoformat(timespec="minutes") if opened else "",
                     "closed_at": self._server_dt(closed).isoformat(timespec="minutes") if closed else "",
-                    "held_sec": max(0, closed - opened),
+                    "held_sec": max(0, closed - opened) if opened else 0,
                     "by_system": bool(g["magic"]),
                 }
             )
@@ -1598,6 +1689,11 @@ class Bridge:
         self.mt = MT5Controller(cfg)
         self.router = CommandRouter(cfg, self.mt)
         self.stop = asyncio.Event()
+        # 送信は3か所から同時に走る（指令への返事・5秒ごとの送信・30秒ごとの見張り）。
+        # WebSocket の送信は同時に呼べないので、ここで順番に通す。
+        # 重なると送信が例外になり、指令の返事を送っている側で起きたときは
+        # そのまま接続が切れて、再接続からやり直しになっていた。
+        self._send_lock = asyncio.Lock()
         self.connected_since: float | None = None
         self.disconnected_since: float = time.time()
         self._failsafe_fired = False
@@ -1631,7 +1727,9 @@ class Bridge:
         return kwargs
 
     async def _send(self, ws: Any, message: dict[str, Any]) -> None:
-        await ws.send(json.dumps(message, ensure_ascii=False, allow_nan=False, default=str))
+        body = json.dumps(message, ensure_ascii=False, allow_nan=False, default=str)
+        async with self._send_lock:
+            await ws.send(body)
 
     def _with_risk(self, status: dict[str, Any]) -> dict[str, Any]:
         """AIリスク監督の状態を、画面へ送る内容に足す。"""
@@ -1777,12 +1875,21 @@ class Bridge:
             try:
                 async with ws_connect(self.cfg.ws_url, **self._connect_kwargs()) as ws:
                     backoff.reset()
+                    started = time.time()
                     await self._serve_connection(ws)
                     if getattr(ws, "close_code", None) == 4001:
                         log.warning("別の接続ツールが接続したため、このブリッジは終了します")
                         self.request_stop()
                         break
-                log.warning("サーバーから切断されました")
+                    # 切れた理由が後から分かるように、必ず番号と理由を残す。
+                    # 1000/1001=中継からの正常な終了（再起動・入れ替え）、
+                    # 1006=返事が無くなった（回線・PCのスリープ・中継の落ち）。
+                    log.warning(
+                        "サーバーから切断されました code=%s reason=%r 接続していた時間=%.0f秒",
+                        getattr(ws, "close_code", None),
+                        getattr(ws, "close_reason", ""),
+                        time.time() - started,
+                    )
             except asyncio.CancelledError:
                 raise
             except (WebSocketException, OSError) as exc:

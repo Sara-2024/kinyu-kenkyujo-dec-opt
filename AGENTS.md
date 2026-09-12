@@ -74,6 +74,14 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   `datetime.now()` や `datetime.fromtimestamp()` を履歴の問い合わせや表示に
   使わない（時差のぶん窓がずれて、直近の売買が丸ごと抜ける）。
   `_server_now()` / `_server_dt()` / `_deals_between()` を通すこと。
+- **履歴は「決済ぶん」を一件も落とさない。** 数え方を変えるときは
+  `_closing_entries()`（OUT / OUT_BY / INOUT）を通す。ドテンの損益は INOUT に載るので、
+  ここを外すとその取引の損益がまるごと画面から消える。
+  取引一覧（`_trades_blocking`）は、窓の外で建てた取引も落とさない
+  （建てた側が無ければ `_entry_deals_for()` で名指しに取り、それでも無ければ
+  建値を空にして損益だけ載せる）。窓の上限では切らない（`open_end=True`）。
+  サーバー時計との差は最大15分ぶん粗く、10分間は取り直さないので、
+  上限で切ると「たったいまの決済」が落ちる。
 - **売買フラグを動かしてよいのは「サイトからの指示」だけ。**
   指示は `%LOCALAPPDATA%\AITrader\intent.json` に持つ。ブリッジは起動時も
   再接続時も、この意思に MT5 を合わせるだけ。記録が無ければ「停止」から始める
@@ -118,6 +126,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   `python3 bridge/tests/wiring_test.py` … Bridge の配線（未定義の名前・属性違いを捕まえる）
   `python3 bridge/tests/symbol_test.py` … 金の銘柄選び（GOLD を採り、XAUEUR/XAUJPY を弾く）
   `python3 bridge/tests/settings_restore_test.py` … 指令ファイルが消えたときの設定の書き戻し
+  `python3 bridge/tests/history_test.py` … 口座履歴の取りこぼし（ドテン・長期保有・時計のズレ）
 - **AI に聞くのは「入りうる場面」だけ。** EA はブレイク後のリテスト成立でしか入らないので、
   水準から遠く伸びも小さい時間帯に聞いても、その判定は使われない（費用だけ増える）。
   条件は `RiskGate._entry_possible`：重要水準まで ATR 1個以内／直近15本で ATR 4個以上動いた／
