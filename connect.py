@@ -507,11 +507,11 @@ def write_bridge_env(session: dict) -> None:
 
 
 def adopt_room(room: str) -> None:
-    """サイトから部屋（会員ID）を受け取る。これまでの連携のしかた（互換用）。
+    """この PC の部屋（会員ID）を覚えて、連携済みにする。
 
-    新しい導線は token 方式（Phase 2）を使う。こちらは、すでに使っている
-    お客様の PC が古い URL で呼ばれたときのために残してある。
-    サイトから呼ばれた時点で「連携された」とみなし、通信を始められる状態にする。
+    ここに渡ってよい部屋は、サイトが合図（token）と引き換えに返したものだけ。
+    URL から直接受け取ってはいけない（会員IDを知っているだけの相手に
+    連携されてしまう）。呼び出し口は connect_all 一本にしてある。
     """
     if not ROOM_RE.match(room):
         return
@@ -576,22 +576,6 @@ def redeem_connect_token(token: str) -> str:
         return ""
     log("連携の合図を確認しました")
     return room
-
-
-def site_room_from_args(argv: list[str]) -> str:
-    """aitrader://connect?room=<会員ID> から部屋を読む。"""
-    for raw in argv:
-        if not is_protocol_url(raw):
-            continue
-        try:
-            parsed = urllib.parse.urlparse(raw.replace("\\", "/"))
-            query = urllib.parse.parse_qs(parsed.query)
-            room = (query.get("room") or [""])[0].strip()
-            if ROOM_RE.match(room):
-                return room
-        except Exception:  # noqa: BLE001
-            continue
-    return ""
 
 
 # ────────────────────────────────────────────────
@@ -1271,9 +1255,12 @@ def connect_all(room: str = "") -> int:
 def main() -> int:
     global CONSOLE
     raw_args = [a for a in sys.argv[1:]]
-    # いまの連携は合図（token）。room= は古い形で、互換のためだけに読む
+    # 外から連携を始められる入口は、合図（token）ただ1つ。
+    # aitrader://connect?room=... は受け付けない（会員IDを知っているだけの相手が
+    # 勝手に連携できてしまうため）。すでに使っているお客様の引き継ぎは、
+    # URL ではなく、その PC に残っている bridge.env から行う（adopt_legacy）。
     connect_token = connect_token_from_args(raw_args)
-    room = site_room_from_args(raw_args)
+    room = ""
     args = [a for a in raw_args if not is_protocol_url(a)]
     CONSOLE = "--console" in args or "--self-test" in args
 

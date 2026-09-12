@@ -200,8 +200,16 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **新しい環境変数は要らない。** すでにある `VITE_SUPABASE_URL` /
   `VITE_SUPABASE_ANON_KEY` をそのまま使う。
 - **合図は記録に残さない。** ログにも応答にも、伏せた形でしか出さない。
-- **`room=` は互換のためだけに残してある。** サイトからは絶対に発行しない
-  （`src/data/connector.ts` は `token=` しか作らない）。
+- **`aitrader://connect?room=...` は受け付けない。** 会員IDを知っているだけの
+  相手に連携されてしまうため、URL から部屋を受け取る処理そのものを廃止した。
+  外から CONNECTED にできる入口は合図（token）ただ1つ。
+- **すでに使っているお客様の引き継ぎは、URL ではなく手元の設定から。**
+  その PC の `bridge.env` に会員IDが入っていれば CONNECTED とみなす
+  （`connect_state.adopt_legacy`）。
+- **DB の追加は migration で流す。** すでに動いている環境には
+  `supabase/migrations/20260912_add_connect_tokens.sql` だけを流す。
+  新しい環境は `schema.sql` でよい（同じ内容が入っている。ずれていないことは
+  `phase2_test.py` が見ている）。
 
 ## お客様のPCで動くもの（接続ツール）
 
