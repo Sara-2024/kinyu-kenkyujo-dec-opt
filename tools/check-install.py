@@ -181,7 +181,9 @@ def main() -> int:
         mq5 = t.data_path / "MQL5" / "Experts" / "OrbitGoldEA_v6.mq5"
         inc = t.data_path / "MQL5" / "Include" / "TradingGate.mqh"
         row("  .ex5", "ある" if ex5.is_file() else "無い", "✓" if ex5.is_file() else "✕")
-        row("  .mq5（配らない）", "残っている" if mq5.is_file() else "無い", "△" if mq5.is_file() else "✓")
+        # 前は .mq5 を配って現地でコンパイルさせていた。その残りがあれば知らせる
+        # （動きには影響しないが、MT5 のナビゲーターに同じ名前が2つ出て紛らわしい）
+        row("  前の方式の残り", "あり（消してよい）" if mq5.is_file() else "なし", "△" if mq5.is_file() else "✓")
         row("  TradingGate.mqh", "ある" if inc.is_file() else "無い", "✓" if inc.is_file() else "✕")
         if st.detail:
             print(f"      {st.detail}")
