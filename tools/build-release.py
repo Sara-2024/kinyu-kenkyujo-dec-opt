@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """配るもの一式を、まとめて作る（Windows で実行）。
 
-  tools\\リリースする.bat  を押すだけ。
+  tools\\2_リリースする.bat  を押すだけ。
 
 やること:
   1. EA を用意する           （bridge に .ex5 があればそのまま使う。
@@ -152,7 +152,7 @@ def compile_ea() -> Path:
     # 作り直したいときだけ、--compile を付けて実行する。
     if ex5_out.is_file() and "--compile" not in sys.argv:
         ok(f"{ex5_out.name} をそのまま使います（{ex5_out.stat().st_size:,} バイト）")
-        print("     作り直したいときは tools\\リリースする.bat --compile")
+        print("     作り直したいときは tools\\2_リリースする.bat --compile")
         return ex5_out
 
     editor = find_metaeditor()
@@ -343,7 +343,7 @@ def main() -> int:
         print("  ！ いまの .ex5 は本物ではありません。配る前に必ず差し替えること。")
         print()
     print("  次にやること:")
-    print("    1. tools\\確認する.bat で、このPCの状態を見る")
+    print("    1. tools\\3_確認する.bat で、このPCの状態を見る")
     print("    2. リリース手順.md の実機テスト A〜E を行う")
     print("    3. 問題なければ、下の3つをコミットして push する")
     print(f"         bridge\\{EA_NAME}.ex5")
