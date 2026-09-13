@@ -4,7 +4,8 @@
   tools\\リリースする.bat  を押すだけ。
 
 やること:
-  1. EA をコンパイルする     （MetaEditor を自動で探して呼ぶ。手で開かなくてよい）
+  1. EA を用意する           （bridge に .ex5 があればそのまま使う。
+                              無いときだけ MetaEditor を探してコンパイルする）
   2. 版と中身の控えを作る    （ea_manifest.json）
   3. 接続ツールをビルドする  （AITrader.exe）
   4. インストーラーを作る    （Inno Setup。入っていなければ飛ばす）
@@ -146,14 +147,20 @@ def compile_ea() -> Path:
     if not mqh_src.is_file():
         die(f"{mqh_src} がありません")
 
+    # すでに .ex5 があるなら、それを配る。コンパイルはしない。
+    # 自分でコンパイルしたものを bridge に置いたときは、そのまま使われる。
+    # 作り直したいときだけ、--compile を付けて実行する。
+    if ex5_out.is_file() and "--compile" not in sys.argv:
+        ok(f"{ex5_out.name} をそのまま使います（{ex5_out.stat().st_size:,} バイト）")
+        print("     作り直したいときは tools\\リリースする.bat --compile")
+        return ex5_out
+
     editor = find_metaeditor()
     if editor is None:
-        if ex5_out.is_file():
-            ok(f"MetaEditor は見つからないが、{ex5_out.name} はすでにある（そのまま使う）")
-            return ex5_out
         die(
             "MetaEditor（metaeditor64.exe）が見つかりません",
-            "MT5 を一度起動してから、もう一度お試しください。",
+            f"MT5 で bridge\\{EA_NAME}.mq5 を F7 でコンパイルし、",
+            f"できた {EA_NAME}.ex5 を bridge\\ に置いてから、もう一度実行してください。",
         )
     ok(f"MetaEditor: {editor}")
 
@@ -301,7 +308,7 @@ def main() -> int:
     print("  AI Trader Connect を作る")
     print("=" * 62)
 
-    step("EA をコンパイルする")
+    step("EA を用意する")
     ex5 = compile_ea()
     placeholder = looks_like_placeholder(ex5)
     if placeholder:
