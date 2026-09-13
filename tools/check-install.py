@@ -85,6 +85,45 @@ def protocol_command() -> str:
         return ""
 
 
+def exe_of(command: str) -> Path | None:
+    """レジストリのコマンドから、実行ファイルの場所だけ取り出す。"""
+    command = command.strip()
+    if command.startswith('"'):
+        end = command.find('"', 1)
+        path = command[1:end] if end > 0 else command.strip('"')
+    else:
+        path = command.split(" ")[0]
+    try:
+        return Path(path)
+    except (OSError, ValueError):
+        return None
+
+
+def points_here(command: str) -> tuple[bool, str]:
+    """その登録が、いま使っているアプリを指しているか。
+
+    フォルダ名の一部が一致するだけでは駄目（kinyu-kenkyujo-dec-opt は
+    kinyu-kenkyujo-dec-opt-main の一部でもある）。実行ファイルの場所が、
+    インストール先か、このリポジトリの中にあるかで見る。
+    """
+    exe = exe_of(command)
+    if exe is None:
+        return False, "読めません"
+
+    def norm(path: Path | str) -> str:
+        return os.path.normcase(os.path.normpath(str(path)))
+
+    target = norm(exe)
+    installed = Path(os.environ.get("LOCALAPPDATA", "")) / "AITraderConnect"
+    for base, label in ((installed, "インストール先"), (ROOT, "このフォルダ")):
+        head = norm(base)
+        # 「〜の中にあるか」。前方一致だけで見ないこと。
+        # kinyu-kenkyujo-dec-opt は kinyu-kenkyujo-dec-opt-main の前方一致でもある
+        if target == head or target.startswith(head + os.sep):
+            return True, f"{label}（{exe.name}）"
+    return False, f"別の場所（{exe.parent.name}\\{exe.name}）"
+
+
 def bridge_processes() -> list[str]:
     """裏で動いているブリッジ。Windows は wmic、他は ps で見る。"""
     try:
@@ -199,12 +238,19 @@ def main() -> int:
             if connected:
                 print("      ※ 連携済みなら、アプリを一度開くと登録されます")
         for name, value in entries:
-            here = str(ROOT).lower() in value.lower() or "aitraderconnect" in value.lower()
-            row(f"自動起動［{name}］", value[:70], "✓" if here else "✕")
-            if not here:
-                print("      ※ 古い exe を指しています。インストーラーを入れ直してください")
+            ok_, where = points_here(value)
+            row(f"自動起動［{name}］", where, "✓" if ok_ else "✕")
+            if not ok_:
+                print(f"      ※ 別の場所を指しています: {value[:90]}")
+                print("      ※ インストーラーを入れ直してください")
         proto = protocol_command()
-        row("aitrader://", proto[:70] if proto else "登録なし", "✓" if proto else "✕")
+        if proto:
+            ok_, where = points_here(proto)
+            row("aitrader://", where, "✓" if ok_ else "✕")
+            if not ok_:
+                print(f"      ※ 別の場所を指しています: {proto[:90]}")
+        else:
+            row("aitrader://", "登録なし", "✕")
 
     # ── 記録 ──
     head("記録（困ったときはここ）")

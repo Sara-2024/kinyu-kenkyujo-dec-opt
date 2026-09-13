@@ -100,10 +100,28 @@ def _last_used(data_path: Path) -> float:
     return best
 
 
+def is_mt5(data_path: Path) -> bool:
+    """MT5 のデータフォルダか。
+
+    %APPDATA%\\MetaQuotes\\Terminal には MT4 のフォルダも並んでいる。
+    MT4 は MQL4、MT5 は MQL5 を持つ。MT5 の EA は MT4 では動かないので、
+    MQL5 があるものだけを相手にする（これをしないと、お客様の選択画面に
+    MT4 まで並んで、どれを選べばいいか分からなくなる）。
+    """
+    try:
+        if (data_path / "MQL4").is_dir() and not (data_path / "MQL5").is_dir():
+            return False
+        return (data_path / "MQL5").is_dir()
+    except OSError:
+        return False
+
+
 def list_terminals() -> list[Terminal]:
-    """見つかった MT5 を、最後に使った順に並べて返す。"""
+    """見つかった MT5 を、最後に使った順に並べて返す。MT4 は入れない。"""
     out: list[Terminal] = []
     for data_dir in iter_terminal_data_dirs():
+        if not is_mt5(data_dir):
+            continue
         install = terminal_dir_from_data_path(data_dir)
         out.append(
             Terminal(

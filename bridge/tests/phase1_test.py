@@ -58,6 +58,21 @@ def make_terminal(folder_id: str, install_name: str, encoding: str = "utf-16") -
 hfm = make_terminal("A" * 32, "HFM MetaTrader 5")
 xm = make_terminal("B" * 32, "XM MT5", encoding="utf-8")
 
+
+def make_mt4(folder_id: str, install_name: str) -> pathlib.Path:
+    """MT4 のデータフォルダ。MetaQuotes\\Terminal には MT5 と一緒に並んでいる。"""
+    base = pathlib.Path(os.environ["APPDATA"]) / "MetaQuotes" / "Terminal" / folder_id
+    (base / "MQL4" / "Experts").mkdir(parents=True, exist_ok=True)
+    install = pathlib.Path(WORK) / "Program Files" / install_name
+    install.mkdir(parents=True, exist_ok=True)
+    (install / "terminal.exe").write_text("", encoding="utf-8")
+    (base / "origin.txt").write_text(str(install), encoding="utf-16")
+    return base
+
+
+make_mt4("C" * 32, "XM Global MT4")
+make_mt4("D" * 32, "Myfx Markets 4")
+
 import connect_state  # noqa: E402
 import ea_manager  # noqa: E402
 import mt5_detect  # noqa: E402
@@ -87,6 +102,9 @@ def make_assets(version: str = "6.10", *, sha_ok: bool = True, ea_body: bytes = 
 # ── 1) MT5 を全部見つけられる（起動もログインも不要） ──
 terminals = mt5_detect.list_terminals()
 check("MT5 を2台とも見つける", len(terminals) == 2, str(mt5_detect.describe(terminals)))
+check("MT4 は混ぜない", all("MT4" not in t.label and "Myfx" not in t.label for t in terminals),
+      str([t.label for t in terminals]))
+check("MQL5 があるものだけ", all((t.data_path / "MQL5").is_dir() for t in terminals))
 labels = sorted(t.label for t in terminals)
 check("ブローカー名を出せる", labels == ["HFM", "XM"], str(labels))
 check("データフォルダを持っている", all(t.data_path.is_dir() for t in terminals))
