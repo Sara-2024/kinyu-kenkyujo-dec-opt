@@ -18,8 +18,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -83,6 +85,18 @@ def find_metaeditor() -> Path | None:
     return seen[0] if seen else None
 
 
+def find_mt5_data_dir() -> Path | None:
+    """MT5 のデータフォルダ（MQL5 があるところ）。最後に使ったものを選ぶ。"""
+    base = Path(os.environ.get("APPDATA", "")) / "MetaQuotes" / "Terminal"
+    if not base.is_dir():
+        return None
+    found = [p for p in base.iterdir() if p.is_dir() and (p / "origin.txt").is_file()]
+    if not found:
+        return None
+    found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return found[0]
+
+
 def looks_like_placeholder(ex5: Path) -> str:
     """本物のコンパイル結果かどうかを、ざっくり見る。
 
@@ -103,49 +117,92 @@ def looks_like_placeholder(ex5: Path) -> str:
     return ""
 
 
+def read_compile_log(mq5: Path) -> str:
+    """MetaEditor が残した記録。文字コードは環境で変わる。"""
+    for path in (mq5.with_suffix(".log"), mq5.parent / f"{mq5.stem}.log"):
+        if not path.is_file():
+            continue
+        for encoding in ("utf-16", "utf-8", "cp932"):
+            try:
+                return path.read_text(encoding=encoding, errors="ignore")
+            except (OSError, UnicodeError):
+                continue
+    return ""
+
+
 def compile_ea() -> Path:
-    mq5 = BRIDGE / f"{EA_NAME}.mq5"
-    ex5 = BRIDGE / f"{EA_NAME}.ex5"
-    if not mq5.is_file():
-        die(f"{mq5} がありません")
+    r"""MT5 のフォルダを借りてコンパイルし、できた .ex5 を bridge へ持ち帰る。
+
+    EA は `#include <TradingGate.mqh>` と書いてある。山かっこの include は
+    MT5 の Include フォルダを見に行くので、bridge の中だけではコンパイルできない。
+    お客様の PC に配るときと同じ置き方（MQL5\Experts と MQL5\Include）にしてから
+    コンパイルする。これは以前から動いていたやり方。
+    """
+    mq5_src = BRIDGE / f"{EA_NAME}.mq5"
+    mqh_src = BRIDGE / "TradingGate.mqh"
+    ex5_out = BRIDGE / f"{EA_NAME}.ex5"
+    if not mq5_src.is_file():
+        die(f"{mq5_src} がありません")
+    if not mqh_src.is_file():
+        die(f"{mqh_src} がありません")
 
     editor = find_metaeditor()
     if editor is None:
-        if ex5.is_file():
-            ok(f"MetaEditor は見つからないが、{ex5.name} はすでにある（そのまま使う）")
-            return ex5
+        if ex5_out.is_file():
+            ok(f"MetaEditor は見つからないが、{ex5_out.name} はすでにある（そのまま使う）")
+            return ex5_out
         die(
             "MetaEditor（metaeditor64.exe）が見つかりません",
             "MT5 を一度起動してから、もう一度お試しください。",
-            "それでも見つからなければ、MT5 の F4 で MetaEditor を開き、",
-            f"  bridge\\{EA_NAME}.mq5 を F7 でコンパイルしてから、また実行してください。",
         )
     ok(f"MetaEditor: {editor}")
 
-    before = ex5.stat().st_mtime_ns if ex5.is_file() else 0
-    # Include も同じフォルダから読ませる
-    log = BRIDGE / "compile.log"
-    cmd = [str(editor), f"/compile:{mq5}", f"/inc:{BRIDGE}", f"/log:{log}"]
+    data = find_mt5_data_dir()
+    if data is None:
+        die(
+            "MT5 のデータフォルダが見つかりません",
+            "MT5 を一度起動してログインしてから、もう一度お試しください。",
+        )
+    ok(f"MT5 のフォルダ: {data}")
+
+    experts = data / "MQL5" / "Experts"
+    include = data / "MQL5" / "Include"
+    experts.mkdir(parents=True, exist_ok=True)
+    include.mkdir(parents=True, exist_ok=True)
+
+    mq5 = experts / mq5_src.name
+    ex5 = experts / f"{EA_NAME}.ex5"
+    shutil.copy2(mqh_src, include / mqh_src.name)
+    shutil.copy2(mq5_src, mq5)
+    if ex5.is_file():
+        try:
+            ex5.unlink()  # 消してから作る（できたかどうかで成否が分かる）
+        except OSError:
+            die(f"{ex5} を消せません", "MT5 のチャートから EA を外してから、もう一度お試しください。")
+
     print(f"  … コンパイル中（{mq5.name}）")
     try:
-        subprocess.run(cmd, timeout=180, capture_output=True)
+        subprocess.run([str(editor), f"/compile:{mq5}", "/log"], timeout=240, capture_output=True)
     except (OSError, subprocess.TimeoutExpired) as exc:
         die(f"コンパイルを実行できませんでした: {exc}")
 
-    if not ex5.is_file() or ex5.stat().st_mtime_ns == before:
-        tail = ""
-        if log.is_file():
-            for encoding in ("utf-16", "utf-8", "cp932"):
-                try:
-                    tail = "\n      ".join(log.read_text(encoding=encoding, errors="ignore").strip().splitlines()[-8:])
-                    break
-                except (OSError, UnicodeError):
-                    continue
-        die("コンパイルできませんでした", f"MetaEditor の記録:\n      {tail}" if tail else "")
-    if log.is_file():
-        log.unlink(missing_ok=True)
-    ok(f"{ex5.name} を作りました（{ex5.stat().st_size:,} バイト）")
-    return ex5
+    for _ in range(120):
+        if ex5.is_file():
+            break
+        time.sleep(0.25)
+
+    if not ex5.is_file():
+        tail = read_compile_log(mq5)
+        lines = [ln for ln in tail.splitlines() if ln.strip()][-12:]
+        die(
+            "コンパイルできませんでした",
+            "MetaEditor の記録:",
+            *[f"  | {ln}" for ln in lines] or ["  （記録が読めませんでした）"],
+        )
+
+    shutil.copy2(ex5, ex5_out)
+    ok(f"{ex5_out.name} を作りました（{ex5_out.stat().st_size:,} バイト）")
+    return ex5_out
 
 
 # ────────────────────────────────
