@@ -1,6 +1,8 @@
 # 依存とビルド成果物
 node_modules/
 dist/
+tools/installer/
+build/
 *.tsbuildinfo
 
 # エディタ・OS
