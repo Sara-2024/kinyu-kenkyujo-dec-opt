@@ -83,6 +83,26 @@ def find_metaeditor() -> Path | None:
     return seen[0] if seen else None
 
 
+def looks_like_placeholder(ex5: Path) -> str:
+    """本物のコンパイル結果かどうかを、ざっくり見る。
+
+    差し替え忘れたまま配ると、お客様の MT5 で EA が動かない。
+    形式まで検めることはできないので、「明らかに違うもの」だけ弾く。
+    戻り値は理由（空なら、少なくとも見た目は本物）。
+    """
+    size = ex5.stat().st_size
+    if size < 10_000:
+        return f"小さすぎる（{size:,} バイト）。本物は数十KB以上ある"
+    head = ex5.read_bytes()[:4096]
+    try:
+        text = head.decode("ascii")
+    except UnicodeDecodeError:
+        return ""
+    if text.isprintable() or "PLACEHOLDER" in text.upper():
+        return "中身がただの文字（コンパイル結果ではない）"
+    return ""
+
+
 def compile_ea() -> Path:
     mq5 = BRIDGE / f"{EA_NAME}.mq5"
     ex5 = BRIDGE / f"{EA_NAME}.ex5"
@@ -206,7 +226,12 @@ def build_installer() -> Path | None:
 # ────────────────────────────────
 # 5. 配る場所へ
 # ────────────────────────────────
-def place(exe: Path) -> None:
+def place(exe: Path, placeholder: str) -> None:
+    if placeholder:
+        print(f"  ！ 配る場所へは置きません（{placeholder}）")
+        print("     本物の .ex5 に差し替えてから、もう一度実行してください。")
+        print("     ここまでの exe とインストーラーは、配線の確認には使えます。")
+        return
     target = ROOT / "public" / "download" / "AITrader.exe"
     target.parent.mkdir(parents=True, exist_ok=True)
     before = target.stat().st_size if target.is_file() else 0
@@ -221,6 +246,13 @@ def main() -> int:
 
     step("EA をコンパイルする")
     ex5 = compile_ea()
+    placeholder = looks_like_placeholder(ex5)
+    if placeholder:
+        print()
+        print("  " + "!" * 56)
+        print(f"  ！ この .ex5 は本物ではありません: {placeholder}")
+        print("  ！ 配線の確認にだけ使えます。お客様には配らないでください。")
+        print("  " + "!" * 56)
 
     step("版と中身の控えを作る")
     manifest = make_manifest(ex5)
@@ -232,7 +264,7 @@ def main() -> int:
     installer = build_installer()
 
     step("配る場所へ置く")
-    place(exe)
+    place(exe, placeholder)
 
     print()
     print("=" * 62)
@@ -243,6 +275,9 @@ def main() -> int:
     if installer:
         print(f"  インストーラー: {installer}")
     print()
+    if placeholder:
+        print("  ！ いまの .ex5 は本物ではありません。配る前に必ず差し替えること。")
+        print()
     print("  次にやること:")
     print("    1. tools\\確認する.bat で、このPCの状態を見る")
     print("    2. リリース手順.md の実機テスト A〜E を行う")

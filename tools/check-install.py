@@ -166,6 +166,9 @@ def main() -> int:
         row("配布物の版", f"{source.version or '不明'}（{source.sha256[:12]}…）", "✓" if source.ok else "✕")
         if not source.ok:
             print(f"      {source.broken}")
+        if source.ea_path.stat().st_size < 10_000:
+            row("！ 本物の EA か", f"本物ではありません（{source.ea_path.stat().st_size:,} バイト）", "✕")
+            print("      配線の確認用の差し替え品です。お客様には配らないでください")
 
     terminals = mt5_detect.list_terminals()
     if not terminals:
