@@ -72,20 +72,29 @@ launch = body_of(connector, "export async function launchConnector")
 download = body_of(connector, "export function downloadConnector")
 relaunch = body_of(connector, "export function relaunchConnector")
 
-# ── 1) 新規の連携が始まらない ──
-check("新規の連携は止まっている（launchConnector）", ("if (CONNECT_PAUSED) return false" in launch) == PAUSED, launch[:120])
-check("画面側でも入口で引き返す", ("if (CONNECT_PAUSED) {" in dialogue) == PAUSED)
-check("引き返すときは準備中の案内を出す", ("SETUP.paused" in dialogue) == PAUSED)
+# ── 1) スイッチがちゃんと効く配線になっているか ──
+#     （スイッチの値がどちらでも、この配線は残っていること）
+check("新規の連携はスイッチを見ている", "if (CONNECT_PAUSED) return false" in launch, launch[:120])
+check("画面側の入口もスイッチを見ている", "if (CONNECT_PAUSED) {" in dialogue)
+check("止めるときは準備中の案内を出す", "SETUP.paused" in dialogue)
 check("準備中の文言がある", "paused:" in characters)
 
-# 入口（startSetup）で引き返しているので、その先へ進まない
-if PAUSED:
-    m = re.search(r"if \(CONNECT_PAUSED\) \{\s*\n\s*setAiText\(t\(SETUP\.paused\)\)\s*\n\s*return\s*\n\s*\}\s*\n\s*setPhase\('launching'\)", dialogue)
-    check("『呼び出し中』の画面へ進む前に止めている", m is not None)
-    check("30秒後のダウンロード案内は、進まないので出ない", "setPhase('launching')" in dialogue)
+# 止めるのは「呼び出し中」の画面へ進む前。ここで引き返すので、
+# 接続ツールの呼び出しも、30秒後のダウンロード案内も出ない
+m = re.search(
+    r"if \(CONNECT_PAUSED\) \{\s*\n\s*setAiText\(t\(SETUP\.paused\)\)\s*\n\s*return\s*\n\s*\}\s*\n\s*setPhase\('launching'\)",
+    dialogue,
+)
+check("『呼び出し中』の画面へ進む前で止める配線になっている", m is not None)
 
-# ── 2) 古い接続ツールを配らない ──
-check("ダウンロードも止まっている", ("if (CONNECT_PAUSED) return" in download) == PAUSED, download[:160])
+# ── 2) ダウンロードもスイッチを見ているか ──
+check("ダウンロードもスイッチを見ている", "if (CONNECT_PAUSED) return" in download, download[:160])
+
+# ── 2-2) いまの設定で、実際にどうなるか ──
+if PAUSED:
+    print("  --   いまは新規の連携を受け付けません（お客様には「準備中」と出ます）")
+else:
+    print("  --   いまは新規の連携を受け付けます")
 
 # ── 3) つなぎ直しは塞がない（すでに連携済みのお客様） ──
 check("つなぎ直しの入口がある", "export function relaunchConnector" in connector)

@@ -21,7 +21,7 @@ export const CONNECTOR_SCHEME = 'aitrader'
  *
  * 再開するときは、ここを false に戻すだけでよい（他は何も変えなくてよい）。
  */
-export const CONNECT_PAUSED = true
+export const CONNECT_PAUSED = false
 
 /**
  * 部屋（会員ID）を知らずに起動した接続ツールが入る、既定の部屋。
