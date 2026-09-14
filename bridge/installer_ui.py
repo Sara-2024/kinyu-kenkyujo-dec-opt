@@ -138,6 +138,15 @@ class SetupWindow:
             self._alive = False
         return self._alive
 
+    def pump(self) -> None:
+        """待ち時間のあいだに呼ぶ。呼ばないと Windows が「応答なし」と出す。"""
+        if not self.alive():
+            return
+        try:
+            self.root.update()
+        except Exception:  # noqa: BLE001
+            self._alive = False
+
     def say(self, text: str) -> None:
         if not self.alive():
             return

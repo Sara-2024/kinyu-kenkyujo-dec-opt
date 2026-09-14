@@ -851,11 +851,13 @@ def kill_process(pid: int) -> None:
             log(f"終了できませんでした: {exc}")
 
 
-def wait_gone(pid: int, seconds: float = 10.0) -> bool:
+def wait_gone(pid: int, seconds: float = 10.0, tick=None) -> bool:
     for _ in range(int(seconds / 0.5)):
         if not process_image(pid):
             return True
         time.sleep(0.5)
+        if tick:
+            tick()  # 画面を固まらせない
     return not process_image(pid)
 
 
@@ -1125,6 +1127,33 @@ def tell(ui, message: str, hint: str = "") -> None:
         installer_ui.message_box(f"{message}\n\n{hint}".strip())
 
 
+_INSTANCE_MUTEX = None
+
+
+def hold_single_instance() -> bool:
+    """同じアプリを二つ開かない。二つ目なら False。
+
+    exe は開くのに数秒かかるので、お客様は「反応が無い」と思ってもう一度押す。
+    二つ同時に EA を置きに行くと、片方が書けずに「保存できませんでした」になる。
+    """
+    global _INSTANCE_MUTEX
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.CreateMutexW(None, False, "Local\\AITraderConnect.setup")
+        if not handle:
+            return True
+        if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+            return False
+        _INSTANCE_MUTEX = handle  # 終わるまで持ち続ける（終われば Windows が外す）
+        return True
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def setup_phase1() -> int:
     """お客様が exe を開いたときの既定の動き。EA を置いて終わる。"""
     banner("初回の設定")
@@ -1231,9 +1260,14 @@ def setup_phase1() -> int:
 
     connect_state.write(connect_state.INSTALL_ONLY, terminal=str(target.data_path), ea=after.state)
 
-    # ついでに、金の銘柄を気配値に出しておく（そのままチャートに出せる）
-    shown = gold_symbol.show_in_market_watch(target.exe, log=log)
-    running = gold_symbol.mt5_is_running()
+    # その MT5 が動いているかは、プロセス一覧で見る。
+    # mt5.initialize() で確かめてはいけない（動いていなければ MT5 を起こしてしまうし、
+    # 複数あるときはどれを起こすかも選べない）。
+    running = bool(mt5_pids(target.exe))
+    log(f"MT5 は{'起動中' if running else '停止中'}: {target.exe}")
+    # ついでに、金の銘柄を気配値に出しておく（そのままチャートに出せる）。
+    # 動いているときだけ。動いていない MT5 につなぎに行くと、起こしてしまう
+    shown = gold_symbol.show_in_market_watch(target.exe, log=log) if running else ""
     restarted = False
 
     # MT5 を開いたまま置いても、一覧にはすぐ出てこない。開き直すと確実に出る
@@ -1248,9 +1282,11 @@ def setup_phase1() -> int:
                 "取引中のポジションは消えません。チャートも元に戻ります。",
             ],
         ):
-            restart_mt5(target)
-            running = False
-            restarted = True
+            ui.clear_body()
+            ui.clear_buttons()
+            ui.say("MT5を開き直しています…")
+            restarted = restart_mt5(target, tick=ui.pump)
+            running = not restarted
 
     guide_after_install(
         ui,
@@ -1376,7 +1412,7 @@ def mt5_pids(exe: Path | None) -> list[int]:
     return pids
 
 
-def restart_mt5(terminal: "mt5_detect.Terminal") -> bool:
+def restart_mt5(terminal: "mt5_detect.Terminal", tick=None) -> bool:
     """MT5 を開き直して、ナビゲーターに新しい EA を出す。
 
     MT5 は、開いたまま置いた EA をすぐには一覧に出さない（更新を押すまで）。
@@ -1384,6 +1420,8 @@ def restart_mt5(terminal: "mt5_detect.Terminal") -> bool:
 
     建玉や注文はサーバー側にあるので、開き直しても消えない。
     チャートや時間足も、MT5 が覚えていて元に戻る。
+
+    tick は待っているあいだに呼ぶ（画面を固まらせないため）。
     """
     exe = terminal.exe
     if exe is None:
@@ -1401,14 +1439,19 @@ def restart_mt5(terminal: "mt5_detect.Terminal") -> bool:
         except Exception:  # noqa: BLE001
             pass
     for pid in pids:
-        if not wait_gone(pid, 20.0):
+        if not wait_gone(pid, 20.0, tick=tick):
             log(f"閉じないので、強制的に終了します（{pid}）")
             kill_process(pid)
-            wait_gone(pid, 10.0)
+            wait_gone(pid, 10.0, tick=tick)
 
-    time.sleep(2)
+    for _ in range(4):
+        time.sleep(0.5)
+        if tick:
+            tick()
     log(f"MT5 を開き直します: {exe}")
-    spawn_hidden([str(exe)])
+    # ここは spawn_hidden を使わない。あれは「窓を出さない」指定つきで起こすので、
+    # MT5 がその指定に従うと、開き直したはずの MT5 が画面に出てこない。
+    launch_mt5(exe)
     return True
 
 
@@ -1750,6 +1793,12 @@ def main() -> int:
     # ログインのたびに画面が開いてしまう（古い版が登録した自動起動が残っている PC）。
     if "--startup" in args and not connect_state.is_connected():
         log("自動起動で呼ばれたが、まだ連携していないので何もしない")
+        return 0
+
+    # 同じアプリがもう開いていれば、そちらに任せる（二つ同時に置きに行かない）
+    if not hold_single_instance():
+        log("すでに開いているので、こちらは何もしない")
+        installer_ui.message_box("AI Trader Connect は、すでに開いています。\n開いている画面をご覧ください。")
         return 0
 
     # 部屋が渡されていない（＝サイトからではなく、自分で開いた）とき。

@@ -105,6 +105,39 @@ check("最新なら置き直さない", ea.stat().st_mtime_ns == before)
 connect.start_bridge(None)   # no_spawn が呼ばれたら AssertionError で落ちる
 check("連携前はブリッジを起動しない", True)
 
+# ── MT5 が動いていないときに、MT5 を起こしてしまわない ──
+#   mt5.initialize() は、MT5 が止まっていると自分で起動してしまう。
+#   「動いているか」はプロセス一覧で見て、止まっていれば MT5 に触らない
+import gold_symbol  # noqa: E402
+touched = []
+real_show = gold_symbol.show_in_market_watch
+gold_symbol.show_in_market_watch = lambda exe=None, log=None: (touched.append(str(exe)), "")[1]
+connect.mt5_pids = lambda exe: []          # 止まっている
+code4 = connect.setup_phase1()
+check("MT5 が止まっていても設定は成功", code4 == 0, f"code={code4}")
+check("止まっている MT5 に触らない（起こさない）", touched == [], str(touched))
+connect.mt5_pids = lambda exe: [4242]      # 動いている
+code5 = connect.setup_phase1()
+check("動いていれば気配値に出しに行く", len(touched) == 1, str(touched))
+gold_symbol.show_in_market_watch = real_show
+connect.mt5_pids = lambda exe: []
+
+# ── 開き直しは、隠しウィンドウで起こさない ──
+#   spawn_hidden は「窓を出さない」指定つき。MT5 に使うと画面に出てこない
+class T:
+    exe = pathlib.Path(WORK) / "PF" / "HFM MetaTrader 5" / "terminal64.exe"
+launched = []
+connect.launch_mt5 = lambda exe: launched.append(str(exe))
+connect.mt5_pids = lambda exe: [4242]
+connect.wait_gone = lambda pid, seconds=10.0, tick=None: True
+connect.run_hidden = lambda *a, **k: 0    # taskkill の身代わり
+ticks = []
+restarted = connect.restart_mt5(T(), tick=lambda: ticks.append(1))
+check("開き直しは launch_mt5 で起こす（spawn_hidden ではない）", restarted and launched == [str(T.exe)], str(launched))
+check("待っているあいだ画面を動かす", len(ticks) > 0, str(len(ticks)))
+connect.run_hidden = no_spawn
+connect.mt5_pids = lambda exe: []
+
 # 同梱の EA が無いときは、何もせずに案内して終わる（壊れたまま置かない）
 empty = pathlib.Path(WORK) / "empty"
 empty.mkdir(exist_ok=True)

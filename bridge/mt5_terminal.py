@@ -26,6 +26,25 @@ def is_our_ea(stem: str) -> bool:
     return EA_MATCH.lower() in str(stem).lower()
 
 
+def origin_folder(data_path: str | Path) -> Path | None:
+    """origin.txt に書かれたインストール先。存在するかは見ない（読めなければ None）。"""
+    origin = Path(data_path) / "origin.txt"
+    if not origin.is_file():
+        return None
+    text = ""
+    for encoding in ("utf-16", "utf-8"):
+        try:
+            text = origin.read_text(encoding=encoding, errors="ignore").strip()
+        except (OSError, UnicodeError):
+            continue
+        if text:
+            break
+    if not text:
+        return None
+    line = text.splitlines()[0].strip().strip('"')
+    return Path(line) if line else None
+
+
 def terminal_dir_from_data_path(data_path: str | Path) -> Path | None:
     """data_path/origin.txt から、この口座が使っている terminal64.exe のフォルダを取る。"""
     origin = Path(data_path) / "origin.txt"

@@ -23,9 +23,9 @@ from pathlib import Path
 from typing import Any
 
 try:  # connect.py からも bridge.py からも使えるようにする
-    from mt5_terminal import iter_terminal_data_dirs, terminal_dir_from_data_path
+    from mt5_terminal import iter_terminal_data_dirs, origin_folder, terminal_dir_from_data_path
 except ImportError:  # pragma: no cover - パッケージとして読まれたとき
-    from .mt5_terminal import iter_terminal_data_dirs, terminal_dir_from_data_path  # type: ignore
+    from .mt5_terminal import iter_terminal_data_dirs, origin_folder, terminal_dir_from_data_path  # type: ignore
 
 # インストール先フォルダ名から外す言葉。残りをブローカー名として見せる
 _NOISE = ("metatrader 5", "metatrader5", "metatrader", "terminal", "mt5", "platform", "(x86)")
@@ -196,11 +196,27 @@ def is_mt5(data_path: Path) -> bool:
         return False
 
 
+def is_ghost(data_path: Path) -> bool:
+    """本体（terminal64.exe）がもう無いデータフォルダか。
+
+    origin.txt が指す場所に MT5 が無ければ、その MT5 は消されている。
+    origin.txt が読めないときは、消されたとは言い切れないので残す。
+    """
+    folder = origin_folder(data_path)
+    if folder is None:
+        return False
+    return not (folder / "terminal64.exe").is_file() and not (folder / "terminal.exe").is_file()
+
+
 def list_terminals() -> list[Terminal]:
     """見つかった MT5 を、最後に使った順に並べて返す。MT4 は入れない。"""
     out: list[Terminal] = []
     for data_dir in iter_terminal_data_dirs():
         if not is_mt5(data_dir):
+            continue
+        if is_ghost(data_dir):
+            # MT5 を消した／別の場所に入れ直したあとに残る抜け殻。
+            # ここに EA を置いても、どの MT5 からも見えない
             continue
         install = terminal_dir_from_data_path(data_dir)
         out.append(

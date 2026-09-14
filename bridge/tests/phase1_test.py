@@ -73,6 +73,22 @@ def make_mt4(folder_id: str, install_name: str) -> pathlib.Path:
 make_mt4("C" * 32, "XM Global MT4")
 make_mt4("D" * 32, "Myfx Markets 4")
 
+
+def make_ghost(folder_id: str, install_name: str) -> pathlib.Path:
+    """MT5 を消したあとに残るデータフォルダ。origin.txt の先にもう本体が無い。"""
+    base = pathlib.Path(os.environ["APPDATA"]) / "MetaQuotes" / "Terminal" / folder_id
+    (base / "MQL5" / "Experts").mkdir(parents=True, exist_ok=True)
+    gone = pathlib.Path(WORK) / "Program Files" / install_name  # 作らない
+    (base / "origin.txt").write_text(str(gone), encoding="utf-16")
+    # 一番新しく触られたことにして、放っておくと既定に選ばれる状態にする
+    import time as _t
+    now = _t.time() + 100
+    os.utime(base / "origin.txt", (now, now))
+    return base
+
+
+ghost = make_ghost("E" * 32, "Old Broker MT5")
+
 import connect_state  # noqa: E402
 import ea_manager  # noqa: E402
 from mt5_terminal import EA_NAMES  # noqa: E402  いま配る名前（変わりうる）
@@ -103,6 +119,9 @@ def make_assets(version: str = "6.10", *, sha_ok: bool = True, ea_body: bytes = 
 # ── 1) MT5 を全部見つけられる（起動もログインも不要） ──
 terminals = mt5_detect.list_terminals()
 check("MT5 を2台とも見つける", len(terminals) == 2, str(mt5_detect.describe(terminals)))
+check("消した MT5 の抜け殻は出さない", all(t.data_path != ghost for t in terminals), str(mt5_detect.describe(terminals)))
+check("抜け殻だと分かる", mt5_detect.is_ghost(ghost))
+check("本物は抜け殻ではない", not mt5_detect.is_ghost(hfm) and not mt5_detect.is_ghost(xm))
 check("MT4 は混ぜない", all("MT4" not in t.label and "Myfx" not in t.label for t in terminals),
       str([t.label for t in terminals]))
 check("MQL5 があるものだけ", all((t.data_path / "MQL5").is_dir() for t in terminals))

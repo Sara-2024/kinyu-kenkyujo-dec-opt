@@ -10,6 +10,11 @@ EA をチャートに載せるとき、気配値にゴールドが無いと、�
 
 MT5 が起動していない／ログインしていないときは、何もしないで終わる。
 Phase 1（EA を置くだけ）でも呼べるよう、失敗しても先へ進める作りにする。
+
+注意: mt5.initialize() は、MT5 が起動していなければ**自分で起動してしまう**
+（path を渡さなければ、どの MT5 を起こすかも選べない）。
+呼ぶ前に「その MT5 が動いているか」を、プロセス一覧で確かめること
+（connect.py の mt5_pids）。ここでは確かめない。
 """
 from __future__ import annotations
 
@@ -39,6 +44,10 @@ def is_gold_usd(name: str) -> bool:
     if not profit and base and base not in ("XAU", "GOLD", "USD"):
         return False
     return True
+
+
+# MT5 につながるまで待つ上限。動いている MT5 なら 1 秒もかからない
+INIT_TIMEOUT_MS = 8_000
 
 
 def find_gold(log: Callable[[str], None] = lambda _m: None) -> str:
@@ -80,7 +89,8 @@ def show_in_market_watch(
         return ""
     try:
         kwargs = {"path": str(terminal_exe)} if terminal_exe else {}
-        if not mt5.initialize(**kwargs):
+        # 既定の 60 秒待つと、そのあいだ画面が固まって「応答なし」に見える
+        if not mt5.initialize(timeout=INIT_TIMEOUT_MS, **kwargs):
             log("MT5 につながらないので、気配値への表示は省きます")
             return ""
     except Exception as exc:  # noqa: BLE001
@@ -136,18 +146,3 @@ def warm_up_m1(name: str, bars: int = 6000, log: Callable[[str], None] = lambda 
         log(f"1分足を読み込めませんでした（{name}）")
     return count
 
-
-def mt5_is_running() -> bool:
-    """MT5 がいま起動しているか（ナビゲーターの更新が要るかの判断に使う）。"""
-    if mt5 is None:
-        return False
-    try:
-        ok = mt5.initialize()
-    except Exception:  # noqa: BLE001
-        return False
-    if ok:
-        try:
-            mt5.shutdown()
-        except Exception:  # noqa: BLE001
-            pass
-    return bool(ok)
