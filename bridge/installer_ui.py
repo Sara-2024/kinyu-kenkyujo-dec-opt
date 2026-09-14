@@ -235,6 +235,35 @@ class SetupWindow:
             self._alive = False
         return self._choice if self._alive else None
 
+    def ask(self, question: str, yes: str, no: str, lines: Sequence[str] = ()) -> bool:
+        """はい／いいえを聞く。閉じられたら「いいえ」扱い。"""
+        if not self.alive():
+            return False
+        self.clear_body()
+        self.clear_buttons()
+        self.say(question)
+        for line in lines:
+            tk.Label(
+                self.body, text=line, bg=BG, fg=MUTED, font=self.f["small"], wraplength=440, justify="left"
+            ).pack(anchor="w", pady=2)
+
+        answer = {"value": False}
+
+        def pick(value: bool) -> None:
+            answer["value"] = value
+            try:
+                self.root.quit()
+            except Exception:  # noqa: BLE001
+                self._alive = False
+
+        self.button(yes, lambda: pick(True), primary=True)
+        self.button(no, lambda: pick(False), primary=False)
+        try:
+            self.root.mainloop()
+        except Exception:  # noqa: BLE001
+            self._alive = False
+        return answer["value"] and self.alive()
+
     def finish(self, lines: Sequence[str], ok: bool = True) -> None:
         if not self.alive():
             return

@@ -1188,6 +1188,21 @@ def setup_phase1() -> int:
     shown = gold_symbol.show_in_market_watch(target.exe, log=log)
     running = gold_symbol.mt5_is_running()
 
+    # MT5 を開いたまま置いても、一覧にはすぐ出てこない。開き直すと確実に出る
+    if running and ui:
+        if ui.ask(
+            "MT5を開き直しますか？",
+            "開き直す（おすすめ）",
+            "あとで自分でやる",
+            [
+                "MT5は、開いたままだと新しく入れたものを一覧に出しません。",
+                "開き直すと、AI Traderがすぐ使えるようになります。",
+                "取引中のポジションは消えません。チャートも元に戻ります。",
+            ],
+        ):
+            restart_mt5(target)
+            running = False
+
     notes: list[str] = []
     if before.state == ea_manager.NOT_INSTALLED:
         notes.append("AI Trader をMT5に追加しました。")
@@ -1206,6 +1221,70 @@ def setup_phase1() -> int:
         ui.finish(notes, ok=True)
     log("初回の設定が終わりました（サイトとは接続していません）")
     return 0
+
+
+def mt5_pids(exe: Path | None) -> list[int]:
+    """その MT5（terminal64.exe）が動いていれば、その番号。"""
+    if os.name != "nt" or exe is None:
+        return []
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-CimInstance Win32_Process -Filter \"Name='terminal64.exe'\" | "
+             "ForEach-Object { \"$($_.ProcessId)|$($_.ExecutablePath)\" }"],
+            capture_output=True, text=True, errors="replace", timeout=30,
+            creationflags=_no_window_flags(), startupinfo=_hidden_startupinfo(),
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    want = str(exe).lower()
+    pids: list[int] = []
+    for line in out.splitlines():
+        if "|" not in line:
+            continue
+        pid_text, _, path = line.partition("|")
+        if path.strip().lower() == want:
+            try:
+                pids.append(int(pid_text.strip()))
+            except ValueError:
+                continue
+    return pids
+
+
+def restart_mt5(terminal: "mt5_detect.Terminal") -> bool:
+    """MT5 を開き直して、ナビゲーターに新しい EA を出す。
+
+    MT5 は、開いたまま置いた EA をすぐには一覧に出さない（更新を押すまで）。
+    外から「更新」を押させる方法が無いので、開き直すのがいちばん確実。
+
+    建玉や注文はサーバー側にあるので、開き直しても消えない。
+    チャートや時間足も、MT5 が覚えていて元に戻る。
+    """
+    exe = terminal.exe
+    if exe is None:
+        log("MT5 の実行ファイルが分からないので、開き直しは省きます")
+        return False
+    pids = mt5_pids(exe)
+    if not pids:
+        log("MT5 は起動していないので、開き直しは要りません")
+        return False
+
+    log(f"MT5 を閉じます（{len(pids)} 個）")
+    for pid in pids:
+        try:
+            run_hidden(["taskkill", "/PID", str(pid)], timeout=30)  # まず穏やかに
+        except Exception:  # noqa: BLE001
+            pass
+    for pid in pids:
+        if not wait_gone(pid, 20.0):
+            log(f"閉じないので、強制的に終了します（{pid}）")
+            kill_process(pid)
+            wait_gone(pid, 10.0)
+
+    time.sleep(2)
+    log(f"MT5 を開き直します: {exe}")
+    spawn_hidden([str(exe)])
+    return True
 
 
 def choose_terminal() -> int:

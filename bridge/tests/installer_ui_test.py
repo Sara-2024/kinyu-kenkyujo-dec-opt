@@ -87,6 +87,22 @@ check("8台あってもボタンが窓の中にある", bottom <= w2.root.winfo_
 check("ボタンは下に固定されている", btn2.winfo_rooty() > w2.body.winfo_rooty())
 w2.close()
 
+# はい／いいえの画面が作れるか（MT5 を開き直すかを聞く）
+w4 = ui.open_window()
+w4.clear_body()
+w4.clear_buttons()
+w4.say("MT5を開き直しますか？")
+w4.button("開き直す（おすすめ）", lambda: None, primary=True)
+w4.button("あとで自分でやる", lambda: None, primary=False)
+w4.root.update_idletasks()
+w4.root.update()
+btns = w4.buttons.winfo_children()
+check("はい／いいえの2つが出る", len(btns) == 2, str(len(btns)))
+low = btns[-1].winfo_rooty() - w4.root.winfo_rooty() + btns[-1].winfo_height()
+check("どちらも窓の中にある", low <= w4.root.winfo_height(), f"{low} > {w4.root.winfo_height()}")
+w4.close()
+check("閉じられていれば ask は いいえ", w4.ask("?", "はい", "いいえ") is False)
+
 # ✕ で閉じられたあとに触っても落ちないか（実際に落ちていた）
 w3 = ui.open_window()
 w3._on_close()
