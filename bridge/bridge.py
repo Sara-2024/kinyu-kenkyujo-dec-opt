@@ -73,9 +73,12 @@ except ImportError:  # pragma: no cover - Windows以外では import できな�
     mt5 = None  # type: ignore[assignment]
 
 try:
-    from mt5_terminal import EA_NAMES, find_logged_in_terminal, resolve_terminal_exe
+    from mt5_terminal import EA_NAMES, find_logged_in_terminal, is_our_ea as _is_our_ea, resolve_terminal_exe
 except ImportError:
-    EA_NAMES = ("3YumekkuEA_win",)
+    EA_NAMES = ("YumekkuEA_v11",)
+
+    def _is_our_ea(stem: str) -> bool:
+        return "yumekku" in str(stem).lower()
     find_logged_in_terminal = None  # type: ignore[assignment,misc]
     resolve_terminal_exe = None  # type: ignore[assignment,misc]
 
@@ -880,13 +883,17 @@ class MT5Controller:
         experts = Path(str(data_path)) / "MQL5" / "Experts"
         found: list[str] = []
         compiled: list[str] = []
-        for name in EA_NAMES:
-            if (experts / f"{name}.mq5").is_file():
-                found.append(name)
-            if (experts / f"{name}.ex5").is_file():
-                compiled.append(name)
-                if name not in found:
-                    found.append(name)
+        # 名前の後半（版など）は変わりうるので、Yumekku が入っているものを見る
+        try:
+            for path in sorted(experts.glob("*.ex5")):
+                if _is_our_ea(path.stem):
+                    compiled.append(path.stem)
+                    found.append(path.stem)
+            for path in sorted(experts.glob("*.mq5")):
+                if _is_our_ea(path.stem) and path.stem not in found:
+                    found.append(path.stem)
+        except OSError:
+            pass
         return {
             "ea_folder": str(experts),
             "ea_found": found,

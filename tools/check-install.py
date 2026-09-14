@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -268,6 +269,30 @@ def main() -> int:
         row("  TradingGate.mqh", "ある" if inc.is_file() else "無い", "✓" if inc.is_file() else "✕")
         if st.detail:
             print(f"      {st.detail}")
+
+    # ── EA がサイトと話しているか ──
+    #    TradingGate.mqh を入れてコンパイルした EA だけが、この控えを書く。
+    #    チャートに載せても出てこなければ、連携が入っていない。
+    head("EA がサイトと話しているか")
+    common = Path(os.environ.get("APPDATA", "")) / "MetaQuotes" / "Terminal" / "Common" / "Files"
+    state_ini = common / "trelab_state.ini"
+    if state_ini.is_file():
+        age = time.time() - state_ini.stat().st_mtime
+        fresh = age < 60
+        row("EA からの合図", f"{int(age)} 秒前" if fresh else f"{int(age // 60)} 分前（古い）", "✓" if fresh else "△")
+        try:
+            for line in state_ini.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if line.startswith(("ea=", "state=", "symbol=")):
+                    print(f"      {line.strip()}")
+        except OSError:
+            pass
+        if not fresh:
+            print("      ※ EA がチャートから外れているか、MT5 が止まっています")
+    else:
+        row("EA からの合図", "無い", "✕")
+        print("      ※ EA をチャートに載せてから、もう一度見てください")
+        print("      ※ 載せても出てこなければ、その EA には連携が入っていません")
+        print(f"      ※ 見ている場所: {state_ini}")
 
     # ── Windows の登録 ──
     head("Windows の登録")

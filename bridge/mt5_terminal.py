@@ -13,8 +13,17 @@ except ImportError as exc:  # DLL が読めない等もここに来る。理由�
     mt5 = None  # type: ignore[assignment]
     MT5_IMPORT_ERROR = str(exc)
 
-# お客様の MT5 に置くシステム。connect.py が配り、bridge.py が有無を報告する
-EA_NAMES = ("3YumekkuEA_win",)
+# お客様の MT5 に置くシステム。connect.py が配り、bridge.py が有無を報告する。
+#
+# 名前の後半（版など）は変わることがあるので、見つけるときは EA_MATCH で探す。
+# EA_NAMES は「いま配っているもの」で、同梱の .ex5 から決まる（無ければこの既定値）。
+EA_MATCH = "Yumekku"
+EA_NAMES = ("YumekkuEA_v11",)
+
+
+def is_our_ea(stem: str) -> bool:
+    """その名前は、うちのシステムか。後半が変わっても拾えるようにする。"""
+    return EA_MATCH.lower() in str(stem).lower()
 
 
 def terminal_dir_from_data_path(data_path: str | Path) -> Path | None:
@@ -137,13 +146,17 @@ def probe_ea_files(data_path: str) -> dict[str, Any]:
     include = Path(data_path) / "MQL5" / "Include"
     found: list[str] = []
     compiled: list[str] = []
-    for name in EA_NAMES:
-        # 配るのはコンパイル済み(.ex5)。以前の方式で置いた .mq5 が残っていることもある
-        if (experts / f"{name}.ex5").is_file():
-            compiled.append(name)
-            found.append(name)
-        elif (experts / f"{name}.mq5").is_file():
-            found.append(name)
+    # 名前の後半は変わりうるので、Yumekku が入っているものを全部見る
+    try:
+        for path in sorted(experts.glob("*.ex5")):
+            if is_our_ea(path.stem):
+                compiled.append(path.stem)
+                found.append(path.stem)
+        for path in sorted(experts.glob("*.mq5")):
+            if is_our_ea(path.stem) and path.stem not in found:
+                found.append(path.stem)
+    except OSError:
+        pass
     return {
         "experts_dir": str(experts),
         "include_dir": str(include),

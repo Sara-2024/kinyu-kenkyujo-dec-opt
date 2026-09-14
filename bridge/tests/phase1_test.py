@@ -235,6 +235,48 @@ if main is not None:
     check("初回は setup_phase1 を通る", "setup_phase1" in dumped)
     check("引き継ぎも見ている", "adopt_legacy" in dumped)
 
+# ── 12-2) 名前の後半が変わっても拾えるか ──────────────
+import mt5_terminal  # noqa: E402
+
+for name in ("YumekkuEA_v11", "YumekkuEA_v12_final", "3YumekkuEA_win", "yumekkuea_test"):
+    check(f"{name} はうちのシステムと分かる", mt5_terminal.is_our_ea(name))
+for name in ("OrbitGoldEA_v11", "TrelabEA", "SomeoneElseEA"):
+    check(f"{name} はうちのではない", not mt5_terminal.is_our_ea(name))
+
+# 同梱の .ex5 の名前が変わっても、そのまま配れる
+fresh = pathlib.Path(tempfile.mkdtemp(prefix="newname-", dir=WORK))
+import hashlib as _h
+import json as _j
+
+body = b"EX5-NEW-NAME"
+(fresh / "YumekkuEA_v12.ex5").write_bytes(body)
+(fresh / "TradingGate.mqh").write_text("// 共通部品", encoding="utf-8")
+(fresh / "ea_manifest.json").write_text(
+    _j.dumps({"version": "12.00", "sha256": _h.sha256(body).hexdigest()}), encoding="utf-8"
+)
+newer_src = ea_manager.load_source(fresh)
+check("名前が変わった配布物も読める", newer_src is not None and newer_src.file_name == "YumekkuEA_v12.ex5",
+      str(newer_src.file_name if newer_src else None))
+
+# 古い版が入っている MT5 に、新しい版を置くと、古い方が片づく
+old_ea = xm / "MQL5" / "Experts" / "YumekkuEA_v11.ex5"
+old_ea.parent.mkdir(parents=True, exist_ok=True)
+old_ea.write_bytes(b"EX5-OLD-NAME")
+after_new_name = ea_manager.install(xm, newer_src)
+check("新しい名前で置ける", (xm / "MQL5" / "Experts" / "YumekkuEA_v12.ex5").is_file())
+check("前の版は片づく", not old_ea.is_file(), "YumekkuEA_v11.ex5 が残っている")
+check("置いたあとは最新", after_new_name.state == ea_manager.LATEST, after_new_name.state)
+
+# 他社の EA は消さない
+other = xm / "MQL5" / "Experts" / "SomeoneElseEA.ex5"
+other.write_bytes(b"OTHER")
+ea_manager.install(xm, newer_src)
+check("よその EA は消さない", other.is_file())
+
+# 後片づけ（このあとの検査に影響させない）
+for p_ in (xm / "MQL5" / "Experts").glob("*"):
+    p_.unlink()
+
 # ── 13) リポジトリに置いてある本物の配布物（あれば）を確かめる ──
 real_ea = BRIDGE / "3YumekkuEA_win.ex5"
 real_manifest = BRIDGE / "ea_manifest.json"

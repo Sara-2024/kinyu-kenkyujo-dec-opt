@@ -42,9 +42,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:
-    from mt5_terminal import EA_NAMES
+    from mt5_terminal import EA_MATCH, EA_NAMES, is_our_ea
 except ImportError:  # pragma: no cover
-    from .mt5_terminal import EA_NAMES  # type: ignore
+    from .mt5_terminal import EA_MATCH, EA_NAMES, is_our_ea  # type: ignore
 
 NOT_INSTALLED = "NOT_INSTALLED"
 INSTALLED = "INSTALLED"
@@ -52,7 +52,7 @@ UPDATE_AVAILABLE = "UPDATE_AVAILABLE"
 LATEST = "LATEST"
 ERROR = "ERROR"
 
-EA_NAME = EA_NAMES[0]
+EA_NAME = EA_NAMES[0]  # 同梱の .ex5 が見つかれば、そちらの名前で上書きされる
 # 配る形式。コンパイル済みだけを配る（ソースは配らない）
 EA_SOURCE_SUFFIX = ".ex5"
 # EA が読む共通部品。これも一緒に置く
@@ -100,15 +100,34 @@ class Source:
         return not self.broken
 
 
+def find_source_file(assets_dir: Path) -> Path | None:
+    """同梱している EA（.ex5）を探す。
+
+    名前の後半（版など）は変わるので、決め打ちにしない。
+    Yumekku が入っている .ex5 を拾い、新しいものを使う。
+    """
+    try:
+        found = [p for p in Path(assets_dir).glob(f"*{EA_SOURCE_SUFFIX}") if is_our_ea(p.stem)]
+    except OSError:
+        return None
+    if not found:
+        return None
+    found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return found[0]
+
+
 def load_source(assets_dir: Path) -> Source | None:
     """同梱している EA を読む。
 
     manifest に SHA-256 が書いてあれば、同梱物が途中で壊れていないかをここで確かめる。
     食い違っていたら broken を立てる。壊れたものは置かない。
     """
-    ea = Path(assets_dir) / f"{EA_NAME}{EA_SOURCE_SUFFIX}"
-    if not ea.is_file():
+    global EA_NAME
+    ea = find_source_file(assets_dir)
+    if ea is None:
         return None
+    # 配る名前は、同梱している .ex5 の名前に合わせる
+    EA_NAME = ea.stem
 
     manifest: dict[str, Any] = {}
     path = Path(assets_dir) / MANIFEST_NAME
@@ -201,13 +220,14 @@ class Status:
         }
 
 
-def installed_path(data_path: Path) -> Path:
-    return Path(data_path) / "MQL5" / "Experts" / f"{EA_NAME}{EA_SOURCE_SUFFIX}"
+def installed_path(data_path: Path, source: "Source | None" = None) -> Path:
+    name = source.file_name if source else f"{EA_NAME}{EA_SOURCE_SUFFIX}"
+    return Path(data_path) / "MQL5" / "Experts" / name
 
 
 def status(data_path: Path, source: Source | None) -> Status:
     """その MT5 に置かれている EA の状態。MT5 を起動しなくても分かる。"""
-    target = installed_path(data_path)
+    target = installed_path(data_path, source)
     src_version = source.version if source else ""
     try:
         exists = target.is_file()
@@ -316,7 +336,36 @@ def install(
 
     write_record(data_root, version=source.version, digest=placed)
     cleanup_old(experts, old_names, log=log)
+    cleanup_other_versions(experts, source.file_name, log=log)
     return status(data_root, source)
+
+
+def cleanup_other_versions(
+    experts: Path,
+    keep: str,
+    *,
+    log: Callable[[str], None] = lambda _m: None,
+) -> list[str]:
+    """いま置いたもの以外の「うちのシステム」を片づける。
+
+    名前の後半（版）が変わると、古い版が別名で残る。
+    2つ並んでいると、お客様がどちらを載せればいいか分からない。
+    """
+    removed: list[str] = []
+    try:
+        candidates = [p for p in experts.iterdir() if p.suffix.lower() in (".ex5", ".mq5")]
+    except OSError:
+        return removed
+    for path in candidates:
+        if path.name == keep or not is_our_ea(path.stem):
+            continue
+        try:
+            path.unlink()
+            removed.append(path.name)
+            log(f"前の版を片づけ {path.name}")
+        except OSError:
+            log(f"片づけられない {path.name}（チャートから外してから開き直す）")
+    return removed
 
 
 def cleanup_old(
@@ -348,7 +397,11 @@ def cleanup_old(
 
 def stale_source_exists(data_path: Path) -> bool:
     """以前の方式で置いた .mq5 が残っているか（コンパイル済みに移行したあとの掃除用）。"""
-    return (Path(data_path) / "MQL5" / "Experts" / f"{EA_NAME}.mq5").is_file()
+    experts = Path(data_path) / "MQL5" / "Experts"
+    try:
+        return any(is_our_ea(p.stem) for p in experts.glob("*.mq5"))
+    except OSError:
+        return False
 
 
 def needs_compile() -> bool:
