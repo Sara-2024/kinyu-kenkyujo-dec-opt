@@ -261,7 +261,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   メールで送る導線は廃止した。
 - **MT5 に送る EA は `bridge/OrbitGoldEA_v11.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、
   XAUUSD 専用）。v6 はトレンド方向を UP/DOWN の二択にし、ナンピンを既定 OFF にしたもの。
-  前の版 `bridge/OrbitGoldEA_v5.mq5` は参照用に残してあるだけで、配りも読み込みもしない
+  配るのはコンパイル済みの `bridge/OrbitGoldEA_v11.ex5` だけ。ソース（`.mq5`）は
+  配らないし、リポジトリにも入れない（`.gitignore`）。
+  前の版 `bridge/OrbitGoldEA_v6.mq5` は参照用に残してあるだけで、配りも読み込みもしない
   （`EA_NAMES` に入っていない。お客様の MT5 にあれば `OLD_EA_NAMES` で片づける）。いま配る EA の名前は `bridge/mt5_terminal.py` の `EA_NAMES` が唯一の定義で、
   connect.py の配置と bridge.py の有無報告がそこを見る。片づける旧 EA の名前は
   `connect.py` の `OLD_EA_NAMES`（別のリスト。EA を上げたら旧名をこちらへ足す）。

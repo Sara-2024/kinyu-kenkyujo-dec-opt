@@ -16,6 +16,8 @@ bridge/__pycache__/
 __pycache__/
 bridge/.env
 bridge/risk_secret.py
+# 配る EA のソース。コンパイルに使うだけで、配らないし入れない
+bridge/OrbitGoldEA_v11.mq5
 bridge/bridge.log*
 
 # 秘密情報は一切コミットしない
