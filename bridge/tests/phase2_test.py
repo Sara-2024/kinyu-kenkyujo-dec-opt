@@ -248,7 +248,8 @@ connect.urllib.request.urlopen = boom
 connect.write_env_key = lambda *a, **k: None
 
 calls: list[str] = []
-connect.connect_all = lambda room="": (calls.append(room), 0)[1]
+# show= は「手で開いたときだけ画面を出す」ための引数。ここでは画面を出さない
+connect.connect_all = lambda room="", show=False: (calls.append(room), 0)[1]
 
 
 def run_main(*argv: str) -> int:

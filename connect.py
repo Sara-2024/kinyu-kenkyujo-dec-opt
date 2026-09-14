@@ -1414,9 +1414,28 @@ def show_status() -> int:
     return 0
 
 
-def connect_all(room: str = "") -> int:
-    """サイトのボタン1つで呼ばれる本体。画面は出さない。"""
+def connect_all(room: str = "", show: bool = False) -> int:
+    """サイトのボタン1つで呼ばれる本体。
+
+    show=True のときだけ、小さな画面を出す。
+    連携が済むと初回の設定（setup_phase1）は走らないので、お客様が自分で
+    アプリを開いても何も起きなくなる。それでは「開かない・壊れた」としか
+    見えないため、手で開いたときだけ結果を知らせる。
+    サイトから呼ばれたとき（合図つき）と自動起動では、これまでどおり出さない。
+    """
     banner("接続開始")
+    ui = installer_ui.open_window() if show else None
+
+    def say(text: str) -> None:
+        log(text)
+        if ui:
+            ui.say(text)
+
+    def give_up(message: str, hint: str = "") -> int:
+        log(message)
+        if ui:
+            ui.fail(message, hint)
+        return 1
 
     if room:
         adopt_room(room)
@@ -1429,6 +1448,7 @@ def connect_all(room: str = "") -> int:
 
     # 初回に選んだ MT5 を覚えていれば、そこを優先する。
     # 覚えていなければ、これまでどおり「いまログイン中の MT5」を使う。
+    say("MT5を確認しています…")
     chosen = str(connect_state.read().get("terminal") or "")
     session = find_logged_in_terminal(chosen or None)
     if session:
@@ -1437,20 +1457,29 @@ def connect_all(room: str = "") -> int:
         else:
             log("すでにログイン中の MT5 を使います")
     else:
+        say("MT5を開いています…")
         exe = find_mt5_exe() or ensure_mt5()
         if exe is None:
-            log("MT5 が用意できませんでした")
-            return 1
+            return give_up(
+                "MT5が見つかりませんでした。",
+                "MT5を開いてログインしてから、もう一度このアプリを開いてください。",
+            )
         launch_mt5(exe)
         session = wait_for_login()
         if session is None:
-            return 1
+            return give_up(
+                "MT5にログインできていません。",
+                "MT5で口座にログインしてから、もう一度このアプリを開いてください。",
+            )
 
     try:
         copy_ea_files(session)
     except SystemExit as exc:
         log(str(exc))
-        return 1
+        return give_up(
+            "設定を保存できませんでした。",
+            "MT5を閉じてから、もう一度このアプリを開いてください。",
+        )
     write_bridge_env(session)
     # 使った MT5 を覚える。次からはここが優先され、別の MT5 に入らない
     used = str(session.get("data_path") or "")
@@ -1462,11 +1491,46 @@ def connect_all(room: str = "") -> int:
     if relay_is_local(url) and not relay_is_up():
         start_relay()
         time.sleep(2)
+    say("サイトにつないでいます…")
     start_bridge(session)
 
     banner("接続完了")
     log(f"口座 {session['account']} / {session['server']}")
+    if ui:
+        # 待つのは1回だけ（ここで最大10秒。二度聞くと待ち時間も二倍になる）
+        seen = relay_sees_us()
+        ui.finish(connect_result_lines(session, seen), ok=seen is not False)
     return 0
+
+
+def relay_sees_us(tries: int = 10) -> bool | None:
+    """サイトから、この PC のブリッジが見えているか。
+
+    ブリッジは起こしてから名乗り出るまで数秒かかるので、少し待って何度か聞く。
+    中継に届かないときは None（つながっていない、とは言い切れない）。
+    """
+    our_id = env_value("BRIDGE_ID") or "vps-01"
+    seen: bool | None = None
+    for i in range(max(1, tries)):
+        seen = relay_has_bridge(our_id)
+        if seen:
+            return True
+        if i + 1 < tries:
+            time.sleep(1)
+    return seen
+
+
+def connect_result_lines(session: dict, seen: bool | None) -> list[str]:
+    """手で開いたときに見せる、結果のことば。専門用語は出さない。"""
+    lines = [f"MT5（口座 {session['account']}）につながりました。"]
+    if seen is True:
+        lines.append("サイトからも見えています。そのままお使いください。")
+    elif seen is False:
+        lines.append("サイトからはまだ見えていません。")
+        lines.append("30秒ほど待ってから、サイトの画面を開き直してください。")
+    else:
+        lines.append("インターネットにつながっているか確かめてから、もう一度お試しください。")
+    return lines
 
 
 def main() -> int:
@@ -1557,7 +1621,10 @@ def main() -> int:
             input("  続けるには Enter を押してください...")
         return code
 
-    code = connect_all(room)
+    # 手で開いたときだけ結果を画面に出す。
+    # サイトからの起動（合図）と自動起動では、これまでどおり黙って動く。
+    by_hand = "--startup" not in args and not connect_token and not CONSOLE
+    code = connect_all(room, show=by_hand)
     if CONSOLE:
         print()
         input("  続けるには Enter を押してください...")
