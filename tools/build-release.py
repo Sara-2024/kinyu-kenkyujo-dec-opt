@@ -449,9 +449,8 @@ def main() -> int:
     print("  次にやること:")
     print("    1. tools\\4_確認する.bat で、このPCの状態を見る")
     print("    2. リリース手順.md の実機テスト A〜E を行う")
-    print("    3. 問題なければ、下の3つをコミットして push する")
+    print("    3. 問題なければ、下の2つをコミットして push する")
     print(f"         bridge\\{EA_NAME}.ex5")
-    print("         bridge\\ea_manifest.json")
     print("         public\\download\\AITrader.exe")
     print()
     return 0
