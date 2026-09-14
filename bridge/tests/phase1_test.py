@@ -75,6 +75,7 @@ make_mt4("D" * 32, "Myfx Markets 4")
 
 import connect_state  # noqa: E402
 import ea_manager  # noqa: E402
+from mt5_terminal import EA_NAMES  # noqa: E402  いま配る名前（変わりうる）
 import mt5_detect  # noqa: E402
 
 
@@ -159,18 +160,21 @@ check("壊れていたら何も置かれない", not (xm / "MQL5" / "Experts" / 
 # 前の名前の .ex5 が残っていても、いま配る名前のものを選ぶ
 mixed = pathlib.Path(tempfile.mkdtemp(prefix="mixed-", dir=WORK))
 (mixed / "TradingGate.mqh").write_text("// 共通部品", encoding="utf-8")
+# 名前は変わりうるので、決め打ちにせず「いま配る名前」で組み立てる
+CURRENT_EA = f"{EA_NAMES[0]}.ex5"
+OLD_EA = "YumekkuEA_mukashi.ex5"
 old_body = b"EX5-OLD-NAME-NEWER"
-(mixed / "3YumekkuEA_win.ex5").write_bytes(old_body)
+(mixed / OLD_EA).write_bytes(old_body)
 import time as _t
 
 _t.sleep(0.01)
-(mixed / "YumekkuEA_v11.ex5").write_bytes(b"EX5-CURRENT")
+(mixed / CURRENT_EA).write_bytes(b"EX5-CURRENT")
 # 古いほうを、あとから触って「新しい」ことにする
 import os as _os
 
-_os.utime(mixed / "3YumekkuEA_win.ex5", None)
+_os.utime(mixed / OLD_EA, None)
 picked = ea_manager.find_source_file(mixed)
-check("前の名前が新しくても、いま配る名前を選ぶ", picked is not None and picked.name == "YumekkuEA_v11.ex5",
+check("前の名前が新しくても、いま配る名前を選ぶ", picked is not None and picked.name == CURRENT_EA,
       str(picked.name if picked else None))
 
 # ── 3) 置く前は「未設置」 ──
@@ -358,6 +362,15 @@ if real_ea is not None and real_manifest.is_file():
     real = ea_manager.load_source(BRIDGE)
     check("同梱の EA が控えと一致している", real is not None and real.ok, str(real.broken if real else None))
     check("同梱の EA に版が入っている", bool(real and real.version), str(real.version if real else ""))
+    # 名前が食い違うと、配る側と受け取る側で別のファイルを見てしまう
+    check("控えの名前と実ファイルが一致", real_ea.stem == _j.loads(real_manifest.read_text(encoding="utf-8"))["ea"],
+          f"{real_ea.stem} / {real_manifest.name}")
+    check("いま配る名前と一致", real_ea.stem == EA_NAMES[0], f"{real_ea.stem} ≠ {EA_NAMES[0]}")
+    # 2つ置いてあると、どちらが配られるのか分からなくなる
+    ours = [q.name for q in BRIDGE.glob("*.ex5") if ea_manager.is_our_ea(q.stem)]
+    check("同梱の EA は1つだけ", len(ours) == 1, str(ours))
+    # 版は .ex5 そのものから読めること（ソースは配らない）
+    check("版は .ex5 から読める", bool(ea_manager.version_from_ex5(real_ea)), ea_manager.version_from_ex5(real_ea))
 elif real_ea is not None or real_manifest.is_file():
     check("EA と控えは両方そろえる", False, "片方しかない")
 else:

@@ -20,12 +20,12 @@ mkdir -p "$OUT" "$STAGE/bridge" "$STAGE/tools"
 # お客様のPCで使うものだけ。venv・.env・ログ・中継サーバー・画面は入れない
 cp AITrader.vbs connect.py はじめる.bat "$STAGE/"
 # 配る EA はコンパイル済み（.ex5）だけ。ソースは配らない
-if [ ! -f bridge/3YumekkuEA_win.ex5 ] || [ ! -f bridge/ea_manifest.json ]; then
-  echo "[ERROR] bridge/3YumekkuEA_win.ex5 と bridge/ea_manifest.json が要ります。" >&2
+if [ ! -f bridge/YumekkuEA_win.ex5 ] || [ ! -f bridge/ea_manifest.json ]; then
+  echo "[ERROR] bridge/YumekkuEA_win.ex5 と bridge/ea_manifest.json が要ります。" >&2
   echo "        Windows で MetaEditor コンパイル → tools/make-ea-manifest.py を実行してください。" >&2
   exit 1
 fi
-cp bridge/bridge.py bridge/mt5_terminal.py bridge/3YumekkuEA_win.ex5 bridge/ea_manifest.json \
+cp bridge/bridge.py bridge/mt5_terminal.py bridge/YumekkuEA_win.ex5 bridge/ea_manifest.json \
    bridge/TradingGate.mqh \
    bridge/mt5_detect.py bridge/ea_manager.py bridge/connect_state.py bridge/installer_ui.py \
    bridge/requirements.txt bridge/README.md "$STAGE/bridge/"

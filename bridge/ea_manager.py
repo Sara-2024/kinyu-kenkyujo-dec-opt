@@ -1,13 +1,13 @@
 """EA の状態を見て、必要なときだけ置き直す。
 
-配るのは**コンパイル済みの `3YumekkuEA_win.ex5`**。お客様の PC では
+配るのは**コンパイル済みの `YumekkuEA_win.ex5`**。お客様の PC では
 MetaEditor を起動しないし、コンパイルもしない。ソース（.mq5）も配らない。
 
   ・MetaEditor が無い PC でも確実に置ける
   ・コンパイルの失敗が起きない
   ・置く処理は「ファイルを1つ置く」だけになる
 
-置く場所と名前はこれまでどおり（MQL5/Experts/3YumekkuEA_win.ex5）。
+置く場所と名前はこれまでどおり（MQL5/Experts/YumekkuEA_win.ex5）。
 すでに使っているお客様のチャート設定を動かさないため、今回は変えない。
 
 状態は5つ:
@@ -35,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from dataclasses import dataclass
@@ -466,6 +467,26 @@ def stale_source_exists(data_path: Path) -> bool:
 def needs_compile() -> bool:
     """お客様の PC でコンパイルが要るか。コンパイル済みを配るので常に False。"""
     return EA_SOURCE_SUFFIX == ".mq5"
+
+
+# ────────────────────────────────────────────────
+# コンパイル済み（.ex5）から版を読む
+#   MetaEditor は #property version の文字列を .ex5 の中に UTF-16 で残す。
+#   ソース（.mq5）は配らないので、版はここから読むしかない。
+#   読めなくても止めない（版は表示に使うだけで、更新の判定は SHA-256 で行う）。
+# ────────────────────────────────────────────────
+_VERSION_IN_EX5 = re.compile(r"(?<![0-9.])([0-9]{1,3}\.[0-9]{1,3})(?![0-9.])")
+
+
+def version_from_ex5(path: Path) -> str:
+    """.ex5 に焼き込まれている版。読めなければ空。"""
+    try:
+        raw = Path(path).read_bytes()
+    except OSError:
+        return ""
+    text = raw.decode("utf-16-le", errors="ignore")
+    found = _VERSION_IN_EX5.findall(text)
+    return found[0] if found else ""
 
 
 # ────────────────────────────────────────────────

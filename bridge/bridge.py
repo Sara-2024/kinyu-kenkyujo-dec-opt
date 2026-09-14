@@ -75,7 +75,7 @@ except ImportError:  # pragma: no cover - Windows以外では import できな�
 try:
     from mt5_terminal import EA_NAMES, find_logged_in_terminal, is_our_ea as _is_our_ea, resolve_terminal_exe
 except ImportError:
-    EA_NAMES = ("YumekkuEA_v11",)
+    EA_NAMES = ("YumekkuEA_win",)
 
     def _is_our_ea(stem: str) -> bool:
         return "yumekku" in str(stem).lower()

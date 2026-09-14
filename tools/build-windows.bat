@@ -76,7 +76,7 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --add-data "bridge\risk_gate.py;bridge" ^
   --add-data "bridge\risk_features.py;bridge" ^
   --paths bridge ^
-  --add-data "bridge\3YumekkuEA_win.ex5;bridge" ^
+  --add-data "bridge\YumekkuEA_win.ex5;bridge" ^
   --add-data "bridge\ea_manifest.json;bridge" ^
   --add-data "bridge\TradingGate.mqh;bridge" ^
   --hidden-import bridge ^

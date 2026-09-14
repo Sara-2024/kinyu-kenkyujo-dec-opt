@@ -5,10 +5,11 @@
 
 やること:
   1. 入れ替える .ex5 を選ぶ（ドラッグしていればそれを使う）
-  2. bridge\\3YumekkuEA_win.ex5 に置く
+  2. bridge\\ に置く（名前はそのまま）
   3. 控え（ea_manifest.json）を作り直す
 
-名前は 3YumekkuEA_win.ex5 に揃える。選んだファイルの名前が違っていても構わない。
+選んだファイルの名前をそのまま使う（MT5 の一覧に出る名前になる）。
+前に入れていたものは片づけるので、2つ並ぶことはない。
 入れ替えたら 3_リリースする.bat を押す。
 """
 from __future__ import annotations
@@ -23,8 +24,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "bridge"
-EA_NAME = "3YumekkuEA_win"
-TARGET = BRIDGE / f"{EA_NAME}.ex5"
+sys.path.insert(0, str(BRIDGE))
+from ea_manager import version_from_ex5  # noqa: E402  .ex5 から版を読む
+
+
+def current_ex5() -> Path | None:
+    """いま同梱している EA。名前は変わりうるので Yumekku で探す。"""
+    found = [p for p in BRIDGE.glob("*.ex5") if "yumekku" in p.stem.lower()]
+    found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return found[0] if found else None
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 
 
@@ -63,8 +71,8 @@ def pick_file() -> Path | None:
     return Path(chosen) if chosen else None
 
 
-def describe(path: Path) -> str:
-    if not path.is_file():
+def describe(path: Path | None) -> str:
+    if path is None or not path.is_file():
         return "（無い）"
     size = path.stat().st_size
     note = "  ← 本物ではありません" if size < 10_000 else ""
@@ -76,7 +84,8 @@ def main() -> int:
     print("  EA を入れ替える")
     print("=" * 62)
     print()
-    print(f"  いま入っているもの: {describe(TARGET)}")
+    before = current_ex5()
+    print(f"  いま入っているもの: {before.name if before else '（無い）'} {describe(before) if before else ''}")
     print()
 
     args = [a for a in sys.argv[1:] if a.strip()]
@@ -90,7 +99,7 @@ def main() -> int:
             f"これは .ex5 ではありません: {src.name}",
             "MetaEditor で F7 を押してできる .ex5 を選んでください。",
         )
-    if src.resolve() == TARGET.resolve():
+    if before is not None and src.resolve() == before.resolve():
         die("いま入っているものと同じファイルです")
 
     size = src.stat().st_size
@@ -103,24 +112,26 @@ def main() -> int:
             return 1
 
     BRIDGE.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, TARGET)
+    target = BRIDGE / src.name
+    shutil.copy2(src, target)
 
-    # 控えを作り直す（版は .mq5 から読む。.ex5 からは読めない）
-    mq5 = BRIDGE / f"{EA_NAME}.mq5"
-    version = ""
-    if mq5.is_file():
-        found = VERSION_RE.search(mq5.read_text(encoding="utf-8", errors="ignore")[:4000])
-        if found:
-            version = found.group(1)
+    # 前の版は片づける。2つ並んでいると、どちらを配るのか分からなくなる
+    for old in BRIDGE.glob("*.ex5"):
+        if "yumekku" in old.stem.lower() and old.resolve() != target.resolve():
+            old.unlink()
+            print(f"  前の版を片づけました: {old.name}")
+
+    # 版は .ex5 そのものから読む（ソースは配らないので .mq5 は無い）
+    version = version_from_ex5(target)
     if not version:
         version = input("  EA の版を入れてください（例 6.10）: ").strip() or "0"
 
     manifest = {
-        "ea": EA_NAME,
-        "file": TARGET.name,
+        "ea": target.stem,
+        "file": target.name,
         "version": version,
-        "sha256": sha256_of(TARGET),
-        "size": TARGET.stat().st_size,
+        "sha256": sha256_of(target),
+        "size": target.stat().st_size,
         "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     (BRIDGE / "ea_manifest.json").write_text(
@@ -128,8 +139,8 @@ def main() -> int:
     )
 
     print()
-    print(f"  ✓ 入れ替えました: {src.name}")
-    print(f"    {describe(TARGET)}")
+    print(f"  ✓ 入れ替えました: {target.name}")
+    print(f"    {describe(target)}")
     print(f"    版 {version}")
     print()
     print("  次は  3_リリースする.bat  を押してください。")

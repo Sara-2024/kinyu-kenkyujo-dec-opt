@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """配る EA（コンパイル済み .ex5）の控えを作る。
 
-Windows で MetaEditor を使って 3YumekkuEA_win.mq5 をコンパイルしたあと、
+Windows で MetaEditor を使って YumekkuEA_win.mq5 をコンパイルしたあと、
 できた .ex5 を bridge/ に置いてから、これを一度実行する。
 
     py -3 tools\\make-ea-manifest.py
 
 やること:
-  1. bridge/3YumekkuEA_win.ex5 の SHA-256 を取る
-  2. bridge/3YumekkuEA_win.mq5 から版（#property version）を読む
+  1. bridge/YumekkuEA_win.ex5 の SHA-256 を取る
+  2. bridge/YumekkuEA_win.mq5 から版（#property version）を読む
   3. bridge/ea_manifest.json に書く
 
 この manifest は exe に同梱され、お客様の PC で
@@ -31,7 +31,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "bridge"
-EA_NAME = "3YumekkuEA_win"
+sys.path.insert(0, str(BRIDGE))
+from ea_manager import version_from_ex5  # noqa: E402  .ex5 から版を読む
+
+EA_NAME = "YumekkuEA_win"
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 
 
@@ -50,19 +53,20 @@ def main() -> int:
 
     if not ex5.is_file():
         print(f"[ERROR] {ex5} がありません。")
-        print("        MT5 の MetaEditor で bridge\\3YumekkuEA_win.mq5 を開き、")
-        print("        F7（コンパイル）を押してできた .ex5 を bridge\\ に置いてください。")
+        print("        MetaEditor で F7（コンパイル）を押してできた .ex5 を")
+        print("        bridge\\ に置いてから、もう一度実行してください。")
         return 1
 
     digest = hashlib.sha256(ex5.read_bytes()).hexdigest()
 
-    version = ""
-    if mq5.is_file():
+    # 版は .ex5 そのものから読む（ソースは配らないので、普通は .mq5 が無い）
+    version = version_from_ex5(ex5)
+    if not version and mq5.is_file():
         found = VERSION_RE.search(mq5.read_text(encoding="utf-8", errors="ignore")[:4000])
         if found:
             version = found.group(1)
     if not version:
-        print("[WARN] 版が読めませんでした（bridge/3YumekkuEA_win.mq5 が無い）。")
+        print(f"[WARN] 版が読めませんでした（{ex5.name}）。")
         version = input("      版を手で入力してください（例 6.10）: ").strip() or "0"
 
     manifest = {
