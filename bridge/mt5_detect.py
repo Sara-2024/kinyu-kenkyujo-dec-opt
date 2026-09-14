@@ -73,40 +73,66 @@ _LOGIN_RE = re.compile(r"'(\d{4,})':\s*(?:authorized on|login to|connected to)\s
 _ACCOUNT_RE = re.compile(r"'(\d{6,})'")
 
 
+def _read_log(path: Path) -> str:
+    """MT5 のログを読む。文字コードは環境（ビルド）で変わる。"""
+    try:
+        raw = path.read_bytes()[:4_000_000]
+    except OSError:
+        return ""
+    first = ""
+    for encoding in ("utf-8", "utf-16-le", "utf-16", "cp932"):
+        try:
+            text = raw.decode(encoding, errors="ignore")
+        except (LookupError, UnicodeError):
+            continue
+        first = first or text
+        # 当たりの文字コードなら、ログにしかない語がそのまま読める。
+        # UTF-16 を utf-8 で読むと文字の間に NUL が入り、この語が現れない
+        if "Network" in text or "Terminal" in text or "authorized" in text:
+            return text
+    return first
+
+
 def account_hint(data_path: Path) -> tuple[str, str]:
     """その MT5 が最後に入った口座とサーバー。分からなければ空。
 
     お客様はフォルダ名では区別できない（「4」「2」では選べない）。
     口座番号とブローカー名なら、MT5 の画面と同じなので選べる。
     ログイン情報そのものは読まない。番号とサーバー名だけ。
+
+    ログイン行はその日のログの**先頭近く**に出るので、末尾だけ読むと見つからない。
+    文字コードもビルドによって変わる。
     """
-    logs = data_path / "logs"
-    if not logs.is_dir():
-        return "", ""
-    try:
-        files = sorted(logs.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)[:3]
-    except OSError:
-        return "", ""
-    for path in files:
+    folders = [data_path / "logs"]
+    install = terminal_dir_from_data_path(data_path)
+    if install is not None:
+        folders.append(install / "logs")
+
+    files: list[Path] = []
+    for folder in folders:
+        if not folder.is_dir():
+            continue
         try:
-            # 後ろの方が新しい。大きいログもあるので末尾だけ読む
-            with path.open("rb") as fh:
-                try:
-                    fh.seek(max(0, path.stat().st_size - 200_000))
-                except OSError:
-                    pass
-                text = fh.read().decode("utf-8", errors="ignore")
+            files.extend(sorted(folder.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)[:5])
         except OSError:
+            continue
+    if not files:
+        return "", ""
+
+    account = server = ""
+    for path in files:
+        text = _read_log(path)
+        if not text:
             continue
         found = _LOGIN_RE.findall(text)
         if found:
-            account, server = found[-1]
-            return account.strip(), server.strip()
-        # サーバー名が読めなくても、口座番号だけは出す
-        numbers = _ACCOUNT_RE.findall(text)
-        if numbers:
-            return numbers[-1], ""
-    return "", ""
+            got_account, got_server = found[-1]
+            return got_account.strip(), got_server.strip()
+        if not account:
+            numbers = _ACCOUNT_RE.findall(text)
+            if numbers:
+                account = numbers[-1]
+    return account, server
 
 
 def broker_label(install_dir: Path | None, data_path: Path) -> str:

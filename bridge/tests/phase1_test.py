@@ -109,6 +109,33 @@ labels = sorted(t.label for t in terminals)
 check("ブローカー名を出せる", labels == ["HFM", "XM"], str(labels))
 check("データフォルダを持っている", all(t.data_path.is_dir() for t in terminals))
 
+# ── 1-2) 選択画面に口座番号が出るか ────────────────
+#  「HFM」「4」では、お客様はどれを選べばいいか分からない。
+#  MT5 のログから口座番号とサーバー名を読む。ログの文字コードは環境で変わる。
+_LOGIN_LINE = (
+    "CP\t0\t13:39:29.995\tNetwork\t'75602463': authorized on "
+    "HFMarketsGlobal-Demo4 through Access Server (ping: 151 ms)\n"
+)
+for enc in ("utf-8", "utf-16-le", "utf-16", "cp932"):
+    probe = pathlib.Path(tempfile.mkdtemp(prefix="log-", dir=WORK))
+    (probe / "logs").mkdir()
+    (probe / "logs" / "20260914.log").write_bytes(_LOGIN_LINE.encode(enc))
+    label = mt5_detect.broker_label(pathlib.Path("MetaTrader 5"), probe)
+    check(f"{enc} のログから口座番号を出せる", "75602463" in label, label)
+    check(f"{enc} のログからサーバー名も出せる", "HFMarketsGlobal-Demo4" in label, label)
+
+# ログイン行がファイルの先頭にあり、後ろが長くても拾えること
+probe = pathlib.Path(tempfile.mkdtemp(prefix="log-big-", dir=WORK))
+(probe / "logs").mkdir()
+(probe / "logs" / "20260914.log").write_text(
+    _LOGIN_LINE + "Network\tnoise\n" * 40000, encoding="utf-8"
+)
+check("ログが長くても先頭の行を拾う", "75602463" in mt5_detect.broker_label(pathlib.Path("MetaTrader 5"), probe))
+
+# ログが無ければ、これまでどおりフォルダ名
+probe = pathlib.Path(tempfile.mkdtemp(prefix="log-none-", dir=WORK))
+check("ログが無ければフォルダ名", mt5_detect.broker_label(pathlib.Path("HFM MetaTrader 5"), probe) == "HFM")
+
 # ── 2) 配布物（同梱の EA）を読める ──
 assets = make_assets()
 source = ea_manager.load_source(assets)
