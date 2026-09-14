@@ -1138,6 +1138,9 @@ def setup_phase1() -> int:
     if len(terminals) > 1:
         if ui:
             picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+            if not picked:
+                log("選ばずに閉じられたので、何もしません")
+                return 1
             for t in terminals:
                 if str(t.data_path) == picked:
                     target = t
@@ -1211,6 +1214,10 @@ def choose_terminal() -> int:
     target = terminals[0]
     if ui and len(terminals) > 1:
         picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+        if not picked:
+            # ✕ で閉じられた。勝手に1台目を選ばない
+            log("選ばずに閉じられたので、何もしません")
+            return 1
         for t in terminals:
             if str(t.data_path) == picked:
                 target = t

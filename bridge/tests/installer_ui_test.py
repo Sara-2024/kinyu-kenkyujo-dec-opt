@@ -87,6 +87,24 @@ check("8台あってもボタンが窓の中にある", bottom <= w2.root.winfo_
 check("ボタンは下に固定されている", btn2.winfo_rooty() > w2.body.winfo_rooty())
 w2.close()
 
+# ✕ で閉じられたあとに触っても落ちないか（実際に落ちていた）
+w3 = ui.open_window()
+w3._on_close()
+check("閉じたあとは alive() が False", not w3.alive())
+try:
+    w3.say("なにか")
+    w3.clear_body()
+    w3.clear_buttons()
+    w3.add_step("x", "手順")
+    w3.mark("x", True)
+    w3.button("押せない", lambda: None)
+    w3.finish(["終わり"], ok=True)
+    w3.fail("だめでした", "もう一度")
+    w3.close()
+    check("閉じたあとに触っても落ちない", True)
+except Exception as exc:  # noqa: BLE001
+    check("閉じたあとに触っても落ちない", False, f"{type(exc).__name__}: {exc}")
+
 # 失敗の案内に技術的な原因を書いていないか
 import inspect
 src = inspect.getsource(ui)

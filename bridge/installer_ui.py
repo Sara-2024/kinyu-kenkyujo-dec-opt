@@ -76,6 +76,9 @@ class SetupWindow:
         self.f = _fonts()
         self._steps: list[tuple[Any, str]] = []
         self._choice: str | None = None
+        # ✕ で閉じられたあとに触ると落ちるので、閉じたことを覚えておく
+        self._alive = True
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         tk.Label(self.root, text=APP_NAME, bg=BG, fg=ACCENT, font=self.f["title"]).pack(pady=(22, 2))
         tk.Frame(self.root, bg=ACCENT, height=2, width=60).pack(pady=(0, 14))
@@ -95,20 +98,58 @@ class SetupWindow:
         _center(self.root, 520, 400)
 
     # ── 表示 ───────────────────────────────────
+    def _on_close(self) -> None:
+        """お客様が ✕ を押した。ここから先は何もしない。"""
+        self._alive = False
+        try:
+            self.root.quit()
+            self.root.destroy()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def alive(self) -> bool:
+        """窓がまだ開いているか。閉じられていれば False。"""
+        if not self._alive:
+            return False
+        try:
+            self.root.winfo_exists()
+        except Exception:  # noqa: BLE001
+            self._alive = False
+        return self._alive
+
     def say(self, text: str) -> None:
-        self.message.configure(text=text)
-        self.root.update()
+        if not self.alive():
+            return
+        try:
+            self.message.configure(text=text)
+            self.root.update()
+        except Exception:  # noqa: BLE001
+            self._alive = False
 
     def clear_body(self) -> None:
-        for child in self.body.winfo_children():
-            child.destroy()
+        if not self.alive():
+            return
+        try:
+            for child in self.body.winfo_children():
+                child.destroy()
+        except Exception:  # noqa: BLE001
+            self._alive = False
+            return
         self._steps = []
 
     def clear_buttons(self) -> None:
-        for child in self.buttons.winfo_children():
-            child.destroy()
+        if not self.alive():
+            return
+        try:
+            for child in self.buttons.winfo_children():
+                child.destroy()
+        except Exception:  # noqa: BLE001
+            self._alive = False
+            return
 
     def add_step(self, key: str, text: str) -> None:
+        if not self.alive():
+            return
         row = tk.Frame(self.body, bg=BG)
         row.pack(fill="x", pady=3, anchor="w")
         mark = tk.Label(row, text="…", bg=BG, fg=MUTED, font=self.f["step"], width=2)
@@ -118,12 +159,16 @@ class SetupWindow:
         self.root.update()
 
     def mark(self, key: str, ok: bool = True) -> None:
+        if not self.alive():
+            return
         for widget, name in self._steps:
             if name == key:
                 widget.configure(text="✓" if ok else "×", fg=OK if ok else NG)
         self.root.update()
 
     def button(self, text: str, command: Callable[[], None], primary: bool = True) -> None:
+        if not self.alive():
+            return
         btn = tk.Button(
             self.buttons,
             text=text,
@@ -143,7 +188,13 @@ class SetupWindow:
 
     # ── 画面のかたち ────────────────────────────
     def choose_terminal(self, items: Sequence[tuple[str, str]]) -> str | None:
-        """複数の MT5 があるときだけ出す選択画面。items は (値, 見せる名前)。"""
+        """複数の MT5 があるときだけ出す選択画面。items は (値, 見せる名前)。
+
+        ✕ で閉じられたら None を返す。呼び出し側は、そこでやめること
+        （勝手に1台目を選んで、意図しない MT5 に入れてしまわないため）。
+        """
+        if not self.alive():
+            return None
         self.clear_body()
         self.clear_buttons()
         self.say("設定するMT5を選んでください。")
@@ -178,21 +229,31 @@ class SetupWindow:
             self.root.quit()
 
         self.button("これで設定する", pick)
-        self.root.mainloop()
-        return self._choice
+        try:
+            self.root.mainloop()
+        except Exception:  # noqa: BLE001
+            self._alive = False
+        return self._choice if self._alive else None
 
     def finish(self, lines: Sequence[str], ok: bool = True) -> None:
+        if not self.alive():
+            return
         self.clear_buttons()
         self.say("設定が完了しました。" if ok else "設定が終わりませんでした。")
         for line in lines:
             tk.Label(
                 self.body, text=line, bg=BG, fg=MUTED if ok else WARN, font=self.f["small"], wraplength=440, justify="left"
             ).pack(anchor="w", pady=2)
-        self.button("閉じる", self.root.destroy)
-        self.root.mainloop()
+        self.button("閉じる", self._on_close)
+        try:
+            self.root.mainloop()
+        except Exception:  # noqa: BLE001
+            self._alive = False
 
     def fail(self, message: str, hint: str = "") -> None:
         """技術的な理由は出さない。次にやることだけを書く。"""
+        if not self.alive():
+            return
         self.clear_body()
         self.clear_buttons()
         self.say(message)
@@ -200,10 +261,14 @@ class SetupWindow:
             tk.Label(self.body, text=hint, bg=BG, fg=MUTED, font=self.f["small"], wraplength=440, justify="left").pack(
                 anchor="w", pady=4
             )
-        self.button("閉じる", self.root.destroy)
-        self.root.mainloop()
+        self.button("閉じる", self._on_close)
+        try:
+            self.root.mainloop()
+        except Exception:  # noqa: BLE001
+            self._alive = False
 
     def close(self) -> None:
+        self._alive = False
         try:
             self.root.destroy()
         except Exception:  # noqa: BLE001
