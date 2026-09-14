@@ -1170,6 +1170,9 @@ def setup_phase1() -> int:
 
     after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, log=log)
     log(f"配置のあとの状態: {after.as_dict()}")
+    # MT5 に最初から入っているサンプルを片づける。
+    # 十数個並んでいると、お客様がうちのシステムを見つけられない
+    ea_manager.tidy_samples(target.data_path, log=log)
     if after.state == ea_manager.ERROR:
         if ui:
             ui.mark("ea", False)

@@ -234,6 +234,35 @@ check("いまの EA は残る", (experts / source.file_name).is_file())
 ea_manager.cleanup_old(experts, ("3YumekkuEA_win",))
 check("取り違えても今の EA は消さない", (experts / source.file_name).is_file())
 
+# ── 7-2) MT5 のサンプルだけを片づける（お客様の EA は消さない）──
+experts2 = hfm / "MQL5" / "Experts"
+(experts2 / "Advisors").mkdir(parents=True, exist_ok=True)
+(experts2 / "Free Robots").mkdir(parents=True, exist_ok=True)
+(experts2 / "Advisors" / "ExpertMACD.ex5").write_text("sample", encoding="utf-8")
+(experts2 / "Free Robots" / "SomeFreeRobot.ex5").write_text("sample", encoding="utf-8")
+(experts2 / "お客様が買ったEA.ex5").write_text("mine", encoding="utf-8")
+(experts2 / "MyFolder").mkdir(exist_ok=True)
+(experts2 / "MyFolder" / "BoughtEA.ex5").write_text("mine", encoding="utf-8")
+
+gone = ea_manager.tidy_samples(hfm)
+check("サンプルを片づける", len(gone) == 2, str(gone))
+check("Advisors フォルダごと消える", not (experts2 / "Advisors").exists())
+check("Free Robots も消える", not (experts2 / "Free Robots").exists())
+check("直下のお客様の EA は残る", (experts2 / "お客様が買ったEA.ex5").is_file())
+check("よそのフォルダは触らない", (experts2 / "MyFolder" / "BoughtEA.ex5").is_file())
+check("うちの EA は残る", (experts2 / source.file_name).is_file())
+
+# サンプルのフォルダに、うちのシステムが紛れていたら触らない
+(experts2 / "Advisors").mkdir(exist_ok=True)
+(experts2 / "Advisors" / "ExpertMACD.ex5").write_text("sample", encoding="utf-8")
+(experts2 / "Advisors" / "YumekkuEA_old.ex5").write_text("ours", encoding="utf-8")
+gone2 = ea_manager.tidy_samples(hfm)
+check("うちのが混ざっていたら、そのフォルダは触らない", gone2 == [] and (experts2 / "Advisors" / "ExpertMACD.ex5").is_file(), str(gone2))
+import shutil as _sh
+_sh.rmtree(experts2 / "Advisors", ignore_errors=True)
+_sh.rmtree(experts2 / "MyFolder", ignore_errors=True)
+(experts2 / "お客様が買ったEA.ex5").unlink()
+
 # ── 8) 触っていない MT5 は未設置のまま（勝手に全部へ置かない） ──
 check("選ばなかった MT5 は未設置のまま", ea_manager.status(xm, source).state == ea_manager.NOT_INSTALLED)
 

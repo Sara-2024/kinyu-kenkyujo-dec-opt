@@ -399,6 +399,55 @@ def cleanup_old(
     return removed
 
 
+# MT5 が最初から入れてくるサンプルのフォルダ。ここだけを片づける。
+# お客様が自分で入れた EA は、たいてい Experts の直下か、自分で作った
+# フォルダに入っている。ここを触らないかぎり消えない。
+SAMPLE_FOLDERS = ("Advisors", "Free Robots", "Examples")
+
+
+def tidy_samples(
+    data_path: Path,
+    *,
+    log: Callable[[str], None] = lambda _m: None,
+) -> list[str]:
+    """MT5 に最初から入っているサンプル EA を片づける。
+
+    ナビゲーターにサンプルが十数個並んでいると、お客様はうちのシステムを
+    見つけられない。最初から入っているものだけを消す。
+
+    消すのは SAMPLE_FOLDERS の中だけ。Experts の直下や、それ以外の
+    フォルダには触らない（お客様が別に買った EA を消さないため）。
+    MT5 を入れ直すか更新すると、また入ってくることがある。
+    """
+    experts = Path(data_path) / "MQL5" / "Experts"
+    removed: list[str] = []
+    for folder_name in SAMPLE_FOLDERS:
+        folder = experts / folder_name
+        if not folder.is_dir():
+            continue
+        try:
+            files = [p for p in folder.rglob("*") if p.is_file()]
+        except OSError:
+            continue
+        # うちのシステムが紛れていたら、そのフォルダは触らない
+        if any(is_our_ea(p.stem) for p in files):
+            log(f"{folder_name} にうちのシステムがあるので、触りません")
+            continue
+        for path in files:
+            try:
+                path.unlink()
+                removed.append(f"{folder_name}/{path.name}")
+            except OSError:
+                log(f"片づけられない {folder_name}/{path.name}")
+        try:
+            shutil.rmtree(folder, ignore_errors=True)
+        except OSError:
+            pass
+    if removed:
+        log(f"最初から入っていたサンプルを {len(removed)} 個片づけました")
+    return removed
+
+
 def stale_source_exists(data_path: Path) -> bool:
     """以前の方式で置いた .mq5 が残っているか（コンパイル済みに移行したあとの掃除用）。"""
     experts = Path(data_path) / "MQL5" / "Experts"
