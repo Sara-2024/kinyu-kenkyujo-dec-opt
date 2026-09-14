@@ -235,6 +235,59 @@ class SetupWindow:
             self._alive = False
         return self._choice if self._alive else None
 
+    def menu(
+        self,
+        title: str,
+        lines: Sequence[str] = (),
+        options: Sequence[tuple[str, str]] = (),
+    ) -> str | None:
+        """いまの状態を見せて、やることを選んでもらう。
+
+        options は (返す値, ボタンの文字)。先頭が目立つ色になる。
+        ✕ で閉じられたら None（呼び出し側は、そこでやめること）。
+
+        ダブルクリックして何も起きないと、お客様は不安になる。
+        すでに設定が済んでいるときも、この画面で「いま入っているもの」を見せる。
+        """
+        if not self.alive():
+            return None
+        self.clear_body()
+        self.clear_buttons()
+        self.say(title)
+        # 行数とボタンの数で窓を高くする。画面に収まらないときは、そこで打ち止め
+        need = 260 + 26 * len(lines) + 58 * len(options)
+        self.root.update_idletasks()
+        height = min(need, max(400, self.root.winfo_screenheight() - 120))
+        self.root.resizable(False, True)
+        _center(self.root, 560, height)
+        for line in lines:
+            tk.Label(
+                self.body,
+                text=line,
+                bg=BG,
+                fg=TEXT if line and not line.startswith("（") else MUTED,
+                font=self.f["small"],
+                wraplength=480,
+                justify="left",
+            ).pack(anchor="w", pady=2)
+
+        picked: dict[str, str | None] = {"key": None}
+
+        def pick(key: str) -> None:
+            picked["key"] = key
+            try:
+                self.root.quit()
+            except Exception:  # noqa: BLE001
+                self._alive = False
+
+        for i, (key, label) in enumerate(options):
+            self.button(label, lambda k=key: pick(k), primary=(i == 0))
+        try:
+            self.root.mainloop()
+        except Exception:  # noqa: BLE001
+            self._alive = False
+        return picked["key"] if self.alive() else None
+
     def ask(self, question: str, yes: str, no: str, lines: Sequence[str] = ()) -> bool:
         """はい／いいえを聞く。閉じられたら「いいえ」扱い。"""
         if not self.alive():

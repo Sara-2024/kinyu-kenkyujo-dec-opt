@@ -1158,8 +1158,34 @@ def setup_phase1() -> int:
             ui.fail("設定に必要なファイルが見つかりませんでした。", "アプリを入れ直してから、もう一度お試しください。")
         return 1
 
-    before = ea_manager.status(target.data_path, source)
-    log(f"EA の状態: {before.as_dict()}")
+    # すでに入っているときは、黙って置き直して終わらせない。
+    # ダブルクリックして何も起きないと、お客様は「動いていない」と感じる。
+    # いま何が入っているかを見せて、やることを選んでもらう。
+    force = False
+    while True:
+        before = ea_manager.status(target.data_path, source)
+        log(f"EA の状態: {before.as_dict()}")
+        if ui is None or force or before.state != ea_manager.LATEST:
+            break
+        choice = ask_what_to_do(ui, target, before, can_switch=len(terminals) > 1)
+        log(f"選ばれた操作: {choice}")
+        if choice is None:
+            log("画面を閉じられたので、何もしません")
+            return 0
+        if choice == "again":
+            force = True
+        elif choice == "other":
+            picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+            if not picked:
+                log("選ばずに閉じられたので、何もしません")
+                return 0
+            for t in terminals:
+                if str(t.data_path) == picked:
+                    target = t
+                    break
+            say(f"{target.label} に入れます。")
+        else:  # このまま使う
+            break
 
     if ui:
         ui.clear_body()
@@ -1168,7 +1194,7 @@ def setup_phase1() -> int:
         ui.add_step("ea", "AI Traderの設定")
     say("AI Traderを設定しています…")
 
-    after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, log=log)
+    after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, force=force, log=log)
     log(f"配置のあとの状態: {after.as_dict()}")
     # MT5 に最初から入っているサンプルを片づける。
     # 十数個並んでいると、お客様がうちのシステムを見つけられない
@@ -1214,6 +1240,33 @@ def setup_phase1() -> int:
         )
     log("初回の設定が終わりました（サイトとは接続していません）")
     return 0
+
+
+def ask_what_to_do(ui, target, st, *, can_switch: bool) -> str | None:
+    """すでに入っているときに出す画面。
+
+    「いま入っているのはこれです」を見せてから、やることを選んでもらう。
+    ここで黙って終わると、押しても何も起きないアプリになってしまう。
+    """
+    beat = ea_manager.heartbeat()
+    log(f"EA の動き: {beat}")
+    version = st.installed_version or st.source_version
+    lines = [
+        f"入っているもの： AI Trader {version}".rstrip(),
+        f"入れたMT5： {target.label}",
+    ]
+    if beat["fresh"]:
+        where = beat["symbol"] or "チャート"
+        lines.append(f"いまの様子： {where} のチャートで動いています")
+    elif beat["seen"]:
+        lines.append("いまの様子： いったん動きましたが、いまは止まっています")
+    else:
+        lines.append("いまの様子： まだチャートに載せていません")
+
+    options = [("use", "このまま使う"), ("again", "設置しなおす")]
+    if can_switch:
+        options.append(("other", "別のMT5に入れる"))
+    return ui.menu("AI Trader は、すでにこのPCに入っています。", lines, options)
 
 
 # MT5 でお願いする操作。ここだけは外から自動化できない

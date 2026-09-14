@@ -293,12 +293,17 @@ def install(
     source: Source,
     *,
     old_names: tuple[str, ...] = (),
+    force: bool = False,
     log: Callable[[str], None] = lambda _m: None,
 ) -> Status:
     """EA と Include を置く。中身が同じなら触らない。
 
     無条件の削除・上書きはしない。壊れた配布物は置かない。
     置いたあとは、もう一度ハッシュを取り直して正しく置けたかを確かめる。
+
+    force=True のときだけ、中身が同じでも置き直す。
+    お客様が「設置しなおす」を選んだときに使う（触っていないのに
+    「何もしませんでした」と言われると、直っていないように見える）。
     """
     if not source.ok:
         log(f"配布物が使えないので置かない: {source.broken}")
@@ -316,13 +321,13 @@ def install(
     try:
         for src in source.includes:
             target = include / src.name
-            if target.is_file() and sha256_of(target) == sha256_of(src):
+            if not force and target.is_file() and sha256_of(target) == sha256_of(src):
                 continue
             shutil.copy2(src, target)
             log(f"置いた Include/{src.name}")
 
         target = experts / source.file_name
-        if target.is_file() and sha256_of(target) == source.sha256:
+        if not force and target.is_file() and sha256_of(target) == source.sha256:
             log(f"そのまま Experts/{source.file_name}（中身が同じ）")
         else:
             shutil.copy2(source.ea_path, target)

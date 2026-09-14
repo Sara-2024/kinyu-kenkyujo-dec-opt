@@ -456,6 +456,69 @@ ea_manager.heartbeat = real_heartbeat
 check("押したらもう一度確かめる", pressed["n"] == 2, str(pressed))
 check("できていれば先へ進む", ui.finished is not None and any("XAUUSD" in l for l in ui.finished), str(ui.finished))
 
+
+# ── 16) すでに入っているときの画面（「いま入っているのはこれです」）──
+class Term:
+    def __init__(self, label, data_path):
+        self.label = label
+        self.data_path = data_path
+        self.exe = None
+
+
+class MenuUI(FakeUI):
+    def __init__(self, answers, menu_answers=()):
+        super().__init__(answers)
+        self.menus = []
+        self.menu_answers = list(menu_answers)
+
+    def menu(self, title, lines=(), options=()):
+        self.menus.append((title, list(lines), list(options)))
+        return self.menu_answers.pop(0) if self.menu_answers else None
+
+
+term = Term("XMTrading-MT5 3（口座 75602463）", xm)
+st_latest = ea_manager.Status(ea_manager.LATEST, installed_version="v11", source_version="v11")
+
+# まだチャートに載せていないとき
+state_ini.unlink(missing_ok=True)
+ui = MenuUI([], ["use"])
+connect.ask_what_to_do(ui, term, st_latest, can_switch=False)
+title, lines, options = ui.menus[0]
+body = "\n".join(lines)
+check("すでに入っていることを伝える", "すでに" in title, title)
+check("入っている版を出す", "v11" in body, body)
+check("どのMT5に入れたか出す", "75602463" in body, body)
+check("まだ載せていないことを伝える", "まだチャートに載せていません" in body, body)
+keys = [k for k, _ in options]
+check("このまま使うを選べる", "use" in keys, str(keys))
+check("設置しなおすを選べる", "again" in keys, str(keys))
+check("MT5が1台なら選び直しは出さない", "other" not in keys, str(keys))
+
+# 動いているとき／MT5 が複数あるとき
+state_ini.write_text("ea=YumekkuEA_v11\nstate=1\nsymbol=XAUUSD\n", encoding="utf-8")
+ui = MenuUI([], ["use"])
+connect.ask_what_to_do(ui, term, st_latest, can_switch=True)
+title, lines, options = ui.menus[0]
+body = "\n".join(lines)
+check("動いていることを伝える", "XAUUSD" in body and "動いています" in body, body)
+check("MT5が複数なら選び直しを出す", "other" in [k for k, _ in options], str(options))
+
+# ボタンの文字に専門用語を出さない
+labels = " ".join(l for _, l in options)
+for word in ("MQL5", "Experts", "EA", "API", "Python"):
+    check(f"ボタンに専門用語を出さない: {word}", word not in labels, labels)
+
+# 「設置しなおす」は、中身が同じでも本当に置き直す
+target_ea = xm / "MQL5" / "Experts" / newer_src.file_name
+ea_manager.install(xm, newer_src)
+before_mtime = target_ea.stat().st_mtime
+_os.utime(target_ea, (before_mtime - 500, before_mtime - 500))
+ea_manager.install(xm, newer_src)
+check("ふつうは触らない", target_ea.stat().st_mtime == before_mtime - 500)
+ea_manager.install(xm, newer_src, force=True)
+check("設置しなおすと置き直す", target_ea.stat().st_mtime != before_mtime - 500)
+check("置き直しても中身は同じ", ea_manager.sha256_of(target_ea) == newer_src.sha256)
+
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)
