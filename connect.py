@@ -1194,6 +1194,43 @@ def setup_phase1() -> int:
     return 0
 
 
+def choose_terminal() -> int:
+    """使う MT5 を選び直す（--choose）。
+
+    MT5 が何台もある PC で、別の MT5 に入ってしまったときに使う。
+    選んだ結果を覚えるので、次からはそこに固定される。
+    """
+    banner("使う MT5 を選び直す")
+    terminals = mt5_detect.list_terminals()
+    if not terminals:
+        log("MT5 が見つかりません")
+        return 1
+    log(f"見つかった MT5: {mt5_detect.describe(terminals)}")
+
+    ui = installer_ui.open_window()
+    target = terminals[0]
+    if ui and len(terminals) > 1:
+        picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+        for t in terminals:
+            if str(t.data_path) == picked:
+                target = t
+                break
+    elif len(terminals) > 1:
+        log("画面を出せないので、最後に使った MT5 を選びます")
+
+    connect_state.write(connect_state.current(), terminal=str(target.data_path))
+    log(f"これから使う MT5: {target.label} / {target.data_path}")
+
+    source = ea_manager.load_source(BRIDGE_DIR)
+    if source is not None:
+        after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, log=log)
+        log(f"EA の状態: {after.as_dict()}")
+
+    if ui:
+        ui.finish([f"{target.label} を使うようにしました。", "このアプリは閉じていただいて構いません。"], ok=True)
+    return 0
+
+
 def install_ea_only() -> int:
     banner("システムの配置だけ")
     session = find_logged_in_terminal()
@@ -1379,6 +1416,13 @@ def main() -> int:
 
     if "--setup" in args:
         return setup_phase1()
+    if "--choose" in args:
+        code = choose_terminal()
+        if code == 0 and connect_state.is_connected():
+            # 選び直したので、ブリッジもそちらでつなぎ直す
+            stop_all_bridges()
+            return connect_all("")
+        return code
 
     # サイトの「MT5と連携する」から呼ばれたとき。
     # 合図が正しいときだけ連携する（アプリ単体では連携できない）。

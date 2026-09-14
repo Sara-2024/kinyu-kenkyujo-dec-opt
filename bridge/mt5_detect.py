@@ -68,7 +68,9 @@ class Terminal:
 
 # MT5 のログに出る「口座とサーバー」の行
 #   'Network  '235147473': authorized on HFMarketsGlobal-Demo4 through ...'
-_LOGIN_RE = re.compile(r"'(\d{4,})':\s*(?:authorized on|login to)\s+([A-Za-z0-9._-]+)")
+_LOGIN_RE = re.compile(r"'(\d{4,})':\s*(?:authorized on|login to|connected to)\s+([A-Za-z0-9._\- ]+?)(?:\s+through|\s*\(|$)", re.M)
+# 口座番号だけでも拾えるようにする（サーバー名の書き方はビルドで変わる）
+_ACCOUNT_RE = re.compile(r"'(\d{6,})'")
 
 
 def account_hint(data_path: Path) -> tuple[str, str]:
@@ -99,7 +101,11 @@ def account_hint(data_path: Path) -> tuple[str, str]:
         found = _LOGIN_RE.findall(text)
         if found:
             account, server = found[-1]
-            return account, server
+            return account.strip(), server.strip()
+        # サーバー名が読めなくても、口座番号だけは出す
+        numbers = _ACCOUNT_RE.findall(text)
+        if numbers:
+            return numbers[-1], ""
     return "", ""
 
 
@@ -108,6 +114,8 @@ def broker_label(install_dir: Path | None, data_path: Path) -> str:
     account, server = account_hint(data_path)
     if account and server:
         return f"{server}（口座 {account}）"
+    if account:
+        return f"口座 {account}"
     if server:
         return server
 

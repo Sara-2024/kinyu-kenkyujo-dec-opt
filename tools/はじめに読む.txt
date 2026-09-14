@@ -6,15 +6,14 @@ AI Trader Connect ｜ tools フォルダの使い方
   2_EAを入れ替える.bat  配る EA（.ex5）を差し替える
                         ※ .ex5 をこのファイルにドラッグしてもよい
   3_リリースする.bat    接続ツールとインストーラーを作る
-  4_確認する.bat        このPCの状態を見る（EAが置けたか・通信していないか）
+  4_確認する.bat        このPCの状態を見る
 
-  できあがるもの:
-    dist\AITrader.exe                           接続ツール本体
-    tools\installer\AITraderConnect-Setup.exe   ★お客様に渡すのはこれ
-    public\download\AITrader.exe               サイトから配るもの
+  ★お客様に渡すのは tools\installer\AITraderConnect-Setup.exe だけ。
+    ここにある .bat は、こちらで使う道具です。渡しません。
 
 ── 困ったとき ─────────────────────────────────
 
+  MT5を選び直す.bat     別の MT5 に EA が入ってしまったとき
   状態を見る.bat        つながらない理由を調べる
   停止する.bat          裏で動いているものを止める
   連携を解除する.bat    このPCの連携を消す（EAは残る）
