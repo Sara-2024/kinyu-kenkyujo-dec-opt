@@ -278,13 +278,14 @@ for p_ in (xm / "MQL5" / "Experts").glob("*"):
     p_.unlink()
 
 # ── 13) リポジトリに置いてある本物の配布物（あれば）を確かめる ──
-real_ea = BRIDGE / "3YumekkuEA_win.ex5"
+# 名前は変わりうるので、決め打ちにせず Yumekku で探す
+real_ea = ea_manager.find_source_file(BRIDGE)
 real_manifest = BRIDGE / "ea_manifest.json"
-if real_ea.is_file() and real_manifest.is_file():
+if real_ea is not None and real_manifest.is_file():
     real = ea_manager.load_source(BRIDGE)
     check("同梱の EA が控えと一致している", real is not None and real.ok, str(real.broken if real else None))
     check("同梱の EA に版が入っている", bool(real and real.version), str(real.version if real else ""))
-elif real_ea.is_file() or real_manifest.is_file():
+elif real_ea is not None or real_manifest.is_file():
     check("EA と控えは両方そろえる", False, "片方しかない")
 else:
     print("  --   コンパイル済みの EA はまだ置かれていません")
