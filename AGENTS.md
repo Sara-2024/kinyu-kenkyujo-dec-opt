@@ -263,8 +263,10 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   XAUUSD 専用）。v6 はトレンド方向を UP/DOWN の二択にし、ナンピンを既定 OFF にしたもの。
   配るのはコンパイル済みの `bridge/OrbitGoldEA_v11.ex5` だけ。ソース（`.mq5`）は
   配らないし、リポジトリにも入れない（`.gitignore`）。
-  前の版 `bridge/OrbitGoldEA_v6.mq5` は参照用に残してあるだけで、配りも読み込みもしない
-  （`EA_NAMES` に入っていない。お客様の MT5 にあれば `OLD_EA_NAMES` で片づける）。いま配る EA の名前は `bridge/mt5_terminal.py` の `EA_NAMES` が唯一の定義で、
+  `bridge/OrbitGoldEA_v6.mq5` は**検証用に残してある**（トレンドを UP/DOWN の
+  二択にして、中間で止まらないようにした版）。配りも読み込みもしない。
+  消さないこと。`EA_NAMES` に入っていないので、お客様には届かない。
+  お客様の MT5 に v6 が残っていれば `OLD_EA_NAMES` で片づける。いま配る EA の名前は `bridge/mt5_terminal.py` の `EA_NAMES` が唯一の定義で、
   connect.py の配置と bridge.py の有無報告がそこを見る。片づける旧 EA の名前は
   `connect.py` の `OLD_EA_NAMES`（別のリスト。EA を上げたら旧名をこちらへ足す）。
   EA を差し替えるときは、`TradingGate.mqh` を include して
