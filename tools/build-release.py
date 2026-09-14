@@ -143,6 +143,18 @@ def compile_ea() -> Path:
     mqh_src = BRIDGE / "TradingGate.mqh"
     ex5_out = BRIDGE / f"{EA_NAME}.ex5"
 
+    # 前の名前の .ex5 が残っていると、そちらを配ってしまう。片づける
+    others = [
+        p for p in BRIDGE.glob("*.ex5")
+        if "yumekku" in p.stem.lower() and p.name != ex5_out.name
+    ]
+    for path in others:
+        try:
+            path.unlink()
+            print(f"  － 前の名前のものを片づけました: {path.name}")
+        except OSError:
+            print(f"  ！ 前の名前のものが残っています: {path.name}（消してください）")
+
     # すでに .ex5 があるなら、それを配る。コンパイルはしない。
     # 自分でコンパイルしたものを bridge に置いたときは、そのまま使われる。
     # 作り直したいときだけ、--compile を付けて実行する。
@@ -289,12 +301,40 @@ def stop_running() -> None:
         pass
     time.sleep(2)
 
+    # 止めても掴まれたままのことがある（1ファイル版の exe は親子2つで動く）。
+    # Windows は「動いている exe でも名前は変えられる」ので、退かしてから作る。
+    for _ in range(3):
+        try:
+            exe.unlink()
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            pass
+        try:
+            exe.rename(exe.with_name(f"AITrader.old-{int(time.time())}.exe"))
+            print("  … 使用中だったので、古いほうを退かしました")
+            return
+        except OSError:
+            time.sleep(2)
+    print("  ！ dist\\AITrader.exe を退かせません。停止する.bat を押してからやり直してください")
+
+
+def sweep_old_exe() -> None:
+    """退かした古い exe を、使われていなければ消す。"""
+    for path in (ROOT / "dist").glob("AITrader.old-*.exe"):
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
 
 def build_exe() -> Path:
     bat = ROOT / "tools" / "build-windows.bat"
     if not bat.is_file():
         die(f"{bat} がありません")
     stop_running()
+    sweep_old_exe()
     print("  … ビルド中（数分かかります）")
     result = subprocess.run([str(bat), "--from-release"], cwd=str(ROOT), shell=True)
     exe = ROOT / "dist" / "AITrader.exe"

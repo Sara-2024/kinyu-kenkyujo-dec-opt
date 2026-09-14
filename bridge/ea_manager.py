@@ -112,6 +112,10 @@ def find_source_file(assets_dir: Path) -> Path | None:
         return None
     if not found:
         return None
+    # 前の名前のものが残っていることがある。いま配る名前のものを最優先にする
+    for path in found:
+        if path.stem == EA_NAMES[0]:
+            return path
     found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return found[0]
 

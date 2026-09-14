@@ -156,6 +156,23 @@ st_bad = ea_manager.install(xm, bad) if bad else None
 check("壊れた配布物は置かない", st_bad is not None and st_bad.state == ea_manager.ERROR)
 check("壊れていたら何も置かれない", not (xm / "MQL5" / "Experts" / "3YumekkuEA_win.ex5").is_file())
 
+# 前の名前の .ex5 が残っていても、いま配る名前のものを選ぶ
+mixed = pathlib.Path(tempfile.mkdtemp(prefix="mixed-", dir=WORK))
+(mixed / "TradingGate.mqh").write_text("// 共通部品", encoding="utf-8")
+old_body = b"EX5-OLD-NAME-NEWER"
+(mixed / "3YumekkuEA_win.ex5").write_bytes(old_body)
+import time as _t
+
+_t.sleep(0.01)
+(mixed / "YumekkuEA_v11.ex5").write_bytes(b"EX5-CURRENT")
+# 古いほうを、あとから触って「新しい」ことにする
+import os as _os
+
+_os.utime(mixed / "3YumekkuEA_win.ex5", None)
+picked = ea_manager.find_source_file(mixed)
+check("前の名前が新しくても、いま配る名前を選ぶ", picked is not None and picked.name == "YumekkuEA_v11.ex5",
+      str(picked.name if picked else None))
+
 # ── 3) 置く前は「未設置」 ──
 st = ea_manager.status(hfm, source)
 check("置く前は未設置", st.state == ea_manager.NOT_INSTALLED, st.state)
