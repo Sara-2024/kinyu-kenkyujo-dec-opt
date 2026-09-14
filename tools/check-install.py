@@ -215,12 +215,20 @@ def main() -> int:
     row("既定の部屋 vps-01", default_room, "✕" if default_room == "いる" and not connected else "✓")
     if default_room == "いる" and not connected:
         print("      ※ 未連携なのにつながっています。報告してください")
-    # ③ このPCで動いているか（参考。Windows の版によっては見えないことがある）
+    # ③ このPCで動いているか（参考）
+    #    1ファイルにまとめた exe は、親（展開する側）と子（本体）の2つに見える。
+    #    コマンドラインが同じなので数では区別できない。2つでも普通。
     procs = bridge_processes()
-    row("このPCで動いているか", f"{len(procs)} 個" if procs else "見つからない", "")
-    for line in procs[:3]:
-        print(f"      {line}")
-    if not procs:
+    if procs:
+        row("このPCで動いているか", "動いている", "")
+        for line in procs[:4]:
+            print(f"      {line}")
+        if len(procs) > 2:
+            print("      ※ 3つ以上あります。停止する.bat で一度止めてください")
+        elif len(procs) == 2:
+            print("      ※ 2つ見えるのは普通です（exe の展開用と本体）")
+    else:
+        row("このPCで動いているか", "見つからない", "")
         print("      ※ 上の「自分の部屋」が『いる』なら、動いています（見えないだけ）")
 
     # ── EA ──
