@@ -69,6 +69,7 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --add-data "bridge\bridge.py;bridge" ^
   --add-data "bridge\mt5_terminal.py;bridge" ^
   --add-data "bridge\mt5_detect.py;bridge" ^
+  --add-data "bridge\gold_symbol.py;bridge" ^
   --add-data "bridge\ea_manager.py;bridge" ^
   --add-data "bridge\connect_state.py;bridge" ^
   --add-data "bridge\installer_ui.py;bridge" ^
@@ -81,6 +82,7 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --hidden-import bridge ^
   --hidden-import mt5_terminal ^
   --hidden-import mt5_detect ^
+  --hidden-import gold_symbol ^
   --hidden-import ea_manager ^
   --hidden-import connect_state ^
   --hidden-import installer_ui ^

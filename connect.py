@@ -55,6 +55,7 @@ from mt5_terminal import (  # noqa: E402
 )
 import connect_state  # noqa: E402  INSTALL_ONLY / CONNECTED
 import ea_manager  # noqa: E402  EA の状態判定と配置
+import gold_symbol  # noqa: E402  金の銘柄を気配値に出す
 import installer_ui  # noqa: E402  初回の設定画面
 import mt5_detect  # noqa: E402  PC の中の MT5 を全部探す
 
@@ -1180,6 +1181,10 @@ def setup_phase1() -> int:
 
     connect_state.write(connect_state.INSTALL_ONLY, terminal=str(target.data_path), ea=after.state)
 
+    # ついでに、金の銘柄を気配値に出しておく（そのままチャートに出せる）
+    shown = gold_symbol.show_in_market_watch(target.exe, log=log)
+    running = gold_symbol.mt5_is_running()
+
     notes: list[str] = []
     if before.state == ea_manager.NOT_INSTALLED:
         notes.append("AI Trader をMT5に追加しました。")
@@ -1187,8 +1192,11 @@ def setup_phase1() -> int:
         notes.append("AI Trader を新しい内容に更新しました。")
     else:
         notes.append("AI Trader はすでに最新でした。")
-    if ea_manager.stale_source_exists(target.data_path):
-        notes.append("MT5を開いているときは、一度閉じて開き直してください。")
+    if shown:
+        notes.append(f"{shown} を気配値表示に出しました。")
+    if running:
+        # MT5 は開いたまま置いても、ナビゲーターにすぐ出てこない
+        notes.append("MT5を一度閉じて開き直すと、一覧に出てきます。")
     notes.append("このアプリは閉じていただいて構いません。")
 
     if ui:
@@ -1232,9 +1240,14 @@ def choose_terminal() -> int:
     if source is not None:
         after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, log=log)
         log(f"EA の状態: {after.as_dict()}")
+    shown = gold_symbol.show_in_market_watch(target.exe, log=log)
 
     if ui:
-        ui.finish([f"{target.label} を使うようにしました。", "このアプリは閉じていただいて構いません。"], ok=True)
+        lines = [f"{target.label} を使うようにしました。"]
+        if shown:
+            lines.append(f"{shown} を気配値表示に出しました。")
+        lines.append("このアプリは閉じていただいて構いません。")
+        ui.finish(lines, ok=True)
     return 0
 
 
@@ -1361,6 +1374,7 @@ def connect_all(room: str = "") -> int:
     used = str(session.get("data_path") or "")
     if used:
         connect_state.write(connect_state.current(), terminal=used)
+    gold_symbol.show_in_market_watch(resolve_terminal_exe(session), log=log)
 
     url = relay_url()
     if relay_is_local(url) and not relay_is_up():
