@@ -269,15 +269,38 @@ def make_manifest(ex5: Path) -> dict:
 # ────────────────────────────────
 # 3. 接続ツール
 # ────────────────────────────────
+def stop_running() -> None:
+    """裏で動いているブリッジを止める。
+
+    動いたままだと dist\\AITrader.exe を掴んでいて、作り直せない
+    （PermissionError: アクセスが拒否されました）。
+    """
+    exe = ROOT / "dist" / "AITrader.exe"
+    if not exe.is_file():
+        return
+    try:
+        subprocess.run([str(exe), "--stop"], timeout=60, capture_output=True)
+        print("  … 動いていたものを止めました")
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    time.sleep(2)
+
+
 def build_exe() -> Path:
     bat = ROOT / "tools" / "build-windows.bat"
     if not bat.is_file():
         die(f"{bat} がありません")
+    stop_running()
     print("  … ビルド中（数分かかります）")
     result = subprocess.run([str(bat), "--from-release"], cwd=str(ROOT), shell=True)
     exe = ROOT / "dist" / "AITrader.exe"
     if result.returncode != 0 or not exe.is_file():
-        die("接続ツールを作れませんでした", "上に出ている PyInstaller の記録を見てください。")
+        die(
+            "接続ツールを作れませんでした",
+            "  「アクセスが拒否されました」と出ていたら、まだ動いています。",
+            "  tools\\停止する.bat を押してから、もう一度実行してください。",
+            "  それ以外なら、上に出ている PyInstaller の記録を見てください。",
+        )
     ok(f"AITrader.exe（{exe.stat().st_size:,} バイト）")
     return exe
 
