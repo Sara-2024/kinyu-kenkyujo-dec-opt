@@ -48,14 +48,16 @@ if exist bridge\risk_secret.py (
 
 echo.
 echo [2/3] exe を作っています（数分かかります）...
-REM 出荷する EA はコンパイル済みだけ
-if not exist bridge\3YumekkuEA_win.ex5 (
-  echo [ERROR] bridge\3YumekkuEA_win.ex5 がありません。
-  echo         MetaEditor で bridge\3YumekkuEA_win.mq5 を F7 でコンパイルし、
-  echo         できた .ex5 を bridge\ に置いてから実行してください。
+REM 出荷する EA はコンパイル済みだけ。名前は変わりうるので Yumekku で探す
+set EA_FILE=
+for %%f in (bridge\*Yumekku*.ex5) do set EA_FILE=%%f
+if "%EA_FILE%"=="" (
+  echo [ERROR] bridge\ にコンパイル済みの EA（*Yumekku*.ex5）がありません。
+  echo         2_EAを入れ替える.bat で .ex5 を入れてから実行してください。
   pause
   exit /b 1
 )
+echo   同梱する EA: %EA_FILE%
 if not exist bridge\ea_manifest.json (
   echo [ERROR] bridge\ea_manifest.json がありません。
   echo         py -3 tools\make-ea-manifest.py を実行してください。
@@ -77,7 +79,7 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --add-data "bridge\risk_gate.py;bridge" ^
   --add-data "bridge\risk_features.py;bridge" ^
   --paths bridge ^
-  --add-data "bridge\YumekkuEA_win.ex5;bridge" ^
+  --add-data "%EA_FILE%;bridge" ^
   --add-data "bridge\ea_manifest.json;bridge" ^
   --add-data "bridge\TradingGate.mqh;bridge" ^
   --hidden-import bridge ^

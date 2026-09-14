@@ -28,7 +28,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "bridge"
-EA_NAME = "YumekkuEA_win"
+
+
+def _current_ea_name() -> str:
+    """いま bridge に置いてある EA の名前。名前は変わりうるので Yumekku で探す。"""
+    try:
+        found = sorted(BRIDGE.glob("*.ex5"), key=lambda q: q.stat().st_mtime, reverse=True)
+    except OSError:
+        found = []
+    for q in found:
+        if "yumekku" in q.stem.lower():
+            return q.stem
+    return "YumekkuEA_win"  # 無いときの既定。ここで止まるのではなく、あとの案内に使う
+
+
+EA_NAME = _current_ea_name()
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 
 STEP = 0
