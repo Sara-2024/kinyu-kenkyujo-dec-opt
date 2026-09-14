@@ -223,16 +223,34 @@ def compile_ea() -> Path:
 # 2. 控えを作る
 # ────────────────────────────────
 def make_manifest(ex5: Path) -> dict:
-    mq5 = BRIDGE / f"{EA_NAME}.mq5"
+    digest = hashlib.sha256(ex5.read_bytes()).hexdigest()
     version = ""
+
+    # ① ソースがあれば、そこから読む
+    mq5 = BRIDGE / f"{EA_NAME}.mq5"
     if mq5.is_file():
         found = VERSION_RE.search(mq5.read_text(encoding="utf-8", errors="ignore")[:4000])
         if found:
             version = found.group(1)
-    if not version:
-        die("EA の版（#property version）を読めませんでした")
 
-    digest = hashlib.sha256(ex5.read_bytes()).hexdigest()
+    # ② 無ければ、前の控えを使う（いまの .ex5 と同じものなら、版も同じ）
+    #    配るのは .ex5 だけで、ソースは手元に無いのがふつう
+    if not version:
+        old = BRIDGE / "ea_manifest.json"
+        if old.is_file():
+            try:
+                raw = json.loads(old.read_text(encoding="utf-8"))
+                if str(raw.get("sha256", "")).lower() == digest:
+                    version = str(raw.get("version") or "")
+            except (OSError, ValueError):
+                pass
+
+    # ③ それでも分からなければ聞く
+    if not version:
+        print("  EA の版が分かりません（ソースが無く、控えとも中身が違います）")
+        version = input("  版を入れてください（例 11.00）: ").strip()
+        if not version:
+            die("版が入っていません", "  もう一度実行して、版を入れてください。")
     manifest = {
         "ea": EA_NAME,
         "file": ex5.name,
