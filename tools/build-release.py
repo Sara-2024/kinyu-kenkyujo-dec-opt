@@ -249,11 +249,12 @@ def make_manifest(ex5: Path) -> dict:
                 pass
 
     # ③ それでも分からなければ聞く
+    # ③ 最後は EA の名前から起こす（OrbitGoldEA_v11 → 11）。
+    #    版はサイトに出す札でしかないので、ここで止めない。
     if not version:
-        print("  EA の版が分かりません（ソースが無く、控えにも入っていません）")
-        version = input("  版を入れてください（例 11.00）: ").strip()
-        if not version or version == "0":
-            die("版が入っていません", "  もう一度実行して、版（例 11.00）を入れてください。")
+        found = re.search(r"_v(\d+)$", EA_NAME)
+        version = found.group(1) if found else "不明"
+        print(f"  － 版が分からないので、名前から {version} としました")
     manifest = {
         "ea": EA_NAME,
         "file": ex5.name,
