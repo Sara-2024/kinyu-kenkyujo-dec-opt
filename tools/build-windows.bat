@@ -1,6 +1,6 @@
 @echo off
 REM ================================================================
-REM  お客様に配る接続ツール（AITrader.exe / 表示名 AIトレーダー）を作る
+REM  お客様に配る接続ツール（AITrader.exe / 表示名 MT5 Automatic）を作る
 REM
 REM  Windows で一度だけ実行する。できあがった exe は
 REM  Python も Node も入っていないPCで動き、黒い画面も出ない。
@@ -66,6 +66,7 @@ if not exist bridge\ea_manifest.json (
 py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --onefile --noconsole ^
   --name AITrader ^
+  --splash tools\splash.png ^
   --add-data "bridge\bridge.py;bridge" ^
   --add-data "bridge\mt5_terminal.py;bridge" ^
   --add-data "bridge\mt5_detect.py;bridge" ^
@@ -147,7 +148,7 @@ if "%~1"=="--from-release" exit /b 0
 echo.
 echo ================================================================
 echo   できました: public\download\AITrader.exe
-echo   表示名: AIトレーダー
+echo   表示名: MT5 Automatic
 echo.
 echo   あとは、このファイルを commit して push すれば、サイトから配られます。
 echo     git add public/download/AITrader.exe

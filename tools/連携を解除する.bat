@@ -1,5 +1,5 @@
 @echo off
-title AIトレーダー ｜ 連携を解除する
+title MT5 Automatic ｜ 連携を解除する
 cd /d "%~dp0.."
 
 echo.

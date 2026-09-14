@@ -25,7 +25,7 @@ export function installSteps(kind: 'exe' | 'zip'): UserStep[] {
       {
         no: 2,
         title: 'ダウンロードしたファイルを開く',
-        detail: '「AITraderset 接続ツール」をダブルクリック。「WindowsによってPCが保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません',
+        detail: '「MT5 Automatic」をダブルクリック。「WindowsによってPCが保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません',
         figure: 'smartScreen',
       },
       { no: 3, title: 'MT5はログインしたままに', detail: 'いつも通り口座に入っていれば、そのままで大丈夫です' },

@@ -148,9 +148,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **AI へ送る JSON は詰めて書く。** `buildUserPrompt` で整形（インデント）すると、
   改行と空白のぶんだけ入力トークンが増える。呼ぶ回数が多いので効いてくる。
 
-## AI Trader Connect（お客様に配る Windows アプリ）
+## MT5 Automatic（お客様に配る Windows アプリ）
 
-配るのは1つの exe（`AITrader.exe`／表示名は AI Trader Connect）。
+配るのは1つの exe（`AITrader.exe`／表示名は MT5 Automatic）。
 中身は接続ツールとブリッジで、**状態で動きが変わる**。
 
 - **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。
@@ -240,7 +240,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **黒い画面（コンソール）を出さない。** お客様は「何か怖いものが動いた」と感じる。
   - 押すファイルは2つだけ。増やさない。
   - `はじめる.bat` … 自分が確認するとき（画面つき。初回の準備もここ）
-  - `AITrader.vbs` / `AITrader.exe` … お客様が使うもの（画面なし。表示名は AIトレーダー）
+  - `AITrader.vbs` / `AITrader.exe` … お客様が使うもの（画面なし。表示名は MT5 Automatic）
   - 個別のスクリプトは `tools/` に置く。プロジェクト直下に増やさない。
   - `connect.py` から他のプログラムを呼ぶときは `run_hidden` / `spawn_hidden` を使う。
     直に `subprocess.Popen` を書かない（ウィンドウが出る）。

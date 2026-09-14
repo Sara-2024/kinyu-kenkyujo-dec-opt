@@ -141,7 +141,7 @@ export interface ConnectorDownload {
 }
 
 /** お客様が受け取るファイルの名前。中身は同じで、名前だけ分かりやすくする */
-const SAVE_AS = 'AITraderset 接続ツール.exe'
+const SAVE_AS = 'MT5 Automatic.exe'
 
 export const CONNECTOR_DOWNLOAD: ConnectorDownload = (() => {
   const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/AITrader.exe'

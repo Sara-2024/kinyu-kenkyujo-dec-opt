@@ -1,5 +1,5 @@
 @echo off
-title AIトレーダー ｜ 接続をやめる
+title MT5 Automatic ｜ 接続をやめる
 cd /d "%~dp0.."
 
 echo.

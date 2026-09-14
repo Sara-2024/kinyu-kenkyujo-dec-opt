@@ -40,7 +40,7 @@ export const NOTICES: Notice[] = [
     date: '2026-08-10',
     tag: 'お知らせ',
     title: '接続ツールは黒い画面を出しません',
-    body: 'AIトレーダーは裏側で動きます。経過は connect.log に残るので、うまくいかないときはそちらをお送りください。',
+    body: 'MT5 Automatic は裏側で動きます。経過は connect.log に残るので、うまくいかないときはそちらをお送りください。',
   },
   {
     date: '',

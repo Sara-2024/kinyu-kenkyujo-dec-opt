@@ -1,4 +1,4 @@
-; AI Trader Connect のインストーラー（Inno Setup 6）
+; MT5 Automatic のインストーラー（Inno Setup 6）
 ;
 ; 作り方:
 ;   1. Windows で tools\build-windows.bat を実行して dist\AITrader.exe を作る
@@ -12,9 +12,9 @@
 ;   ・aitrader:// の登録はここで行う。アンインストールで消える
 ;   ・コード署名はまだ。SmartScreen の警告が出る（別工程で対応）
 
-#define AppName "AI Trader Connect"
+#define AppName "MT5 Automatic"
 #define AppVersion "1.0.0"
-#define AppPublisher "AI Trader"
+#define AppPublisher "MT5 Automatic"
 #define AppExe "AITrader.exe"
 
 [Setup]

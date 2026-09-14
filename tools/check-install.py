@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "bridge"))
 
 RELAY = "https://kinyu-relay.onrender.com/health"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-RUN_NAMES = ("AIトレーダー", "TrelabConnect")
+RUN_NAMES = ("MT5 Automatic", "AIトレーダー", "TrelabConnect")
 
 
 def config_dir() -> Path:

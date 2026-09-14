@@ -1,5 +1,5 @@
 // Vercel のサーバー関数。中身は _lib/connect.ts。
-// お客様のPCの AI Trader Connect だけが呼ぶ（ワンタイムの合図を確かめる）。
+// お客様のPCの MT5 Automatic だけが呼ぶ（ワンタイムの合図を確かめる）。
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { envFrom, handleConnect, maskToken, readJson } from './_lib/connect.js'
 

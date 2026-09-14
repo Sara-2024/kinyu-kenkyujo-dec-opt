@@ -1,6 +1,6 @@
 // MT5連携のワンタイム合図を確かめる。
 //
-// お客様のPCの AI Trader Connect が、aitrader://connect?token=... で受け取った
+// お客様のPCの MT5 Automatic が、aitrader://connect?token=... で受け取った
 // 合図をここへ送ってくる。正しければ、その会員の部屋（会員ID）を返す。
 //
 //   ・合図を作れるのはサイトだけ（ログイン中のセッションが要る）

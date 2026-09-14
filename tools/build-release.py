@@ -449,7 +449,7 @@ def place(exe: Path, placeholder: str) -> None:
 
 def main() -> int:
     print("=" * 62)
-    print("  AI Trader Connect を作る")
+    print("  MT5 Automatic を作る")
     print("=" * 62)
 
     step("EA を用意する")

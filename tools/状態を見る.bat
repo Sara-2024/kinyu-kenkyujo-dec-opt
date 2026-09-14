@@ -1,5 +1,5 @@
 @echo off
-title AIトレーダー ｜ 状態を見る
+title MT5 Automatic ｜ 状態を見る
 cd /d "%~dp0.."
 
 echo.

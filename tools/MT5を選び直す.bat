@@ -1,6 +1,6 @@
 @echo off
 chcp 932 >nul
-title AI Trader Connect ｜ MT5を選び直す
+title MT5 Automatic ｜ MT5を選び直す
 cd /d "%~dp0.."
 
 REM ソースから動かす（こちらの道具なので Python がある前提）。

@@ -1,4 +1,4 @@
-"""AI Trader Connect の画面（初回の設定だけ）。
+"""MT5 Automatic の画面（初回の設定だけ）。
 
 40〜60代のお客様が迷わないことを最優先にする。
 
@@ -26,7 +26,7 @@ except Exception:  # noqa: BLE001 - 画面が無い環境
     tk = None  # type: ignore[assignment]
     tkfont = None  # type: ignore[assignment]
 
-APP_NAME = "AI Trader Connect"
+APP_NAME = "MT5 Automatic"
 
 BG = "#0b1220"
 PANEL = "#111c31"
@@ -38,6 +38,20 @@ WARN = "#ffd23e"
 NG = "#ff8484"
 
 
+def close_splash() -> None:
+    """起動中に出している画像（PyInstaller の --splash）を消す。
+
+    exe は開くのに数秒かかるので、そのあいだ「開いています…」の画像を出している。
+    本当の窓が出たら、こちらは要らない。exe でないとき（.py のまま）は何も無い。
+    """
+    try:
+        import pyi_splash  # type: ignore  exe に --splash を付けたときだけ存在する
+
+        pyi_splash.close()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def message_box(text: str, title: str = APP_NAME) -> bool:
     """窓を作れなかったときの、最後の知らせ方。
 
@@ -47,6 +61,7 @@ def message_box(text: str, title: str = APP_NAME) -> bool:
     """
     if os.name != "nt":
         return False
+    close_splash()
     try:
         import ctypes
 
@@ -390,8 +405,12 @@ class SetupWindow:
 def open_window() -> SetupWindow | None:
     """窓を開く。開けない環境では None（呼び出し側は画面なしで進める）。"""
     if tk is None:
+        close_splash()
         return None
     try:
-        return SetupWindow()
+        win = SetupWindow()
     except Exception:  # noqa: BLE001
+        close_splash()
         return None
+    close_splash()  # 本当の窓が出たので、起動中の画像は消す
+    return win

@@ -1,6 +1,6 @@
 @echo off
 chcp 932 >nul
-title AI Trader Connect Åb ç≈êVÇ…Ç∑ÇÈ
+title MT5 Automatic Åb ç≈êVÇ…Ç∑ÇÈ
 cd /d "%~dp0.."
 
 echo.

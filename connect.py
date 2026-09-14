@@ -87,11 +87,12 @@ OLD_EA_NAMES = (
 )
 INCLUDE_FILES = ("TradingGate.mqh",)
 
-PRODUCT_NAME = "AIトレーダー"
-APP_NAME = "AIトレーダー"
+PRODUCT_NAME = "MT5 Automatic"
+APP_NAME = "MT5 Automatic"
 PROTOCOL = "aitrader"
 LEGACY_PROTOCOL = "trelab"
-LEGACY_APP_NAMES = ("TrelabConnect",)
+# 前の版が自動起動に登録していた名前。見つけたら消して、いまの名前で登録し直す
+LEGACY_APP_NAMES = ("AIトレーダー", "TrelabConnect")
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 # このPCの「部屋」は会員ID（UUID）だけ。ここを緩くしていたので、
 # 悪意あるページが `aitrader://connect?room=<自分のID>` を開かせるだけで、
@@ -1241,8 +1242,8 @@ def setup_phase1() -> int:
         ui.clear_body()
         ui.add_step("mt5", "MT5の確認")
         ui.mark("mt5", True)
-        ui.add_step("ea", "AI Traderの設定")
-    say("AI Traderを設定しています…")
+        ui.add_step("ea", "自動売買の設定")
+    say("自動売買の設定をしています…")
 
     after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, force=force, log=log)
     log(f"配置のあとの状態: {after.as_dict()}")
@@ -1278,7 +1279,7 @@ def setup_phase1() -> int:
             "あとで自分でやる",
             [
                 "MT5は、開いたままだと新しく入れたものを一覧に出しません。",
-                "開き直すと、AI Traderがすぐ使えるようになります。",
+                "開き直すと、入れたものがすぐ一覧に出ます。",
                 "取引中のポジションは消えません。チャートも元に戻ります。",
             ],
         ):
@@ -1298,6 +1299,12 @@ def setup_phase1() -> int:
     return 0
 
 
+def st_name(st) -> str:
+    """お客様に見せる「入っているもの」。MT5 の一覧に出る名前で言う。"""
+    version = st.installed_version or st.source_version
+    return f"{EA_NAME}（版 {version}）" if version else EA_NAME
+
+
 def ask_what_to_do(ui, target, st, *, can_switch: bool) -> str | None:
     """すでに入っているときに出す画面。
 
@@ -1306,9 +1313,8 @@ def ask_what_to_do(ui, target, st, *, can_switch: bool) -> str | None:
     """
     beat = ea_manager.heartbeat()
     log(f"EA の動き: {beat}")
-    version = st.installed_version or st.source_version
     lines = [
-        f"入っているもの： AI Trader {version}".rstrip(),
+        f"入っているもの： {st_name(st)}",
         f"入れたMT5： {target.label}",
     ]
     if beat["fresh"]:
@@ -1322,14 +1328,14 @@ def ask_what_to_do(ui, target, st, *, can_switch: bool) -> str | None:
     options = [("use", "このまま使う"), ("again", "設置しなおす")]
     if can_switch:
         options.append(("other", "別のMT5に入れる"))
-    return ui.menu("AI Trader は、すでにこのPCに入っています。", lines, options)
+    return ui.menu("MT5 Automatic は、すでに設定が済んでいます。", lines, options)
 
 
 # MT5 でお願いする操作。ここだけは外から自動化できない
 # （チャートを開くことも、時間足を変えることも、MT5 は外部に開いていない）
 CHART_STEPS = (
     "1. MT5の左側にある「ナビゲーター」を開きます。",
-    "2. AI Trader を、ゴールドの1分足チャートにドラッグします。",
+    f"2. 「{EA_NAME}」を、ゴールドの1分足チャートにドラッグします。",
     "3. 画面の上にある「アルゴ取引」のボタンを押して、緑色にします。",
 )
 
@@ -1345,11 +1351,11 @@ def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool) -> 
     押してもらえば、その場で見て次へ進める。
     """
     if placed == ea_manager.NOT_INSTALLED:
-        head = "AI Trader をMT5に追加しました。"
+        head = f"「{EA_NAME}」をMT5に追加しました。"
     elif placed == ea_manager.UPDATE_AVAILABLE:
-        head = "AI Trader を新しい内容に更新しました。"
+        head = f"「{EA_NAME}」を新しい内容に更新しました。"
     else:
-        head = "AI Trader はすでに入っています。"
+        head = f"「{EA_NAME}」はすでにMT5に入っています。"
 
     if ui is None:
         # 窓を作れなかったとき。せめて「何が起きたか」だけは見せる
@@ -1726,6 +1732,12 @@ def main() -> int:
 
     os.chdir(str(ROOT))
     log(f"起動 argv={raw_args} frozen={FROZEN} room={room or '-'}")
+    # 窓を出さずに動く経路（自動起動・裏のブリッジ・道具類）では、
+    # 起動中の画像を出したままにしない。窓を出す経路では、窓が出たときに消える
+    if "--startup" in args or "--run-bridge" in args or connect_token or CONSOLE or any(
+        a.startswith("--") for a in args if a not in ("--silent", "--from-site")
+    ):
+        installer_ui.close_splash()
 
     # はじめる.bat から「中継の接続先」を受け取る。.env を丸ごと書き直すと
     # サイトから受け取った部屋（BRIDGE_ID）が消えて E003 になるので、1項目だけ直す。
@@ -1798,7 +1810,7 @@ def main() -> int:
     # 同じアプリがもう開いていれば、そちらに任せる（二つ同時に置きに行かない）
     if not hold_single_instance():
         log("すでに開いているので、こちらは何もしない")
-        installer_ui.message_box("AI Trader Connect は、すでに開いています。\n開いている画面をご覧ください。")
+        installer_ui.message_box("MT5 Automatic は、すでに開いています。\n開いている画面をご覧ください。")
         return 0
 
     # 部屋が渡されていない（＝サイトからではなく、自分で開いた）とき。

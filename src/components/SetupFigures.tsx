@@ -44,7 +44,7 @@ function BrowserWarning() {
           ⚠
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-bold">AITraderset 接続ツール.exe</span>
+          <span className="block truncate text-[13px] font-bold">MT5 Automatic.exe</span>
           <span className="block text-[12px]" style={{ color: '#6b7280' }}>
             一般的にダウンロードされていません
           </span>
