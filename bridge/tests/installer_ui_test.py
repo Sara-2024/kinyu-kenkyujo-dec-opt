@@ -60,6 +60,33 @@ banned = ["MQL5", "Experts", "Terminal", "Bridge", "ブリッジ", "API", "Pytho
 hit = [b for b in banned if b.lower() in blob.lower()]
 check("専門用語を出していない", not hit, str(hit))
 
+# 選択画面: 台数が多くてもボタンが押せるか（画面の外に出ないか）
+import tkinter as tk  # noqa: E402
+
+w2 = ui.open_window()
+many = [(f"d{i}", f"SomeBroker-Demo{i}（口座 {10000000 + i}）") for i in range(8)]
+w2.clear_body()
+w2.clear_buttons()
+w2.say("設定するMT5を選んでください。")
+need = 300 + 46 * len(many)
+w2.root.update_idletasks()
+ui._center(w2.root, 560, min(need, max(400, w2.root.winfo_screenheight() - 120)))
+var = tk.StringVar(value=many[0][0])
+for value, label in many:
+    tk.Radiobutton(
+        w2.body, text=label, variable=var, value=value, bg=ui.BG, fg=ui.TEXT,
+        selectcolor=ui.PANEL, activebackground=ui.BG, activeforeground=ui.TEXT,
+        font=w2.f["step"], anchor="w", justify="left", wraplength=460, padx=6, pady=6,
+    ).pack(fill="x", anchor="w")
+w2.button("これで設定する", lambda: None)
+w2.root.update_idletasks()
+w2.root.update()
+btn2 = w2.buttons.winfo_children()[0]
+bottom = btn2.winfo_rooty() - w2.root.winfo_rooty() + btn2.winfo_height()
+check("8台あってもボタンが窓の中にある", bottom <= w2.root.winfo_height(), f"{bottom} > {w2.root.winfo_height()}")
+check("ボタンは下に固定されている", btn2.winfo_rooty() > w2.body.winfo_rooty())
+w2.close()
+
 # 失敗の案内に技術的な原因を書いていないか
 import inspect
 src = inspect.getsource(ui)

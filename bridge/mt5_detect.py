@@ -17,6 +17,7 @@ EA の置き場は MQL5/Experts なので、口座に入らなくてもファイ
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -65,13 +66,58 @@ class Terminal:
         }
 
 
+# MT5 のログに出る「口座とサーバー」の行
+#   'Network  '235147473': authorized on HFMarketsGlobal-Demo4 through ...'
+_LOGIN_RE = re.compile(r"'(\d{4,})':\s*(?:authorized on|login to)\s+([A-Za-z0-9._-]+)")
+
+
+def account_hint(data_path: Path) -> tuple[str, str]:
+    """その MT5 が最後に入った口座とサーバー。分からなければ空。
+
+    お客様はフォルダ名では区別できない（「4」「2」では選べない）。
+    口座番号とブローカー名なら、MT5 の画面と同じなので選べる。
+    ログイン情報そのものは読まない。番号とサーバー名だけ。
+    """
+    logs = data_path / "logs"
+    if not logs.is_dir():
+        return "", ""
+    try:
+        files = sorted(logs.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)[:3]
+    except OSError:
+        return "", ""
+    for path in files:
+        try:
+            # 後ろの方が新しい。大きいログもあるので末尾だけ読む
+            with path.open("rb") as fh:
+                try:
+                    fh.seek(max(0, path.stat().st_size - 200_000))
+                except OSError:
+                    pass
+                text = fh.read().decode("utf-8", errors="ignore")
+        except OSError:
+            continue
+        found = _LOGIN_RE.findall(text)
+        if found:
+            account, server = found[-1]
+            return account, server
+    return "", ""
+
+
 def broker_label(install_dir: Path | None, data_path: Path) -> str:
-    """お客様に見せる名前。専門用語を出さず、ブローカー名だけにする。"""
+    """お客様に見せる名前。MT5 の画面で見えるものに合わせる。"""
+    account, server = account_hint(data_path)
+    if account and server:
+        return f"{server}（口座 {account}）"
+    if server:
+        return server
+
     name = install_dir.name if install_dir else ""
     out = " ".join(_strip_noise(name).split())
-    if out:
+    # 「4」「2」のような、削った残りが数字だけのものは使わない
+    if out and not out.isdigit():
         return out
-    # インストール先から分からないときは、データフォルダの短縮名を出す
+    if name:
+        return name
     return f"MetaTrader 5（{data_path.name[:8]}）"
 
 

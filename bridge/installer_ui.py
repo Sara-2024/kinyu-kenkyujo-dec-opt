@@ -85,11 +85,12 @@ class SetupWindow:
         )
         self.message.pack(pady=(0, 12))
 
-        self.body = tk.Frame(self.root, bg=BG)
-        self.body.pack(fill="both", expand=True, padx=28)
-
+        # ボタンを先に下へ固定する。あとから中身が増えても、画面の外に出ない
         self.buttons = tk.Frame(self.root, bg=BG)
-        self.buttons.pack(fill="x", padx=28, pady=(6, 20))
+        self.buttons.pack(side="bottom", fill="x", padx=28, pady=(6, 20))
+
+        self.body = tk.Frame(self.root, bg=BG)
+        self.body.pack(side="top", fill="both", expand=True, padx=28)
 
         _center(self.root, 520, 400)
 
@@ -146,6 +147,12 @@ class SetupWindow:
         self.clear_body()
         self.clear_buttons()
         self.say("設定するMT5を選んでください。")
+        # 台数ぶん窓を高くする。画面に収まらないときは、そこで打ち止め
+        need = 300 + 46 * len(items)
+        self.root.update_idletasks()
+        height = min(need, max(400, self.root.winfo_screenheight() - 120))
+        self.root.resizable(False, True)
+        _center(self.root, 560, height)
         var = tk.StringVar(value=items[0][0])
         for value, label in items:
             tk.Radiobutton(
@@ -161,6 +168,7 @@ class SetupWindow:
                 font=self.f["step"],
                 anchor="w",
                 justify="left",
+                wraplength=460,
                 padx=6,
                 pady=6,
             ).pack(fill="x", anchor="w")
