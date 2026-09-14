@@ -15,13 +15,14 @@ import json
 import os
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "bridge"))
 
-RELAY_HEALTH = "https://kinyu-relay.onrender.com/health?room=vps-01"
+RELAY = "https://kinyu-relay.onrender.com/health"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_NAMES = ("AIトレーダー", "TrelabConnect")
 
@@ -124,29 +125,49 @@ def points_here(command: str) -> tuple[bool, str]:
     return False, f"別の場所（{exe.parent.name}\\{exe.name}）"
 
 
+def _process_lines() -> list[str]:
+    """動いているプログラムの一覧（コマンドライン付き）。
+
+    wmic は最近の Windows 11 から消えているので、PowerShell を先に使う。
+    どちらも駄目なら tasklist（コマンドラインは出ないが、名前だけは分かる）。
+    """
+    attempts: list[list[str]] = []
+    if os.name == "nt":
+        attempts = [
+            ["powershell", "-NoProfile", "-Command",
+             "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }"],
+            ["wmic", "process", "get", "ProcessId,CommandLine"],
+            ["tasklist"],
+        ]
+    else:
+        attempts = [["ps", "-ax", "-o", "pid,command"]]
+    for cmd in attempts:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=30).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if out and out.strip():
+            return out.splitlines()
+    return []
+
+
 def bridge_processes() -> list[str]:
-    """裏で動いているブリッジ。Windows は wmic、他は ps で見る。"""
-    try:
-        if os.name == "nt":
-            out = subprocess.run(
-                ["wmic", "process", "get", "ProcessId,CommandLine"],
-                capture_output=True, text=True, timeout=20,
-            ).stdout
-        else:
-            out = subprocess.run(["ps", "-ax", "-o", "pid,command"], capture_output=True, text=True, timeout=20).stdout
-    except (OSError, subprocess.TimeoutExpired):
-        return []
+    """裏で動いているブリッジ。exe 版は「AITrader.exe --run-bridge」で動く。"""
     hits = []
-    for line in out.splitlines():
+    for line in _process_lines():
         low = line.lower()
-        if ("bridge.py" in low or "--run-bridge" in low) and "check-install" not in low:
+        if "check-install" in low or "get-ciminstance" in low:
+            continue
+        if "bridge.py" in low or "--run-bridge" in low:
             hits.append(line.strip()[:110])
     return hits
 
 
-def relay_state() -> str:
+def relay_state(room_id: str) -> str:
+    """中継に「その部屋にブリッジが居るか」を聞く。これがいちばん確かな答え。"""
     try:
-        with urllib.request.urlopen(RELAY_HEALTH, timeout=15) as res:
+        url = f"{RELAY}?room={urllib.parse.quote(room_id)}"
+        with urllib.request.urlopen(url, timeout=15) as res:
             data = json.loads(res.read().decode("utf-8"))
     except Exception as exc:  # noqa: BLE001
         return f"見られません（{type(exc).__name__}）"
@@ -182,12 +203,25 @@ def main() -> int:
 
     # ── ブリッジ ──
     head("ブリッジ（外との通信）")
+    # ① 中継に聞く（確実）
+    my_room = str(state.get("room") or bridge_id or "")
+    if connected and my_room:
+        here = relay_state(my_room)
+        row("自分の部屋につながっているか", here, "✓" if here == "いる" else "✕")
+        if here != "いる":
+            print("      ※ AITrader.exe を開き直してください")
+    # ② 既定の部屋に居座っていないか（未連携のまま繋いでいたら問題）
+    default_room = relay_state("vps-01")
+    row("既定の部屋 vps-01", default_room, "✕" if default_room == "いる" and not connected else "✓")
+    if default_room == "いる" and not connected:
+        print("      ※ 未連携なのにつながっています。報告してください")
+    # ③ このPCで動いているか（参考。Windows の版によっては見えないことがある）
     procs = bridge_processes()
-    row("動いているか", f"{len(procs)} 個" if procs else "動いていない", "✓" if bool(procs) == connected else "✕")
+    row("このPCで動いているか", f"{len(procs)} 個" if procs else "見つからない", "")
     for line in procs[:3]:
         print(f"      {line}")
-    row("既定の部屋 vps-01", relay_state(), "")
-    print("      ※ 未連携なのに「いる」なら ✕（報告してください）")
+    if not procs:
+        print("      ※ 上の「自分の部屋」が『いる』なら、動いています（見えないだけ）")
 
     # ── EA ──
     head("MT5 と EA")
