@@ -35,9 +35,18 @@ EA_NAME = "3YumekkuEA_win"
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 
 
+def find_ex5() -> Path | None:
+    """同梱の EA を探す。名前の後半は変わりうるので Yumekku で探す。"""
+    found = [p for p in BRIDGE.glob("*.ex5") if "yumekku" in p.stem.lower()]
+    if not found:
+        return None
+    found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return found[0]
+
+
 def main() -> int:
-    ex5 = BRIDGE / f"{EA_NAME}.ex5"
-    mq5 = BRIDGE / f"{EA_NAME}.mq5"
+    ex5 = find_ex5() or (BRIDGE / f"{EA_NAME}.ex5")
+    mq5 = ex5.with_suffix(".mq5")
 
     if not ex5.is_file():
         print(f"[ERROR] {ex5} がありません。")
@@ -57,7 +66,7 @@ def main() -> int:
         version = input("      版を手で入力してください（例 6.10）: ").strip() or "0"
 
     manifest = {
-        "ea": EA_NAME,
+        "ea": ex5.stem,
         "file": ex5.name,
         "version": version,
         "sha256": digest,
