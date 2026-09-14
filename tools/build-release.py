@@ -142,10 +142,6 @@ def compile_ea() -> Path:
     mq5_src = BRIDGE / f"{EA_NAME}.mq5"
     mqh_src = BRIDGE / "TradingGate.mqh"
     ex5_out = BRIDGE / f"{EA_NAME}.ex5"
-    if not mq5_src.is_file():
-        die(f"{mq5_src} がありません")
-    if not mqh_src.is_file():
-        die(f"{mqh_src} がありません")
 
     # すでに .ex5 があるなら、それを配る。コンパイルはしない。
     # 自分でコンパイルしたものを bridge に置いたときは、そのまま使われる。
@@ -155,12 +151,23 @@ def compile_ea() -> Path:
         print("     作り直したいときは tools\\3_リリースする.bat --compile")
         return ex5_out
 
+    # ここへ来たのは .ex5 が無いとき。ソース（.mq5）は配らないので、
+    # ふつうは手元にも無い。その場合は入れ替えの道具へ案内する。
+    if not mq5_src.is_file():
+        die(
+            "配る EA がありません",
+            "  2_EAを入れ替える.bat を押して、コンパイル済みの .ex5 を入れてください。",
+            "  （.ex5 をそのファイルにドラッグしても入ります）",
+        )
+    if not mqh_src.is_file():
+        die(f"{mqh_src.name} がありません", "リポジトリを取り直してください。")
+
     editor = find_metaeditor()
     if editor is None:
         die(
             "MetaEditor（metaeditor64.exe）が見つかりません",
-            f"MT5 で bridge\\{EA_NAME}.mq5 を F7 でコンパイルし、",
-            f"できた {EA_NAME}.ex5 を bridge\\ に置いてから、もう一度実行してください。",
+            f"  MT5 で bridge\\{EA_NAME}.mq5 を開いてコンパイルし、",
+            "  できた .ex5 を 2_EAを入れ替える.bat に入れてください。",
         )
     ok(f"MetaEditor: {editor}")
 
