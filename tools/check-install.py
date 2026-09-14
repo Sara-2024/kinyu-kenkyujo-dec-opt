@@ -280,8 +280,20 @@ def main() -> int:
         age = time.time() - state_ini.stat().st_mtime
         fresh = age < 60
         row("EA からの合図", f"{int(age)} 秒前" if fresh else f"{int(age // 60)} 分前（古い）", "✓" if fresh else "△")
+        # EA(MQL5)の書き出しは環境によって文字コードが変わる。読めるもので読む
+        #（bridge.py の _ea_state_blocking と同じ見方）
         try:
-            for line in state_ini.read_text(encoding="utf-8", errors="ignore").splitlines():
+            raw = state_ini.read_bytes()
+            text = ""
+            for encoding in ("utf-8", "utf-16", "cp932"):
+                try:
+                    candidate = raw.decode(encoding)
+                except (UnicodeDecodeError, LookupError):
+                    continue
+                if "state=" in candidate:
+                    text = candidate
+                    break
+            for line in text.splitlines():
                 if line.startswith(("ea=", "state=", "symbol=")):
                     print(f"      {line.strip()}")
         except OSError:
