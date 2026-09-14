@@ -33,4 +33,4 @@ server/node_modules/
 
 # PyInstaller の作業フォルダ（tools/build-windows.bat）
 build/
-AITrader.spec
+MT5Automatic.spec

@@ -1,13 +1,13 @@
 @echo off
 REM ================================================================
-REM  お客様に配る接続ツール（AITrader.exe / 表示名 MT5 Automatic）を作る
+REM  お客様に配る接続ツール（MT5Automatic.exe / 表示名 MT5 Automatic）を作る
 REM
 REM  Windows で一度だけ実行する。できあがった exe は
 REM  Python も Node も入っていないPCで動き、黒い画面も出ない。
 REM  同梱するのはブリッジ本体と EA だけ（venv や .env は入れない。
 REM  接続先はクラウドの中継に固定されている）。
 REM
-REM    dist\AITrader.exe   … これをお客様にお渡しする
+REM    dist\MT5Automatic.exe   … これをお客様にお渡しする
 REM ================================================================
 cd /d "%~dp0.."
 
@@ -67,7 +67,7 @@ if not exist bridge\ea_manifest.json (
 
 py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --onefile --noconsole ^
-  --name AITrader ^
+  --name MT5Automatic ^
   --splash tools\splash.png ^
   --add-data "bridge\bridge.py;bridge" ^
   --add-data "bridge\mt5_terminal.py;bridge" ^
@@ -118,15 +118,15 @@ if errorlevel 1 (
 
 echo.
 echo [3/3] 確認...
-if not exist dist\AITrader.exe (
-  echo [ERROR] dist\AITrader.exe ができていません。
+if not exist dist\MT5Automatic.exe (
+  echo [ERROR] dist\MT5Automatic.exe ができていません。
   pause
   exit /b 1
 )
 
 REM 画面の部品（tkinter）が入っているか確かめる。
 REM 入っていないと、お客様がダブルクリックしても窓が出ない（無言で終わる）。
-py -3 -c "import sys;d=open(r'dist\AITrader.exe','rb').read();sys.exit(0 if b'_tkinter' in d else 1)"
+py -3 -c "import sys;d=open(r'dist\MT5Automatic.exe','rb').read();sys.exit(0 if b'_tkinter' in d else 1)"
 if errorlevel 1 (
   echo [ERROR] 画面の部品が入っていません。この exe は配らないでください。
   echo         py -3 -m pip install --upgrade pyinstaller を試してから、もう一度実行してください。
@@ -136,9 +136,9 @@ if errorlevel 1 (
 
 REM サイトが配る場所へそのまま置く（あとは commit と push だけ）
 if not exist public\download mkdir public\download
-copy /Y dist\AITrader.exe public\download\AITrader.exe >nul
+copy /Y dist\MT5Automatic.exe public\download\MT5Automatic.exe >nul
 if errorlevel 1 (
-  echo [ERROR] public\download\AITrader.exe に置けませんでした。
+  echo [ERROR] public\download\MT5Automatic.exe に置けませんでした。
   pause
   exit /b 1
 )
@@ -149,11 +149,11 @@ if "%~1"=="--from-release" exit /b 0
 
 echo.
 echo ================================================================
-echo   できました: public\download\AITrader.exe
+echo   できました: public\download\MT5Automatic.exe
 echo   表示名: MT5 Automatic
 echo.
 echo   あとは、このファイルを commit して push すれば、サイトから配られます。
-echo     git add public/download/AITrader.exe
+echo     git add public/download/MT5Automatic.exe
 echo     git commit -m "exe を作り直す"
 echo     git push
 echo ================================================================

@@ -8,7 +8,7 @@ REM exe を先に使うと、作り直すまで直したものが反映されない。
 py -3 connect.py --choose --console
 if errorlevel 9009 (
   echo Python が無いので、作ってある exe で動かします
-  dist\AITrader.exe --choose
+  dist\MT5Automatic.exe --choose
 )
 echo.
 echo   選び直しました。この画面は閉じて構いません。

@@ -6,7 +6,7 @@
 |------|--------|-----|
 | 画面（React） | Vercel | https://kinyu-kenkyujo-dec-opt.vercel.app |
 | 中継（WebSocket） | Render | https://kinyu-relay.onrender.com |
-| ブリッジ + MT5 | お客様の Windows | `AITrader.exe`（自分の確認は `はじめる.bat`） |
+| ブリッジ + MT5 | お客様の Windows | `MT5Automatic.exe`（自分の確認は `はじめる.bat`） |
 
 ```
 ブラウザ ──wss──► Render（中継）◄──wss── bridge.py ──► MT5
@@ -75,7 +75,7 @@ vercel --prod
 
 | 使うもの | 設定ファイル |
 |---|---|
-| `AITrader.exe`（お客様に配るもの） | `%LOCALAPPDATA%\AITrader\bridge.env` |
+| `MT5Automatic.exe`（お客様に配るもの） | `%LOCALAPPDATA%\AITrader\bridge.env` |
 | `.py` / `.vbs`（開発機） | `bridge/.env` |
 
 中身（接続ツールが `MT5_PATH` を自動で書き込みます）:
@@ -84,11 +84,11 @@ vercel --prod
 TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
 ```
 
-お客様に渡すのは **1本だけ**（`tools\build-windows.bat` で作る `dist\AITrader.exe`）。
-開発機で試すときは `AITrader.vbs` でも同じ処理が動く。
+お客様に渡すのは **1本だけ**（`tools\build-windows.bat` で作る `dist\MT5Automatic.exe`）。
+開発機で試すときは `MT5Automatic.vbs` でも同じ処理が動く。
 
 1. MT5 を起動してログイン
-2. `AITrader.exe`（または `AITrader.vbs`）を**一度だけ**開く
+2. `MT5Automatic.exe`（または `MT5Automatic.vbs`）を**一度だけ**開く
    - 黒い画面は出ない。中では EA 配置 → ブリッジ起動まで進む（EA はコンパイル済みを配るので、お客様のPCではコンパイルしない）
    - あわせて `aitrader://` とスタートアップを登録するので、
      次回からは**サイトのボタン1つ**、PC再起動後は**自動**でつながる
@@ -103,13 +103,13 @@ TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
 渡すものは2つだけ。
 
 1. 本番サイトのURL（ログイン用アカウントも渡す）
-2. `AITrader.exe`（サイトの「接続ツールをダウンロード」ボタンで配る）
+2. `MT5Automatic.exe`（サイトの「接続ツールをダウンロード」ボタンで配る）
 
-Windows で `tools/build-windows.bat` を実行して `dist/AITrader.exe` ができたら、
-`public/download/AITrader.exe` に置いてコミットする（サイトの既定はこれ）。
+Windows で `tools/build-windows.bat` を実行して `dist/MT5Automatic.exe` ができたら、
+`public/download/MT5Automatic.exe` に置いてコミットする（サイトの既定はこれ）。
 `connect.py` や `bridge/` を変えたら作り直す。
-Python 版の ZIP は `bash tools/pack-connector.sh` で `public/download/AITrader.zip` にできる
-（`VITE_CONNECTOR_URL=/download/AITrader.zip` で差し替え）。
+Python 版の ZIP は `bash tools/pack-connector.sh` で `public/download/MT5Automatic.zip` にできる
+（`VITE_CONNECTOR_URL=/download/MT5Automatic.zip` で差し替え）。
 
 お客様側の手順:
 

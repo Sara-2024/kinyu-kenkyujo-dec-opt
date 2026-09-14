@@ -153,7 +153,7 @@ def _process_lines() -> list[str]:
 
 
 def bridge_processes() -> list[str]:
-    """裏で動いているブリッジ。exe 版は「AITrader.exe --run-bridge」で動く。"""
+    """裏で動いているブリッジ。exe 版は「MT5Automatic.exe --run-bridge」で動く。"""
     hits = []
     for line in _process_lines():
         low = line.lower()
@@ -210,7 +210,7 @@ def main() -> int:
         here = relay_state(my_room)
         row("自分の部屋につながっているか", here, "✓" if here == "いる" else "✕")
         if here != "いる":
-            print("      ※ AITrader.exe を開き直してください")
+            print("      ※ MT5Automatic.exe を開き直してください")
     # ② 既定の部屋に居座っていないか（未連携のまま繋いでいたら問題）
     default_room = relay_state("vps-01")
     row("既定の部屋 vps-01", default_room, "✕" if default_room == "いる" and not connected else "✓")

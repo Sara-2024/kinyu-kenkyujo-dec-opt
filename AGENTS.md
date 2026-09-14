@@ -119,7 +119,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   どちらか欠けていれば「切」のまま動かない（`/api/risk` は 503 を返す）。
   `risk_secret.py` はコミットしない。
   **ただし、この合言葉は配布物（exe）から取り出せる。** PyInstaller の同梱物を展開すれば
-  数分で復元できるので、`public/download/AITrader.exe` を公開している以上、
+  数分で復元できるので、`public/download/MT5Automatic.exe` を公開している以上、
   「誰でも取れる」前提で扱うこと。`api/_lib/risk.ts` の `RATE_LIMIT` は
   1インスタンスのメモリで数えているだけなので、サーバーレスでは悪用の歯止めにならない
   （事故で叩きすぎるのを止めるためのもの）。実際の歯止めは AI 提供元の予算上限で作る。
@@ -150,7 +150,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 
 ## MT5 Automatic（お客様に配る Windows アプリ）
 
-配るのは1つの exe（`AITrader.exe`／表示名は MT5 Automatic）。
+配るのは1つの exe（`MT5Automatic.exe`／表示名は MT5 Automatic）。
 中身は接続ツールとブリッジで、**状態で動きが変わる**。
 
 - **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。
@@ -168,7 +168,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   ログインのたびに画面が開いてしまう。
 - **古い自動起動の登録は片づける。** 古い版は「そのときの exe の置き場」を指したまま
   登録しているので、残っていると Windows が古い exe を起こし続ける。
-  インストーラーが入れるときに消し（`AITraderConnect.iss` の `[Registry]`）、
+  インストーラーが入れるときに消し（`MT5Automatic.iss` の `[Registry]`）、
   初回の設定でも残っていれば消す（`unregister_startup`）。
   連携が済めば、新しい版が自分の場所で登録し直す。
 - **初回は EA を置くだけ。** `setup_phase1()`。MT5 の検出はログインも起動も要らない
@@ -193,7 +193,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **画面に技術用語を出さない。** `bridge/installer_ui.py`。MQL5・Experts・
   ブリッジ・API・Python・Socket は書かない。失敗しても原因ではなく
   「次に何をすればいいか」だけを出す。ボタンは高さ 44px 以上。
-- **インストーラーは `tools/AITraderConnect.iss`**（Inno Setup 6）。
+- **インストーラーは `tools/MT5Automatic.iss`**（Inno Setup 6）。
   管理者権限を要求せず、`aitrader://` の登録とアンインストールまで面倒を見る。
 
 ### サイトとの連携（Phase 2）
@@ -240,7 +240,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **黒い画面（コンソール）を出さない。** お客様は「何か怖いものが動いた」と感じる。
   - 押すファイルは2つだけ。増やさない。
   - `はじめる.bat` … 自分が確認するとき（画面つき。初回の準備もここ）
-  - `AITrader.vbs` / `AITrader.exe` … お客様が使うもの（画面なし。表示名は MT5 Automatic）
+  - `MT5Automatic.vbs` / `MT5Automatic.exe` … お客様が使うもの（画面なし。表示名は MT5 Automatic）
   - 個別のスクリプトは `tools/` に置く。プロジェクト直下に増やさない。
   - `connect.py` から他のプログラムを呼ぶときは `run_hidden` / `spawn_hidden` を使う。
     直に `subprocess.Popen` を書かない（ウィンドウが出る）。
@@ -254,9 +254,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   （`TRUSTED_SITES`）。サイトのドメインを増やしたらここに足す。
   ブラウザは登録なしにPCのソフトを起動できないので、**初回だけツールを一度開いてもらう**
   導線は残しておく。配り方はサイトの「接続ツールをダウンロード」ボタン
-  （既定は `public/download/AITrader.exe`。Windows で `tools/build-windows.bat` を実行して
+  （既定は `public/download/MT5Automatic.exe`。Windows で `tools/build-windows.bat` を実行して
   できたものを置いて**コミットする**。Python 不要で、ユイの手順は「開くだけ」）。
-  Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/AITrader.zip`
+  Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/MT5Automatic.zip`
   で差し替えられる。`connect.py` や `bridge/` を変えたら exe を作り直して置き直すこと。
   メールで送る導線は廃止した。
 - **MT5 に送る EA は `bridge/YumekkuEA_win.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、

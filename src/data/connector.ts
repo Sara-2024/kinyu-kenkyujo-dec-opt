@@ -124,9 +124,9 @@ export function relaunchConnector(): void {
 
 // ────────────────────────────────
 // 接続ツールのダウンロード
-//   既定は public/download/AITrader.exe（Windows で tools/build-windows.bat を実行して
+//   既定は public/download/MT5Automatic.exe（Windows で tools/build-windows.bat を実行して
 //   できたもの。Python 不要で開くだけ）。Python 版の ZIP（tools/pack-connector.sh）も
-//   同じ場所にあり、VITE_CONNECTOR_URL=/download/AITrader.zip で差し替えられる。
+//   同じ場所にあり、VITE_CONNECTOR_URL=/download/MT5Automatic.zip で差し替えられる。
 //   .exe なら「開くだけ」、.zip なら「展開して はじめる.bat を開く」と案内が変わる。
 // ────────────────────────────────
 export type ConnectorKind = 'exe' | 'zip'
@@ -144,8 +144,8 @@ export interface ConnectorDownload {
 const SAVE_AS = 'MT5 Automatic.exe'
 
 export const CONNECTOR_DOWNLOAD: ConnectorDownload = (() => {
-  const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/AITrader.exe'
-  const filename = url.split('?')[0].split('/').pop() || 'AITrader.zip'
+  const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/MT5Automatic.exe'
+  const filename = url.split('?')[0].split('/').pop() || 'MT5Automatic.zip'
   const kind: ConnectorKind = /\.exe$/i.test(filename) ? 'exe' : 'zip'
   // ZIP を配るときは中身が違うので、名前もそのまま使う
   return { url, filename, saveAs: kind === 'exe' ? SAVE_AS : filename, kind }

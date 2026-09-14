@@ -4,7 +4,7 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_ANON_KEY: string
   readonly VITE_RELAY_URL: string
-  /** 接続ツールのダウンロード先（省略時は /download/AITrader.zip） */
+  /** 接続ツールのダウンロード先（省略時は /download/MT5Automatic.zip） */
   readonly VITE_CONNECTOR_URL?: string
 }
 

@@ -12,9 +12,9 @@
 
 サイトに口座パスワードは一切渡さない。
 
-  AITrader.exe をダブルクリック        … 初回は MT5 を探して EA を置くだけ（画面つき）
+  MT5Automatic.exe をダブルクリック        … 初回は MT5 を探して EA を置くだけ（画面つき）
                                          連携済みなら、これまでどおり裏でつなぎ直す
-  AITrader.vbs をダブルクリック       … 画面を出さずに全部やる
+  MT5Automatic.vbs をダブルクリック       … 画面を出さずに全部やる
   python connect.py --console          … 経過を画面に出す（調査用）
   python connect.py --setup            … 初回の設定（MT5を探して EA を置く。画面つき）
   python connect.py --install-ea       … システムの配置だけ
