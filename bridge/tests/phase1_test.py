@@ -88,12 +88,12 @@ def make_assets(version: str = "6.10", *, sha_ok: bool = True, ea_body: bytes = 
     import json
 
     assets = pathlib.Path(tempfile.mkdtemp(prefix="assets-", dir=WORK))
-    ea = assets / "OrbitGoldEA_v6.ex5"
+    ea = assets / "OrbitGoldEA_v11.ex5"
     ea.write_bytes(ea_body)
     (assets / "TradingGate.mqh").write_text("// 共通部品", encoding="utf-8")
     digest = hashlib.sha256(ea_body).hexdigest()
     (assets / "ea_manifest.json").write_text(
-        json.dumps({"ea": "OrbitGoldEA_v6", "file": ea.name, "version": version,
+        json.dumps({"ea": "OrbitGoldEA_v11", "file": ea.name, "version": version,
                     "sha256": digest if sha_ok else "0" * 64}),
         encoding="utf-8",
     )
@@ -116,7 +116,7 @@ check("配布物を読める", source is not None)
 if source is None:
     print("\n配布物が読めないので以降は省略")
     sys.exit(1)
-check("配るのはコンパイル済み", source.file_name == "OrbitGoldEA_v6.ex5", source.file_name)
+check("配るのはコンパイル済み", source.file_name == "OrbitGoldEA_v11.ex5", source.file_name)
 check("版は控えから読む", source.version == "6.10", source.version)
 check("SHA-256 が合っている", source.ok, source.broken)
 check("Include も同梱している", len(source.includes) == 1, str(source.includes))
@@ -127,7 +127,7 @@ bad = ea_manager.load_source(make_assets(sha_ok=False))
 check("中身が控えと違えば使わない", bad is not None and not bad.ok, str(bad.broken if bad else None))
 st_bad = ea_manager.install(xm, bad) if bad else None
 check("壊れた配布物は置かない", st_bad is not None and st_bad.state == ea_manager.ERROR)
-check("壊れていたら何も置かれない", not (xm / "MQL5" / "Experts" / "OrbitGoldEA_v6.ex5").is_file())
+check("壊れていたら何も置かれない", not (xm / "MQL5" / "Experts" / "OrbitGoldEA_v11.ex5").is_file())
 
 # ── 3) 置く前は「未設置」 ──
 st = ea_manager.status(hfm, source)
@@ -187,7 +187,7 @@ experts = hfm / "MQL5" / "Experts"
 removed = ea_manager.cleanup_old(experts, ("OrbitGoldEA_v5",))
 check("古い版を片づける", removed == ["OrbitGoldEA_v5.mq5"], str(removed))
 check("いまの EA は残る", (experts / source.file_name).is_file())
-ea_manager.cleanup_old(experts, ("OrbitGoldEA_v6",))
+ea_manager.cleanup_old(experts, ("OrbitGoldEA_v11",))
 check("取り違えても今の EA は消さない", (experts / source.file_name).is_file())
 
 # ── 8) 触っていない MT5 は未設置のまま（勝手に全部へ置かない） ──
@@ -236,7 +236,7 @@ if main is not None:
     check("引き継ぎも見ている", "adopt_legacy" in dumped)
 
 # ── 13) リポジトリに置いてある本物の配布物（あれば）を確かめる ──
-real_ea = BRIDGE / "OrbitGoldEA_v6.ex5"
+real_ea = BRIDGE / "OrbitGoldEA_v11.ex5"
 real_manifest = BRIDGE / "ea_manifest.json"
 if real_ea.is_file() and real_manifest.is_file():
     real = ea_manager.load_source(BRIDGE)

@@ -49,9 +49,9 @@ if exist bridge\risk_secret.py (
 echo.
 echo [2/3] exe を作っています（数分かかります）...
 REM 出荷する EA はコンパイル済みだけ
-if not exist bridge\OrbitGoldEA_v6.ex5 (
-  echo [ERROR] bridge\OrbitGoldEA_v6.ex5 がありません。
-  echo         MetaEditor で bridge\OrbitGoldEA_v6.mq5 を F7 でコンパイルし、
+if not exist bridge\OrbitGoldEA_v11.ex5 (
+  echo [ERROR] bridge\OrbitGoldEA_v11.ex5 がありません。
+  echo         MetaEditor で bridge\OrbitGoldEA_v11.mq5 を F7 でコンパイルし、
   echo         できた .ex5 を bridge\ に置いてから実行してください。
   pause
   exit /b 1
@@ -75,7 +75,7 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --add-data "bridge\risk_gate.py;bridge" ^
   --add-data "bridge\risk_features.py;bridge" ^
   --paths bridge ^
-  --add-data "bridge\OrbitGoldEA_v6.ex5;bridge" ^
+  --add-data "bridge\OrbitGoldEA_v11.ex5;bridge" ^
   --add-data "bridge\ea_manifest.json;bridge" ^
   --add-data "bridge\TradingGate.mqh;bridge" ^
   --hidden-import bridge ^

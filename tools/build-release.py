@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "bridge"
-EA_NAME = "OrbitGoldEA_v6"
+EA_NAME = "OrbitGoldEA_v11"
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 
 STEP = 0
