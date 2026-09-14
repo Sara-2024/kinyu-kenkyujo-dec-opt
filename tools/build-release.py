@@ -274,7 +274,7 @@ def build_exe() -> Path:
     if not bat.is_file():
         die(f"{bat} がありません")
     print("  … ビルド中（数分かかります）")
-    result = subprocess.run([str(bat)], cwd=str(ROOT), shell=True)
+    result = subprocess.run([str(bat), "--from-release"], cwd=str(ROOT), shell=True)
     exe = ROOT / "dist" / "AITrader.exe"
     if result.returncode != 0 or not exe.is_file():
         die("接続ツールを作れませんでした", "上に出ている PyInstaller の記録を見てください。")

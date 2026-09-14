@@ -126,6 +126,10 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM 3_リリースする.bat から呼ばれたときは、ここで止まらない。
+REM （途中で「キーを押してください」と出ると、終わったように見えてしまう）
+if "%~1"=="--from-release" exit /b 0
+
 echo.
 echo ================================================================
 echo   できました: public\download\AITrader.exe
