@@ -1503,6 +1503,19 @@ def connect_all(room: str = "", show: bool = False) -> int:
     return 0
 
 
+def show_failure(message: str, hint: str = "") -> int:
+    """画面を出して「次に何をすればいいか」だけ伝え、1 を返す。
+
+    画面を出せない環境（tkinter が無いなど）では、記録に残すだけで済ませる。
+    """
+    ui = installer_ui.open_window()
+    if ui:
+        ui.fail(message, hint)
+    else:
+        log(f"{message} {hint}".strip())
+    return 1
+
+
 def relay_sees_us(tries: int = 10) -> bool | None:
     """サイトから、この PC のブリッジが見えているか。
 
@@ -1597,8 +1610,12 @@ def main() -> int:
         banner("サイトとの連携")
         room = redeem_connect_token(connect_token)
         if not room:
+            # ここで黙って終わると、サイトのボタンを押しても何も起きないように見える
             log("連携できませんでした。サイトでもう一度お試しください")
-            return 1
+            return show_failure(
+                "サイトとつなげませんでした。",
+                "サイトの画面に戻って、もう一度「初期設定をはじめる」を押してください。",
+            )
 
     # すでにサイトと連携して使っている PC を引き継ぐ（state.json がまだ無い場合）
     if connect_state.adopt_legacy(env_value("BRIDGE_ID")):
@@ -1621,10 +1638,10 @@ def main() -> int:
             input("  続けるには Enter を押してください...")
         return code
 
-    # 手で開いたときだけ結果を画面に出す。
-    # サイトからの起動（合図）と自動起動では、これまでどおり黙って動く。
-    by_hand = "--startup" not in args and not connect_token and not CONSOLE
-    code = connect_all(room, show=by_hand)
+    # 黙って動いてよいのは自動起動のときだけ。
+    # それ以外（手で開く・サイトのボタン）は、必ず結果を画面に出す。
+    # 何も出ないと、お客様には「開かない・壊れた」としか見えない。
+    code = connect_all(room, show="--startup" not in args and not CONSOLE)
     if CONSOLE:
         print()
         input("  続けるには Enter を押してください...")
