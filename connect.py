@@ -1187,6 +1187,7 @@ def setup_phase1() -> int:
     # ついでに、金の銘柄を気配値に出しておく（そのままチャートに出せる）
     shown = gold_symbol.show_in_market_watch(target.exe, log=log)
     running = gold_symbol.mt5_is_running()
+    restarted = False
 
     # MT5 を開いたまま置いても、一覧にはすぐ出てこない。開き直すと確実に出る
     if running and ui:
@@ -1202,25 +1203,69 @@ def setup_phase1() -> int:
         ):
             restart_mt5(target)
             running = False
-
-    notes: list[str] = []
-    if before.state == ea_manager.NOT_INSTALLED:
-        notes.append("AI Trader をMT5に追加しました。")
-    elif before.state == ea_manager.UPDATE_AVAILABLE:
-        notes.append("AI Trader を新しい内容に更新しました。")
-    else:
-        notes.append("AI Trader はすでに最新でした。")
-    if shown:
-        notes.append(f"{shown} を気配値表示に出しました。")
-    if running:
-        # MT5 は開いたまま置いても、ナビゲーターにすぐ出てこない
-        notes.append("MT5を一度閉じて開き直すと、一覧に出てきます。")
-    notes.append("このアプリは閉じていただいて構いません。")
+            restarted = True
 
     if ui:
-        ui.finish(notes, ok=True)
+        guide_after_install(
+            ui,
+            placed=before.state,
+            shown=shown,
+            needs_restart=running and not restarted,
+        )
     log("初回の設定が終わりました（サイトとは接続していません）")
     return 0
+
+
+# MT5 でお願いする操作。ここだけは外から自動化できない
+# （チャートを開くことも、時間足を変えることも、MT5 は外部に開いていない）
+CHART_STEPS = (
+    "1. MT5の左側にある「ナビゲーター」を開きます。",
+    "2. AI Trader を、ゴールドの1分足チャートにドラッグします。",
+    "3. 画面の上にある「アルゴ取引」のボタンを押して、緑色にします。",
+)
+
+
+def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool) -> None:
+    """設置が済んだあとの案内。
+
+    「すでに入っています」で終わると、お客様はそこで止まってしまう。
+    置いただけでは何も動かない（チャートに載せて初めて動く）ので、
+    いまどこまで進んだかを見せて、次の一手だけを出す。
+
+    済んだかどうかは EA 自身が書く控えで分かるので、「できたので確かめる」を
+    押してもらえば、その場で見て次へ進める。
+    """
+    if placed == ea_manager.NOT_INSTALLED:
+        head = "AI Trader をMT5に追加しました。"
+    elif placed == ea_manager.UPDATE_AVAILABLE:
+        head = "AI Trader を新しい内容に更新しました。"
+    else:
+        head = "AI Trader はすでに入っています。"
+
+    while ui.alive():
+        beat = ea_manager.heartbeat()
+        log(f"EA の動き: {beat}")
+        if beat["fresh"]:
+            lines = [head]
+            where = beat["symbol"] or "チャート"
+            lines.append(f"{where} で動いています。準備ができました。")
+            lines.append("このアプリは閉じていただいて構いません。")
+            ui.finish(lines, ok=True)
+            return
+
+        lines = [head, ""]
+        lines.extend(CHART_STEPS)
+        lines.append("")
+        if shown:
+            lines.append(f"（{shown} は、すぐ出せるように気配値表示に出してあります）")
+        if needs_restart:
+            lines.append("（一覧に出てこないときは、MT5を一度閉じて開き直してください）")
+        if beat["seen"] and not beat["fresh"]:
+            lines.append("（前は動いていましたが、いまは止まっています）")
+
+        if not ui.ask("あと1つだけ、MT5での操作をお願いします。", "できたので確かめる", "あとでやる", lines):
+            log("チャートへの設置は、あとで行うことになりました")
+            return
 
 
 def mt5_pids(exe: Path | None) -> list[int]:

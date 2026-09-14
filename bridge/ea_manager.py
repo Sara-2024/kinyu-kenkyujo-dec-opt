@@ -36,6 +36,7 @@ import hashlib
 import json
 import os
 import shutil
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -460,3 +461,57 @@ def stale_source_exists(data_path: Path) -> bool:
 def needs_compile() -> bool:
     """お客様の PC でコンパイルが要るか。コンパイル済みを配るので常に False。"""
     return EA_SOURCE_SUFFIX == ".mq5"
+
+
+# ────────────────────────────────────────────────
+# EA がチャートで動いているか
+#   TradingGate を積んだ EA は、チャートに載っているあいだ、この控えを
+#   書き直し続ける。ファイルの新しさを見るだけで「載っているか」が分かる
+#   （MT5 を外から覗く手立ては無いので、これが唯一の確かめ方）。
+#   置き場は Terminal/Common/Files。MT5 が何台あっても1か所に集まる。
+# ────────────────────────────────────────────────
+HEARTBEAT_FILE = "trelab_state.ini"
+# EA は1秒ごとに書く。MT5 が忙しいときのために、少し余裕をみる
+HEARTBEAT_FRESH_SEC = 90
+
+
+def heartbeat_path() -> Path:
+    base = os.environ.get("APPDATA") or os.environ.get("TMPDIR") or "/tmp"
+    return Path(base) / "MetaQuotes" / "Terminal" / "Common" / "Files" / HEARTBEAT_FILE
+
+
+def heartbeat(fresh_sec: int = HEARTBEAT_FRESH_SEC) -> dict[str, Any]:
+    """EA がいまチャートで動いているか。
+
+    seen   … 控えがあるか（一度でも動いたか）
+    fresh  … いま動いているか
+    ea     … 動いている EA の名前
+    symbol … 載っているチャートの銘柄
+    """
+    info: dict[str, Any] = {"seen": False, "fresh": False, "age": None, "ea": "", "symbol": ""}
+    path = heartbeat_path()
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        return info
+    info["seen"] = True
+    info["age"] = int(age)
+    info["fresh"] = age < fresh_sec
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return info
+    # MQL5 の書き出しは環境によって文字コードが変わる。読めるもので読む
+    for encoding in ("utf-8", "utf-16", "cp932"):
+        try:
+            text = raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+        if "state=" not in text:
+            continue
+        for line in text.splitlines():
+            key, _, value = line.partition("=")
+            if key.strip() in ("ea", "symbol"):
+                info[key.strip()] = value.strip()
+        break
+    return info

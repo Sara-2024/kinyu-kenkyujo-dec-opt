@@ -364,6 +364,98 @@ else:
     print("  --   コンパイル済みの EA はまだ置かれていません")
     print("       Windows で MetaEditor コンパイル → py -3 tools/make-ea-manifest.py")
 
+
+# ── 14) EA がチャートで動いているか（設置のあとの案内に使う）──
+import os as _os
+import time as _time
+
+beat = ea_manager.heartbeat()
+check("控えが無ければ「動いていない」", beat["seen"] is False and beat["fresh"] is False, str(beat))
+
+common = pathlib.Path(_os.environ["APPDATA"]) / "MetaQuotes" / "Terminal" / "Common" / "Files"
+common.mkdir(parents=True, exist_ok=True)
+state_ini = common / ea_manager.HEARTBEAT_FILE
+state_ini.write_text("ea=YumekkuEA_v11\nstate=1\nsymbol=XAUUSD\n", encoding="utf-8")
+
+beat = ea_manager.heartbeat()
+check("いま書かれていれば「動いている」", beat["fresh"] is True, str(beat))
+check("載っている銘柄が読める", beat["symbol"] == "XAUUSD", str(beat))
+check("EA の名前が読める", beat["ea"] == "YumekkuEA_v11", str(beat))
+
+# 古い控え（チャートから外された・MT5 が止まった）
+old_time = _time.time() - 600
+_os.utime(state_ini, (old_time, old_time))
+beat = ea_manager.heartbeat()
+check("古ければ「止まっている」", beat["seen"] is True and beat["fresh"] is False, str(beat))
+
+# MQL5 の書き出しは環境によって文字コードが変わる
+state_ini.write_bytes("ea=YumekkuEA_v11\nstate=1\nsymbol=GOLD\n".encode("utf-16"))
+beat = ea_manager.heartbeat()
+check("別の文字コードでも読める", beat["symbol"] == "GOLD", str(beat))
+
+# ── 15) 設置のあとの案内（「もう入っています」で終わらせない）──
+import connect  # noqa: E402
+
+
+class FakeUI:
+    """画面のかわり。押されたボタンと、出た文字を覚えるだけ。"""
+
+    def __init__(self, answers):
+        self.answers = list(answers)
+        self.asked = []
+        self.finished = None
+
+    def alive(self):
+        return True
+
+    def ask(self, question, yes, no, lines=()):
+        self.asked.append((question, list(lines)))
+        return self.answers.pop(0) if self.answers else False
+
+    def finish(self, lines, ok=True):
+        self.finished = list(lines)
+
+
+# 動いていれば、案内を出さずに終わる
+ui = FakeUI([])
+connect.guide_after_install(ui, placed=ea_manager.LATEST, shown="GOLD", needs_restart=False)
+check("動いていれば操作をお願いしない", ui.asked == [], str(ui.asked))
+check("動いていれば終わりの画面を出す", ui.finished is not None)
+check("どこで動いているか言う", any("GOLD" in l for l in (ui.finished or [])), str(ui.finished))
+
+# 止まっていれば、次の一手を出す
+old_time = _time.time() - 600
+_os.utime(state_ini, (old_time, old_time))
+ui = FakeUI([False])
+connect.guide_after_install(ui, placed=ea_manager.LATEST, shown="GOLD", needs_restart=True)
+check("止まっていれば操作をお願いする", len(ui.asked) == 1, str(ui.asked))
+steps = "\n".join(ui.asked[0][1]) if ui.asked else ""
+check("ナビゲーターの案内が出る", "ナビゲーター" in steps, steps)
+check("1分足と書いてある", "1分足" in steps, steps)
+check("アルゴ取引のボタンを案内する", "アルゴ取引" in steps, steps)
+check("開き直しの案内が出る", "開き直" in steps, steps)
+for word in ("MQL5", "Experts", "ブリッジ", "API", "Python", "token", "SHA"):
+    check(f"専門用語を出さない: {word}", word not in steps, steps)
+
+# 「できたので確かめる」を押したら、その場でもう一度見る
+pressed = {"n": 0}
+real_heartbeat = ea_manager.heartbeat
+
+
+def fake_heartbeat(fresh_sec=ea_manager.HEARTBEAT_FRESH_SEC):
+    pressed["n"] += 1
+    if pressed["n"] == 1:
+        return {"seen": True, "fresh": False, "age": 600, "ea": "", "symbol": ""}
+    return {"seen": True, "fresh": True, "age": 1, "ea": "YumekkuEA_v11", "symbol": "XAUUSD"}
+
+
+ea_manager.heartbeat = fake_heartbeat
+ui = FakeUI([True])
+connect.guide_after_install(ui, placed=ea_manager.LATEST, shown="", needs_restart=False)
+ea_manager.heartbeat = real_heartbeat
+check("押したらもう一度確かめる", pressed["n"] == 2, str(pressed))
+check("できていれば先へ進む", ui.finished is not None and any("XAUUSD" in l for l in ui.finished), str(ui.finished))
+
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)
