@@ -241,16 +241,19 @@ def make_manifest(ex5: Path) -> dict:
             try:
                 raw = json.loads(old.read_text(encoding="utf-8"))
                 if str(raw.get("sha256", "")).lower() == digest:
-                    version = str(raw.get("version") or "")
+                    got = str(raw.get("version") or "").strip()
+                    # 「0」は前に版を聞かれて素通りしたときの印。使わない
+                    if got and got != "0":
+                        version = got
             except (OSError, ValueError):
                 pass
 
     # ③ それでも分からなければ聞く
     if not version:
-        print("  EA の版が分かりません（ソースが無く、控えとも中身が違います）")
+        print("  EA の版が分かりません（ソースが無く、控えにも入っていません）")
         version = input("  版を入れてください（例 11.00）: ").strip()
-        if not version:
-            die("版が入っていません", "  もう一度実行して、版を入れてください。")
+        if not version or version == "0":
+            die("版が入っていません", "  もう一度実行して、版（例 11.00）を入れてください。")
     manifest = {
         "ea": EA_NAME,
         "file": ex5.name,
@@ -309,12 +312,44 @@ def build_exe() -> Path:
 # 4. インストーラー
 # ────────────────────────────────
 def find_iscc() -> Path | None:
-    for key in ("PROGRAMFILES(X86)", "PROGRAMFILES"):
-        root = Path(os.environ.get(key, ""))
-        for name in ("Inno Setup 6", "Inno Setup 5"):
-            candidate = root / name / "ISCC.exe"
+    """Inno Setup のコンパイラ（ISCC.exe）を探す。
+
+    winget で入れると、置き場が Program Files とは限らない。
+    決まった場所 → PATH → レジストリ（アンインストール情報）の順に見る。
+    """
+    # 決まった置き場
+    bases = [os.environ.get(k, "") for k in ("PROGRAMFILES(X86)", "PROGRAMFILES", "LOCALAPPDATA")]
+    for base in [b for b in bases if b]:
+        for name in ("Inno Setup 6", "Inno Setup 5", r"Programs\Inno Setup 6"):
+            candidate = Path(base) / name / "ISCC.exe"
             if candidate.is_file():
                 return candidate
+
+    # PATH に通っていれば
+    found = shutil.which("ISCC") or shutil.which("iscc")
+    if found:
+        return Path(found)
+
+    # レジストリの「どこに入れたか」を見る
+    if os.name == "nt":
+        try:
+            import winreg
+
+            for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+                for sub_key in (
+                    r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+                    r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+                ):
+                    try:
+                        with winreg.OpenKey(root, sub_key) as key:
+                            where, _ = winreg.QueryValueEx(key, "InstallLocation")
+                            candidate = Path(str(where)) / "ISCC.exe"
+                            if candidate.is_file():
+                                return candidate
+                    except OSError:
+                        continue
+        except ImportError:
+            pass
     return None
 
 
