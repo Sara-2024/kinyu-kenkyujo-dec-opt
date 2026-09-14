@@ -23,6 +23,7 @@ TESTS=(
   "指令ファイルが消えたときの書き戻し|python3 bridge/tests/settings_restore_test.py"
   "接続ツールが受け取る部屋の検査|python3 bridge/tests/connector_room_test.py"
   "口座履歴の取りこぼし（ドテン・長期保有・時計のズレ）|python3 bridge/tests/history_test.py"
+  "配る EA にサイト連携が入っているか|python3 bridge/tests/ea_gate_test.py"
   "MT5の検出・EAの状態判定・連携状態|python3 bridge/tests/phase1_test.py"
   "初回の設定が通信しないこと（通し試験）|python3 bridge/tests/phase1_offline_test.py"
   "初回の設定画面（専門用語・文字の大きさ）|python3 bridge/tests/installer_ui_test.py"
