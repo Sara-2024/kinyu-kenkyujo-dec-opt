@@ -92,16 +92,28 @@ def _session_from_initialize(terminal_exe: Path | None) -> dict[str, Any] | None
     }
 
 
-def find_logged_in_terminal() -> dict[str, Any] | None:
+def find_logged_in_terminal(prefer_data_path: str | Path | None = None) -> dict[str, Any] | None:
     """
     ログイン済みの MT5 を探す。
     複数ターミナルがあるとき、path 未指定の initialize だけだと別口座に繋がることがある。
+
+    prefer_data_path に「初回に選んだ MT5」を渡すと、そこから先に試す。
+    これが無いと、MT5 が何台もあるお客様の PC で、思っていないほうに
+    EA が入ってしまう（どれに入ったのかも分からない）。
     """
     if mt5 is None:
         return None
 
     tried: set[str] = set()
-    candidates: list[Path | None] = [None]
+    candidates: list[Path | None] = []
+
+    # 初回に選んだ MT5 を最優先にする
+    if prefer_data_path:
+        origin = terminal_dir_from_data_path(prefer_data_path)
+        if origin is not None and (origin / "terminal64.exe").is_file():
+            candidates.append(origin / "terminal64.exe")
+
+    candidates.append(None)  # 指定なし（いま前面にある MT5）
 
     for data_dir in iter_terminal_data_dirs():
         origin = terminal_dir_from_data_path(data_dir)

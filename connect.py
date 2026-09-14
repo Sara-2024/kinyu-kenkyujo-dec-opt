@@ -1288,9 +1288,15 @@ def connect_all(room: str = "") -> int:
     register_protocol()
     register_startup()
 
-    session = find_logged_in_terminal()
+    # 初回に選んだ MT5 を覚えていれば、そこを優先する。
+    # 覚えていなければ、これまでどおり「いまログイン中の MT5」を使う。
+    chosen = str(connect_state.read().get("terminal") or "")
+    session = find_logged_in_terminal(chosen or None)
     if session:
-        log("すでにログイン中の MT5 を使います")
+        if chosen and str(session.get("data_path", "")).rstrip("\\/") == chosen.rstrip("\\/"):
+            log("初回に選んだ MT5 を使います")
+        else:
+            log("すでにログイン中の MT5 を使います")
     else:
         exe = find_mt5_exe() or ensure_mt5()
         if exe is None:
@@ -1307,6 +1313,10 @@ def connect_all(room: str = "") -> int:
         log(str(exc))
         return 1
     write_bridge_env(session)
+    # 使った MT5 を覚える。次からはここが優先され、別の MT5 に入らない
+    used = str(session.get("data_path") or "")
+    if used:
+        connect_state.write(connect_state.current(), terminal=used)
 
     url = relay_url()
     if relay_is_local(url) and not relay_is_up():

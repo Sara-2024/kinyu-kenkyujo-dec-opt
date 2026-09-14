@@ -173,6 +173,17 @@ check("サイトは会員IDを URL に載せない", "member?.id" not in connect
 dialogue = (ROOT / "src" / "components" / "DialogueWindow.tsx").read_text(encoding="utf-8")
 check("画面も会員IDを渡していない", "launchConnector(member?.id)" not in dialogue)
 
+# ── 7-2) 使う MT5 を固定できるか（複数あるPCで、別の MT5 に入らないこと）──
+import inspect  # noqa: E402
+
+import mt5_terminal  # noqa: E402
+
+sig = inspect.signature(mt5_terminal.find_logged_in_terminal)
+check("MT5 を指定して探せる", "prefer_data_path" in sig.parameters)
+src_connect = (ROOT / "connect.py").read_text(encoding="utf-8")
+check("覚えている MT5 を優先して渡している", 'find_logged_in_terminal(chosen or None)' in src_connect)
+check("使った MT5 を覚える", 'terminal=used' in src_connect)
+
 # ── 8) DB の追加分（migration）と schema.sql がずれていないか ──
 mig_path = ROOT / "supabase" / "migrations" / "20260912_add_connect_tokens.sql"
 schema_path = ROOT / "supabase" / "schema.sql"
