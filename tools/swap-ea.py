@@ -5,10 +5,10 @@
 
 やること:
   1. 入れ替える .ex5 を選ぶ（ドラッグしていればそれを使う）
-  2. bridge\\OrbitGoldEA_v11.ex5 に置く
+  2. bridge\\3YumekkuEA_win.ex5 に置く
   3. 控え（ea_manifest.json）を作り直す
 
-名前は OrbitGoldEA_v11.ex5 に揃える。選んだファイルの名前が違っていても構わない。
+名前は 3YumekkuEA_win.ex5 に揃える。選んだファイルの名前が違っていても構わない。
 入れ替えたら 3_リリースする.bat を押す。
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "bridge"
-EA_NAME = "OrbitGoldEA_v11"
+EA_NAME = "3YumekkuEA_win"
 TARGET = BRIDGE / f"{EA_NAME}.ex5"
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 

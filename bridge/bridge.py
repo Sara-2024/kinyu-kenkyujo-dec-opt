@@ -75,7 +75,7 @@ except ImportError:  # pragma: no cover - Windows以外では import できな�
 try:
     from mt5_terminal import EA_NAMES, find_logged_in_terminal, resolve_terminal_exe
 except ImportError:
-    EA_NAMES = ("OrbitGoldEA_v11",)
+    EA_NAMES = ("3YumekkuEA_win",)
     find_logged_in_terminal = None  # type: ignore[assignment,misc]
     resolve_terminal_exe = None  # type: ignore[assignment,misc]
 

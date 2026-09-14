@@ -28,7 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "bridge"
-EA_NAME = "OrbitGoldEA_v11"
+EA_NAME = "3YumekkuEA_win"
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 
 STEP = 0
@@ -249,7 +249,7 @@ def make_manifest(ex5: Path) -> dict:
                 pass
 
     # ③ それでも分からなければ聞く
-    # ③ 最後は EA の名前から起こす（OrbitGoldEA_v11 → 11）。
+    # ③ 最後は EA の名前から起こす（3YumekkuEA_win → 11）。
     #    版はサイトに出す札でしかないので、ここで止めない。
     if not version:
         found = re.search(r"_v(\d+)$", EA_NAME)

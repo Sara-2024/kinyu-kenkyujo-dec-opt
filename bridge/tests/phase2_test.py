@@ -218,10 +218,10 @@ install_dir.mkdir(parents=True, exist_ok=True)
 assets = pathlib.Path(WORK) / "assets"
 assets.mkdir(exist_ok=True)
 BODY = b"EX5-FOR-PHASE2"
-(assets / "OrbitGoldEA_v11.ex5").write_bytes(BODY)
+(assets / "3YumekkuEA_win.ex5").write_bytes(BODY)
 (assets / "TradingGate.mqh").write_text("// 共通部品", encoding="utf-8")
 (assets / "ea_manifest.json").write_text(
-    json.dumps({"ea": "OrbitGoldEA_v11", "file": "OrbitGoldEA_v11.ex5", "version": "6.10",
+    json.dumps({"ea": "3YumekkuEA_win", "file": "3YumekkuEA_win.ex5", "version": "6.10",
                 "sha256": hashlib.sha256(BODY).hexdigest()}), encoding="utf-8")
 connect.BRIDGE_DIR = assets
 connect.installer_ui.open_window = lambda: None
@@ -253,7 +253,7 @@ check("room= を渡しても失敗にはしない（EA は置く）", code == 0,
 check("room= では CONNECTED にならない", not connect_state.is_connected(), connect_state.current())
 check("room= では連携の処理に進まない", calls == [], str(calls))
 check("room= ではブリッジも通信も起きない", True)  # boom が呼ばれたらここまで来ない
-check("room= でも EA は置かれる", (mt5_dir / "MQL5" / "Experts" / "OrbitGoldEA_v11.ex5").is_file())
+check("room= でも EA は置かれる", (mt5_dir / "MQL5" / "Experts" / "3YumekkuEA_win.ex5").is_file())
 
 # (B) 会員IDを知っていても、部屋を名乗るだけでは連携できない
 calls.clear()

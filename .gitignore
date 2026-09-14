@@ -17,7 +17,7 @@ __pycache__/
 bridge/.env
 bridge/risk_secret.py
 # 配る EA のソース。コンパイルに使うだけで、配らないし入れない
-bridge/OrbitGoldEA_v11.mq5
+bridge/3YumekkuEA_win.mq5
 # EA の控え。ビルドのたびに作り直すので、git では持たない
 # （持つと、取り込みのたびにぶつかる）
 bridge/ea_manifest.json

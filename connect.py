@@ -74,7 +74,7 @@ EA_NAME = EA_NAMES[0]
 EA_FILES = (f"{EA_NAME}{ea_manager.EA_SOURCE_SUFFIX}",)
 # 以前に配っていたもの。1つに絞ったので、見つけたら片づける。
 # 残っていると同じ指令ファイルを二重に読み書きして紛らわしい。
-OLD_EA_NAMES = ("TrelabEA", "TrelabGate", "SiteTestEA", "OrbitGoldEA_v5", "OrbitGoldEA_v6")
+OLD_EA_NAMES = ("TrelabEA", "TrelabGate", "SiteTestEA", "OrbitGoldEA_v5", "OrbitGoldEA_v6", "OrbitGoldEA_v11")
 INCLUDE_FILES = ("TradingGate.mqh",)
 
 PRODUCT_NAME = "AIトレーダー"

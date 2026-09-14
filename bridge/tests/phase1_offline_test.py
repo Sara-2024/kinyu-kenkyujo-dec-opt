@@ -52,10 +52,10 @@ import hashlib, json  # noqa: E402
 ASSETS = pathlib.Path(WORK) / "assets"
 ASSETS.mkdir(parents=True, exist_ok=True)
 BODY = b"EX5-BODY-for-test"
-(ASSETS / "OrbitGoldEA_v11.ex5").write_bytes(BODY)
+(ASSETS / "3YumekkuEA_win.ex5").write_bytes(BODY)
 (ASSETS / "TradingGate.mqh").write_text("// 共通部品", encoding="utf-8")
 (ASSETS / "ea_manifest.json").write_text(json.dumps({
-    "ea": "OrbitGoldEA_v11", "file": "OrbitGoldEA_v11.ex5", "version": "6.10",
+    "ea": "3YumekkuEA_win", "file": "3YumekkuEA_win.ex5", "version": "6.10",
     "sha256": hashlib.sha256(BODY).hexdigest()}), encoding="utf-8")
 REAL_ASSETS = connect.BRIDGE_DIR
 connect.BRIDGE_DIR = ASSETS
@@ -77,12 +77,12 @@ check("初回の設定が成功で終わる", code == 0, f"code={code}")
 check("古い自動起動の登録を片づける", removed == ["まだ連携していない"], str(removed))
 connect.startup_command = lambda: ""
 
-ea = hfm / "MQL5" / "Experts" / "OrbitGoldEA_v11.ex5"
+ea = hfm / "MQL5" / "Experts" / "3YumekkuEA_win.ex5"
 inc = hfm / "MQL5" / "Include" / "TradingGate.mqh"
 check("コンパイル済みの EA が置かれた", ea.is_file())
 check("Include が置かれた", inc.is_file())
 check("EA の中身が配布物と同じ", ea.read_bytes() == BODY)
-check("ソース(.mq5)は置かない", not (hfm / "MQL5" / "Experts" / "OrbitGoldEA_v11.mq5").is_file())
+check("ソース(.mq5)は置かない", not (hfm / "MQL5" / "Experts" / "3YumekkuEA_win.mq5").is_file())
 
 import connect_state
 check("状態は INSTALL_ONLY", connect_state.current() == "INSTALL_ONLY", connect_state.current())

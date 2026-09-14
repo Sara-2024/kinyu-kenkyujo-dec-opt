@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """配る EA（コンパイル済み .ex5）の控えを作る。
 
-Windows で MetaEditor を使って OrbitGoldEA_v11.mq5 をコンパイルしたあと、
+Windows で MetaEditor を使って 3YumekkuEA_win.mq5 をコンパイルしたあと、
 できた .ex5 を bridge/ に置いてから、これを一度実行する。
 
     py -3 tools\\make-ea-manifest.py
 
 やること:
-  1. bridge/OrbitGoldEA_v11.ex5 の SHA-256 を取る
-  2. bridge/OrbitGoldEA_v11.mq5 から版（#property version）を読む
+  1. bridge/3YumekkuEA_win.ex5 の SHA-256 を取る
+  2. bridge/3YumekkuEA_win.mq5 から版（#property version）を読む
   3. bridge/ea_manifest.json に書く
 
 この manifest は exe に同梱され、お客様の PC で
@@ -31,7 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BRIDGE = ROOT / "bridge"
-EA_NAME = "OrbitGoldEA_v11"
+EA_NAME = "3YumekkuEA_win"
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 
 
@@ -41,7 +41,7 @@ def main() -> int:
 
     if not ex5.is_file():
         print(f"[ERROR] {ex5} がありません。")
-        print("        MT5 の MetaEditor で bridge\\OrbitGoldEA_v11.mq5 を開き、")
+        print("        MT5 の MetaEditor で bridge\\3YumekkuEA_win.mq5 を開き、")
         print("        F7（コンパイル）を押してできた .ex5 を bridge\\ に置いてください。")
         return 1
 
@@ -53,7 +53,7 @@ def main() -> int:
         if found:
             version = found.group(1)
     if not version:
-        print("[WARN] 版が読めませんでした（bridge/OrbitGoldEA_v11.mq5 が無い）。")
+        print("[WARN] 版が読めませんでした（bridge/3YumekkuEA_win.mq5 が無い）。")
         version = input("      版を手で入力してください（例 6.10）: ").strip() or "0"
 
     manifest = {
