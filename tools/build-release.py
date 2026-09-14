@@ -295,13 +295,33 @@ def find_iscc() -> Path | None:
     return None
 
 
+def install_iscc() -> Path | None:
+    """Inno Setup を winget で入れる。英語の画面は出ない。"""
+    print("  … Inno Setup を入れています（数分かかります）")
+    cmd = [
+        "winget", "install", "JRSoftware.InnoSetup", "-e",
+        "--accept-package-agreements", "--accept-source-agreements",
+    ]
+    try:
+        subprocess.run(cmd, timeout=900, shell=True)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"  － 入れられませんでした（{exc}）")
+        return None
+    return find_iscc()
+
+
 def build_installer() -> Path | None:
     iscc = find_iscc()
     iss = ROOT / "tools" / "AITraderConnect.iss"
     if iscc is None:
-        print("  － Inno Setup が入っていないので飛ばします")
-        print("     https://jrsoftware.org/isdl.php から入れると、次からここも自動になります")
-        return None
+        print("  － Inno Setup が入っていません（お客様に渡すインストーラーを作る道具）")
+        answer = input("     いま入れますか？ (Y/n): ").strip().lower()
+        if answer in ("", "y", "yes"):
+            iscc = install_iscc()
+        if iscc is None:
+            print("  － 飛ばします。手で入れるときは:")
+            print("       winget install JRSoftware.InnoSetup -e --accept-package-agreements --accept-source-agreements")
+            return None
     print(f"  … {iscc.name} で作成中")
     result = subprocess.run([str(iscc), str(iss)], cwd=str(ROOT / "tools"), capture_output=True, text=True)
     out = ROOT / "tools" / "installer" / "AITraderConnect-Setup.exe"
