@@ -519,6 +519,29 @@ ea_manager.install(xm, newer_src, force=True)
 check("設置しなおすと置き直す", target_ea.stat().st_mtime != before_mtime - 500)
 check("置き直しても中身は同じ", ea_manager.sha256_of(target_ea) == newer_src.sha256)
 
+
+# ── 17) 窓を作れなかったときでも、黙って終わらない ──
+#    tkinter を積み忘れた exe を作ってしまうと、お客様には
+#    「ダブルクリックしても何も起きない」としか見えない。
+import installer_ui  # noqa: E402
+
+shown_boxes = []
+real_box = installer_ui.message_box
+installer_ui.message_box = lambda text, title=installer_ui.APP_NAME: (shown_boxes.append(text), True)[1]
+
+connect.tell(None, "MT5が見つかりませんでした。", "MT5を開いてから、もう一度お試しください。")
+check("窓が無くても知らせる", len(shown_boxes) == 1, str(shown_boxes))
+check("次にやることも伝える", "もう一度" in shown_boxes[0], str(shown_boxes))
+
+shown_boxes.clear()
+state_ini.unlink(missing_ok=True)
+connect.guide_after_install(None, placed=ea_manager.LATEST, shown="", needs_restart=False)
+check("窓が無くても案内する", len(shown_boxes) == 1, str(shown_boxes))
+check("窓が無くても手順を出す", "ナビゲーター" in shown_boxes[0], str(shown_boxes))
+
+installer_ui.message_box = real_box
+check("Windows以外では小さな画面を出さない", installer_ui.message_box("x") is False)
+
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)

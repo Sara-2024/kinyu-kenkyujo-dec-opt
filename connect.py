@@ -1103,6 +1103,19 @@ def self_test() -> int:
 #   MT5 を探して EA を置くところまで。サイトとは一切通信しない。
 #   サイトから正式に連携されるまで、この状態のまま動く。
 # ────────────────────────────────────────────────
+def tell(ui, message: str, hint: str = "") -> None:
+    """うまくいかなかったことを知らせる。
+
+    窓を作れていないときも、Windows の小さな画面だけは出す。
+    黙って終わると、お客様には「壊れている」としか見えない。
+    """
+    log(f"{message} {hint}".strip())
+    if ui:
+        ui.fail(message, hint)
+    else:
+        installer_ui.message_box(f"{message}\n\n{hint}".strip())
+
+
 def setup_phase1() -> int:
     """お客様が exe を開いたときの既定の動き。EA を置いて終わる。"""
     banner("初回の設定")
@@ -1128,11 +1141,11 @@ def setup_phase1() -> int:
     log(f"見つかった MT5: {mt5_detect.describe(terminals)}")
     if not terminals:
         log("MT5 のデータフォルダが1つも無い")
-        if ui:
-            ui.fail(
-                "MT5が見つかりませんでした。",
-                "MT5を一度起動してログインしてから、もう一度このアプリを開いてください。",
-            )
+        tell(
+            ui,
+            "MT5が見つかりませんでした。",
+            "MT5を一度起動してログインしてから、もう一度このアプリを開いてください。",
+        )
         return 1
 
     target = terminals[0]
@@ -1154,8 +1167,7 @@ def setup_phase1() -> int:
     source = ea_manager.load_source(BRIDGE_DIR)
     if source is None:
         log(f"同梱の EA が読めない: {BRIDGE_DIR}")
-        if ui:
-            ui.fail("設定に必要なファイルが見つかりませんでした。", "アプリを入れ直してから、もう一度お試しください。")
+        tell(ui, "設定に必要なファイルが見つかりませんでした。", "アプリを入れ直してから、もう一度お試しください。")
         return 1
 
     # すでに入っているときは、黙って置き直して終わらせない。
@@ -1202,7 +1214,7 @@ def setup_phase1() -> int:
     if after.state == ea_manager.ERROR:
         if ui:
             ui.mark("ea", False)
-            ui.fail("設定を保存できませんでした。", "MT5を閉じてから、もう一度このアプリを開いてください。")
+        tell(ui, "設定を保存できませんでした。", "MT5を閉じてから、もう一度このアプリを開いてください。")
         return 1
 
     if ui:
@@ -1231,13 +1243,12 @@ def setup_phase1() -> int:
             running = False
             restarted = True
 
-    if ui:
-        guide_after_install(
-            ui,
-            placed=before.state,
-            shown=shown,
-            needs_restart=running and not restarted,
-        )
+    guide_after_install(
+        ui,
+        placed=before.state,
+        shown=shown,
+        needs_restart=running and not restarted,
+    )
     log("初回の設定が終わりました（サイトとは接続していません）")
     return 0
 
@@ -1294,6 +1305,13 @@ def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool) -> 
         head = "AI Trader を新しい内容に更新しました。"
     else:
         head = "AI Trader はすでに入っています。"
+
+    if ui is None:
+        # 窓を作れなかったとき。せめて「何が起きたか」だけは見せる
+        beat = ea_manager.heartbeat()
+        lines = [head] if beat["fresh"] else [head, "", *CHART_STEPS]
+        installer_ui.message_box("\n".join(lines))
+        return
 
     while ui.alive():
         beat = ea_manager.heartbeat()
@@ -1530,9 +1548,7 @@ def connect_all(room: str = "", show: bool = False) -> int:
             ui.say(text)
 
     def give_up(message: str, hint: str = "") -> int:
-        log(message)
-        if ui:
-            ui.fail(message, hint)
+        tell(ui, message, hint)
         return 1
 
     if room:
@@ -1594,10 +1610,14 @@ def connect_all(room: str = "", show: bool = False) -> int:
 
     banner("接続完了")
     log(f"口座 {session['account']} / {session['server']}")
-    if ui:
+    if show:
         # 待つのは1回だけ（ここで最大10秒。二度聞くと待ち時間も二倍になる）
         seen = relay_sees_us()
-        ui.finish(connect_result_lines(session, seen), ok=seen is not False)
+        lines = connect_result_lines(session, seen)
+        if ui:
+            ui.finish(lines, ok=seen is not False)
+        else:
+            installer_ui.message_box("\n".join(lines))
     return 0
 
 
@@ -1606,11 +1626,7 @@ def show_failure(message: str, hint: str = "") -> int:
 
     画面を出せない環境（tkinter が無いなど）では、記録に残すだけで済ませる。
     """
-    ui = installer_ui.open_window()
-    if ui:
-        ui.fail(message, hint)
-    else:
-        log(f"{message} {hint}".strip())
+    tell(installer_ui.open_window(), message, hint)
     return 1
 
 

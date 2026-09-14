@@ -15,6 +15,8 @@ tkinter は Python に同梱されているので、追加の部品は要らな�
 """
 from __future__ import annotations
 
+import os
+
 from typing import Any, Callable, Sequence
 
 try:
@@ -34,6 +36,25 @@ ACCENT = "#5eccff"
 OK = "#35f58a"
 WARN = "#ffd23e"
 NG = "#ff8484"
+
+
+def message_box(text: str, title: str = APP_NAME) -> bool:
+    """窓を作れなかったときの、最後の知らせ方。
+
+    tkinter を積み忘れた exe を作ってしまっても、「押しても何も起きない」
+    だけは避ける。Windows が必ず持っているものなので、何も足さずに出せる。
+    Windows 以外では何もしない（False を返す）。
+    """
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+
+        # 0x40 = 情報アイコン付きの「OK」だけの画面
+        ctypes.windll.user32.MessageBoxW(0, str(text), str(title), 0x40)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def headless() -> bool:

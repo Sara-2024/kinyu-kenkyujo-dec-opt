@@ -86,6 +86,8 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --hidden-import ea_manager ^
   --hidden-import connect_state ^
   --hidden-import installer_ui ^
+  --hidden-import tkinter ^
+  --hidden-import tkinter.font ^
   --hidden-import MetaTrader5 ^
   --collect-all numpy ^
   --hidden-import logging.handlers ^
@@ -115,6 +117,16 @@ echo.
 echo [3/3] 確認...
 if not exist dist\AITrader.exe (
   echo [ERROR] dist\AITrader.exe ができていません。
+  pause
+  exit /b 1
+)
+
+REM 画面の部品（tkinter）が入っているか確かめる。
+REM 入っていないと、お客様がダブルクリックしても窓が出ない（無言で終わる）。
+py -3 -c "import sys;d=open(r'dist\AITrader.exe','rb').read();sys.exit(0 if b'_tkinter' in d else 1)"
+if errorlevel 1 (
+  echo [ERROR] 画面の部品が入っていません。この exe は配らないでください。
+  echo         py -3 -m pip install --upgrade pyinstaller を試してから、もう一度実行してください。
   pause
   exit /b 1
 )
