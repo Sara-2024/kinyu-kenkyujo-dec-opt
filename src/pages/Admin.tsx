@@ -106,7 +106,10 @@ export function Admin() {
         <div className="flex flex-wrap items-center gap-4">
           <span className="h-4 w-[3px]" style={{ background: 'var(--accent)' }} />
           <h1 className="text-[22px] font-bold">管理者画面</h1>
-          <Link to="/" className="ml-auto text-[15px] font-bold" style={{ color: 'var(--accent)' }}>
+          <Link to="/fleet" className="ml-auto text-[15px] font-bold" style={{ color: 'var(--accent)' }}>
+            一斉制御
+          </Link>
+          <Link to="/" className="text-[15px] font-bold" style={{ color: 'var(--accent)' }}>
             研究所へ戻る
           </Link>
         </div>

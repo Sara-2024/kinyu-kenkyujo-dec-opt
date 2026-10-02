@@ -1,0 +1,74 @@
+// 一斉制御（自社デモ口座の登録簿）。既存の会員・連携とは別枠。
+//
+// 口座は「ログイン中の会員」が登録する。その会員IDが、口座の PC で動く
+// MT5 Automatic の部屋になるので、一斉停止は会員IDの部屋へ流せばよい。
+// パスワードは預かるだけで、停止には使わない。
+import { supabase } from '../lib/supabase'
+
+export interface FleetAccount {
+  id: string
+  member_id: string
+  email: string
+  account: number
+  server: string
+  included: boolean
+  note: string
+  created_at: string
+  updated_at: string
+}
+
+function client() {
+  if (!supabase) throw new Error('NOT_CONFIGURED')
+  return supabase
+}
+
+async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const { data, error } = await client().rpc(name, args)
+  if (error) throw error
+  return data as T
+}
+
+export function fleetErrorMessage(error: unknown): string {
+  const raw =
+    error && typeof error === 'object' && 'message' in error ? String((error as { message: string }).message) : String(error ?? '')
+  if (raw.includes('NOT_CONFIGURED')) return '研究所への接続設定がまだ完了していません。'
+  if (raw.includes('BAD_ACCOUNT')) return '口座番号は数字で入力してください。'
+  if (raw.includes('BAD_SERVER')) return 'サーバー名を入力してください（MT5 のログイン画面に出ている名前）。'
+  if (raw.includes('BAD_PASSWORD')) return 'パスワードを入力してください。'
+  if (raw.includes('TAKEN')) return 'この口座は別の方が登録済みです。'
+  if (raw.includes('FORBIDDEN')) return 'この操作を行う権限がありません。'
+  if (raw.includes('NOT_FOUND')) return '対象の口座が見つかりません。'
+  if (raw.includes('SESSION_EXPIRED')) return 'ログインの有効期限が切れました。もう一度ログインしてください。'
+  if (/could not find the function|does not exist|PGRST202/i.test(raw)) {
+    return 'データベースにまだ一斉制御の設定が入っていません（supabase/migrations/20261002_add_fleet.sql を流してください）。'
+  }
+  return '処理に失敗しました。時間をおいてもう一度お試しください。'
+}
+
+export function fleetRegister(token: string, account: number, server: string, password: string): Promise<FleetAccount> {
+  return rpc<FleetAccount>('fleet_register', { p_token: token, p_account: account, p_server: server, p_password: password })
+}
+
+export function fleetMyAccounts(token: string): Promise<FleetAccount[]> {
+  return rpc<FleetAccount[]>('fleet_my_accounts', { p_token: token })
+}
+
+export function fleetList(token: string): Promise<FleetAccount[]> {
+  return rpc<FleetAccount[]>('fleet_list', { p_token: token })
+}
+
+export function fleetSetIncluded(token: string, id: string, included: boolean): Promise<void> {
+  return rpc('fleet_set_included', { p_token: token, p_id: id, p_included: included })
+}
+
+export function fleetSetNote(token: string, id: string, note: string): Promise<void> {
+  return rpc('fleet_set_note', { p_token: token, p_id: id, p_note: note })
+}
+
+export function fleetDelete(token: string, id: string): Promise<void> {
+  return rpc('fleet_delete', { p_token: token, p_id: id })
+}
+
+export function fleetReveal(token: string, id: string): Promise<{ account: number; server: string; password: string }> {
+  return rpc('fleet_reveal', { p_token: token, p_id: id })
+}

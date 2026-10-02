@@ -111,5 +111,83 @@ used = {
 missing = [name for name in used if not hasattr(b.mt, name)]
 check("監督が呼ぶ MT5 の入口が全部ある", not missing, f"足りない: {missing}")
 
+# ── 6) 一斉制御の「全決済」が配線されている ──
+import asyncio  # noqa: E402
+
+check("MT5コントローラに close_all がある", hasattr(b.mt, "close_all"))
+check("全決済の本体がある", hasattr(b.mt, "_close_all_blocking"))
+
+
+class _Pos:
+    def __init__(self, ticket, symbol, volume, kind, magic=7):
+        self.ticket, self.symbol, self.volume, self.type, self.magic = ticket, symbol, volume, kind, magic
+
+
+class _Order:
+    def __init__(self, ticket):
+        self.ticket = ticket
+
+
+class _Result:
+    def __init__(self, retcode, comment=""):
+        self.retcode, self.comment = retcode, comment
+
+
+sent = []
+
+
+def _order_send(req):
+    sent.append(req)
+    # 1件だけわざと失敗させる（最後まで回って失敗を返すこと）
+    if req.get("position") == 2:
+        return _Result(10013, "invalid request")
+    return _Result(10009)
+
+
+fake = sys.modules["MetaTrader5"]
+fake.positions_get = lambda *a, **k: [_Pos(1, "XAUUSD", 0.1, 0), _Pos(2, "XAUUSD", 0.2, 1)]
+fake.orders_get = lambda *a, **k: [_Order(9)]
+fake.symbol_info = lambda s: types.SimpleNamespace(filling_mode=2)
+fake.symbol_info_tick = lambda s: types.SimpleNamespace(bid=2400.0, ask=2400.5)
+fake.order_send = _order_send
+fake.TRADE_RETCODE_DONE = 10009
+fake.TRADE_RETCODE_PLACED = 10008
+fake.TRADE_ACTION_DEAL = 1
+fake.TRADE_ACTION_REMOVE = 8
+fake.ORDER_TYPE_BUY = 0
+fake.ORDER_TYPE_SELL = 1
+fake.POSITION_TYPE_BUY = 0
+fake.ORDER_FILLING_IOC = 1
+fake.SYMBOL_FILLING_IOC = 2
+fake.SYMBOL_FILLING_FOK = 1
+b.mt.ready = True
+out = b.mt._close_all_blocking()
+check("建玉は反対売買で閉じる（買いは売り・売りは買い）",
+      sent[0]["type"] == 1 and sent[0]["position"] == 1 and sent[1]["type"] == 0 and sent[1]["position"] == 2,
+      str(sent[:2]))
+check("待機注文は取り消す", any(r.get("action") == 8 and r.get("order") == 9 for r in sent), str(sent))
+check("1件失敗しても最後まで回る", out["closed"] == 1 and out["removed"] == 1 and len(out["failed"]) == 1, str(out))
+check("失敗した番号が分かる", out["failed"][0]["ticket"] == 2, str(out["failed"]))
+
+# 指令として届いたときは、先に新規を止めてから閉じる
+calls = []
+
+
+async def _set_trading(allowed, by="サイト"):
+    calls.append(("set_trading", allowed))
+    return True, 0.0
+
+
+async def _close_all():
+    calls.append(("close_all",))
+    return {"closed": 1, "removed": 1, "failed": []}
+
+
+b.mt.set_trading = _set_trading
+b.mt.close_all = _close_all
+ack = asyncio.run(b.router.handle({"command": "close_all", "id": "t1"}))
+check("close_all の指令が通る", ack["ok"] is True and ack["closed"] == 1, str(ack))
+check("閉じる前に新規を止める", calls == [("set_trading", False), ("close_all",)], str(calls))
+
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)

@@ -819,6 +819,99 @@ class MT5Controller:
             )
         return ok, readback
 
+    # ---------- 全決済（一斉制御の「新規を止めて全ポジションも決済」で使う） ----------
+    async def close_all(self) -> dict[str, Any]:
+        if not self.ready:
+            return {"closed": 0, "removed": 0, "failed": [], "error": "MT5に接続していません"}
+        return await self._call(self._close_all_blocking)
+
+    @staticmethod
+    def _filling_for(symbol: str) -> int:
+        """その銘柄で使える約定方式。業者によって違うので symbol_info から選ぶ。"""
+        try:
+            info = mt5.symbol_info(symbol)
+            flags = int(getattr(info, "filling_mode", 0) or 0)
+        except Exception:  # noqa: BLE001
+            flags = 0
+        fok = int(getattr(mt5, "SYMBOL_FILLING_FOK", 1))
+        ioc = int(getattr(mt5, "SYMBOL_FILLING_IOC", 2))
+        if flags & ioc:
+            return int(getattr(mt5, "ORDER_FILLING_IOC", 1))
+        if flags & fok:
+            return int(getattr(mt5, "ORDER_FILLING_FOK", 0))
+        return int(getattr(mt5, "ORDER_FILLING_RETURN", 2))
+
+    def _close_all_blocking(self) -> dict[str, Any]:
+        """持っている建玉を全部閉じ、待機注文も全部取り消す。
+
+        手動・EA を問わず、この口座にあるものを全部対象にする（一斉停止の意図は
+        「この口座をいったん空にする」なので、magic で選り分けない）。
+        1件の失敗で止めず、最後まで回して失敗した番号を返す。
+        """
+        done = int(getattr(mt5, "TRADE_RETCODE_DONE", 10009))
+        placed = int(getattr(mt5, "TRADE_RETCODE_PLACED", 10008))
+        closed = 0
+        removed = 0
+        failed: list[dict[str, Any]] = []
+
+        try:
+            positions = list(mt5.positions_get() or ())
+        except Exception as exc:  # noqa: BLE001
+            return {"closed": 0, "removed": 0, "failed": [], "error": f"建玉を読めません: {exc}"}
+        type_buy = int(getattr(mt5, "POSITION_TYPE_BUY", 0))
+        for pos in positions:
+            ticket = int(getattr(pos, "ticket", 0) or 0)
+            symbol = str(getattr(pos, "symbol", "") or "")
+            volume = float(getattr(pos, "volume", 0) or 0)
+            is_buy = int(getattr(pos, "type", type_buy)) == type_buy
+            tick = mt5.symbol_info_tick(symbol)
+            price = float(getattr(tick, "bid" if is_buy else "ask", 0) or 0)
+            request = {
+                "action": int(getattr(mt5, "TRADE_ACTION_DEAL", 1)),
+                "position": ticket,
+                "symbol": symbol,
+                "volume": volume,
+                "type": int(getattr(mt5, "ORDER_TYPE_SELL" if is_buy else "ORDER_TYPE_BUY", 1 if is_buy else 0)),
+                "price": price,
+                "deviation": 50,
+                "magic": int(getattr(pos, "magic", 0) or 0),
+                "comment": "fleet close",
+                "type_time": int(getattr(mt5, "ORDER_TIME_GTC", 0)),
+                "type_filling": self._filling_for(symbol),
+            }
+            try:
+                result = mt5.order_send(request)
+            except Exception as exc:  # noqa: BLE001
+                failed.append({"ticket": ticket, "error": str(exc)})
+                continue
+            code = int(getattr(result, "retcode", -1)) if result is not None else -1
+            if code in (done, placed):
+                closed += 1
+            else:
+                failed.append({"ticket": ticket, "retcode": code, "error": str(getattr(result, "comment", "") or "")})
+
+        try:
+            orders = list(mt5.orders_get() or ())
+        except Exception as exc:  # noqa: BLE001
+            orders = []
+            failed.append({"ticket": 0, "error": f"待機注文を読めません: {exc}"})
+        for order in orders:
+            ticket = int(getattr(order, "ticket", 0) or 0)
+            request = {"action": int(getattr(mt5, "TRADE_ACTION_REMOVE", 8)), "order": ticket}
+            try:
+                result = mt5.order_send(request)
+            except Exception as exc:  # noqa: BLE001
+                failed.append({"ticket": ticket, "error": str(exc)})
+                continue
+            code = int(getattr(result, "retcode", -1)) if result is not None else -1
+            if code in (done, placed):
+                removed += 1
+            else:
+                failed.append({"ticket": ticket, "retcode": code, "error": str(getattr(result, "comment", "") or "")})
+
+        log.warning("全決済: 建玉 %d 件を決済、待機注文 %d 件を取り消し、失敗 %d 件", closed, removed, len(failed))
+        return {"closed": closed, "removed": removed, "failed": failed}
+
     STATE_FILE = "trelab_state.ini"
 
     def _ea_state_blocking(self) -> dict[str, Any]:
@@ -1635,6 +1728,25 @@ class CommandRouter:
             log.info("指令: 売買再開")
             ok, readback = await self.mt.set_trading(True)
             return self._ack(command, request_id, ok, value=readback)
+
+        if command == "close_all":
+            # 一斉制御の「新規を止めて全ポジションも決済」。
+            # まず新規を止めてから閉じる（閉じた直後に EA が建て直すのを防ぐ）
+            reason = payload.get("reason", "")
+            log.warning("指令: 全決済  理由=%s", reason or "(指定なし)")
+            ok, readback = await self.mt.set_trading(False)
+            result = await self.mt.close_all()
+            failed = result.get("failed") or []
+            return self._ack(
+                command,
+                request_id,
+                ok and not failed and not result.get("error"),
+                value=readback,
+                closed=result.get("closed", 0),
+                removed=result.get("removed", 0),
+                failed=failed,
+                error=result.get("error") or (f"{len(failed)} 件を閉じられませんでした" if failed else None),
+            )
 
         if command == "set_variable":
             name = str(payload.get("name", "")).strip()

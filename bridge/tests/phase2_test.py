@@ -184,6 +184,19 @@ src_connect = (ROOT / "connect.py").read_text(encoding="utf-8")
 check("覚えている MT5 を優先して渡している", 'find_logged_in_terminal(chosen or None)' in src_connect)
 check("使った MT5 を覚える", 'terminal=used' in src_connect)
 
+# ── 8-0) 一斉制御の migration も schema.sql とずれていないか ──
+fleet_mig = ROOT / "supabase" / "migrations" / "20261002_add_fleet.sql"
+check("一斉制御の migration がある", fleet_mig.is_file())
+if fleet_mig.is_file():
+    fleet_sql = fleet_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("一斉制御の migration の中身が schema.sql と同じ", fleet_sql.strip() in schema_all)
+    check("一斉制御の migration は追加だけ（既存を落とさない）", "drop " not in fleet_sql.lower().replace("do update", ""))
+    # パスワードは暗号化して入れ、鍵のテーブルは外から読めない
+    check("パスワードは暗号化して保存", "pgp_sym_encrypt" in fleet_sql)
+    check("鍵のテーブルは外から読めない", "revoke all on table public.fleet_secret" in fleet_sql)
+    check("一覧はパスワードを返さない", "password" not in fleet_sql[fleet_sql.index("_fleet_row_json(r public.fleet_accounts") : fleet_sql.index("fleet_register(")])
+
 # ── 8) DB の追加分（migration）と schema.sql がずれていないか ──
 mig_path = ROOT / "supabase" / "migrations" / "20260912_add_connect_tokens.sql"
 schema_path = ROOT / "supabase" / "schema.sql"

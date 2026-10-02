@@ -4,6 +4,8 @@ import { Chat } from './pages/Chat'
 import { Lab } from './pages/Lab'
 import { Login } from './pages/Login'
 import { Admin } from './pages/Admin'
+import { Fleet } from './pages/Fleet'
+import { FleetJoin } from './pages/FleetJoin'
 import { useAuth } from './hooks/AuthContext'
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -35,6 +37,23 @@ export default function App() {
           <RequireAdmin>
             <Admin />
           </RequireAdmin>
+        }
+      />
+      {/* 一斉制御（自社デモ口座）。既存の画面とは別枠 */}
+      <Route
+        path="/fleet"
+        element={
+          <RequireAdmin>
+            <Fleet />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/fleet/join"
+        element={
+          <RequireAuth>
+            <FleetJoin />
+          </RequireAuth>
         }
       />
       <Route

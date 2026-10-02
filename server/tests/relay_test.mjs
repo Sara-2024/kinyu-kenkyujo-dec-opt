@@ -227,6 +227,7 @@ console.log('\n── 会員の確認（部屋の名前を知っていても、�
 const sessions = {
   'session-A': { id: A, status: 'active', can_trade: true },
   'session-B': { id: B, status: 'active', can_trade: true },
+  'session-admin': { id: '99999999-9999-4999-8999-999999999999', status: 'active', can_trade: true, role: 'admin' },
   'session-stopped': { id: A, status: 'active', can_trade: false },
   'session-suspended': { id: A, status: 'suspended', can_trade: true },
 }
@@ -298,6 +299,93 @@ check('知らない指令はブリッジへ流さない', unknownAck?.ok === fal
 
 mine.close()
 stopped.close()
+
+console.log('\n── 一斉制御（管理者だけが、何部屋にも同じ指令を一度に流せる）')
+
+const fleetUrl = (session) => `ws://127.0.0.1:${checked.port}/fleet${session ? `?session=${session}` : ''}`
+const cbridge = (id) => `ws://127.0.0.1:${checked.port}/bridge?id=${id}`
+
+denied = ''
+try {
+  await open(fleetUrl('session-A'))
+} catch (err) {
+  denied = String(err.message)
+}
+check('★ 一般の会員は一斉制御に入れない', denied.includes('403'), denied)
+denied = ''
+try {
+  await open(fleetUrl(''))
+} catch (err) {
+  denied = String(err.message)
+}
+check('合言葉なしでは入れない', denied.includes('403'), denied)
+
+// 会員A・Bのブリッジ（＝デモ口座2台）が居る。Cはまだ居ない
+const C = '33333333-3333-4333-8333-333333333333'
+const fbA = track(await open(cbridge(A)))
+const fbB = track(await open(cbridge(B)))
+fbA.send_({ type: 'hello', account: 111, server: 'Demo', balance: 10, value: 1 })
+fbB.send_({ type: 'hello', account: 222, server: 'Demo', balance: 20, value: 1 })
+await new Promise((r) => setTimeout(r, 200))
+
+const fleet = track(await open(fleetUrl('session-admin')))
+check('管理者は入れる', fleet.readyState === WebSocket.OPEN)
+
+fleet.send_({ type: 'fleet_watch', id: 'w1', rooms: [A, B, C, 'not-a-room'] })
+const snap = await fleet.nextWhere((m) => m.type === 'fleet_snapshot')
+check('要約が部屋ごとに返る', snap?.rooms?.[A]?.online === true && snap?.rooms?.[B]?.online === true, JSON.stringify(snap))
+check('居ない部屋は切断中として返る', snap?.rooms?.[C]?.online === false, JSON.stringify(snap?.rooms?.[C]))
+check('会員IDの形でないものは無視する', !snap?.rooms?.['not-a-room'])
+check('口座の数字は中継が覚えていたものが返る', snap?.rooms?.[A]?.status?.account === 111, JSON.stringify(snap?.rooms?.[A]))
+
+// 見ているあいだは、ブリッジへ「画面が開いている」と伝わる（数字を送ってもらうため）
+const appsA = await fbA.nextWhere((m) => m.type === 'apps' && m.count >= 1)
+check('見ている部屋のブリッジに、画面が1枚あると伝わる', appsA?.count === 1, JSON.stringify(appsA))
+
+// 一斉停止：居る部屋には届き、居ない部屋は預かる
+fleet.send_({ type: 'fleet_send', id: 's1', command: 'stop_trading', rooms: [A, B, C] })
+const sent = await fleet.nextWhere((m) => m.type === 'fleet_sent')
+check('届いた部屋と預かった部屋が分かる', sent?.delivered?.length === 2 && sent?.waiting?.[0] === C, JSON.stringify(sent))
+const toFA = await fbA.nextCommand()
+const toFB = await fbB.nextCommand()
+check('★ 1回の操作で、2台のブリッジに同じ停止が届く', toFA?.command === 'stop_trading' && toFB?.command === 'stop_trading', JSON.stringify([toFA, toFB]))
+
+// ブリッジの返事が、部屋つきで一斉制御の画面に届く
+fbA.send_({ type: 'ack', id: 's1', command: 'stop_trading', ok: true, value: 0 })
+const ackEv = await fleet.nextWhere((m) => m.type === 'fleet_event' && m.message?.type === 'ack')
+check('返事はどの部屋のものか分かる', ackEv?.room === A && ackEv?.message?.ok === true, JSON.stringify(ackEv))
+
+// 居なかった部屋Cのブリッジが名乗った瞬間、預かっていた停止が渡る
+const fbC = track(await open(cbridge(C)))
+fbC.send_({ type: 'hello', account: 333, server: 'Demo', value: 1 })
+const late = await fbC.nextWhere((m) => m.command === 'stop_trading')
+check('★ あとからつながった部屋にも、預かっていた停止が渡る', late?.command === 'stop_trading', JSON.stringify(late))
+
+// 全決済も一斉制御から流せる。ロット変更などは流せない
+fleet.send_({ type: 'fleet_send', id: 's2', command: 'close_all', rooms: [A] })
+const toClose = await fbA.nextCommand()
+check('全決済を流せる', toClose?.command === 'close_all', JSON.stringify(toClose))
+fleet.send_({ type: 'fleet_send', id: 's3', command: 'set_variable', name: 'AI_LOT', value: 9, rooms: [A] })
+const refusedFleet = await fleet.nextWhere((m) => m.type === 'fleet_refused')
+check('一斉制御からロット変更は流せない', Boolean(refusedFleet), JSON.stringify(refusedFleet))
+check('断られた指令はブリッジに届かない', (await fbA.nextCommand(300)) === null)
+
+fleet.close()
+fbA.close()
+fbB.close()
+fbC.close()
+
+// 会員の確認が無い中継では、一斉制御そのものが閉じている
+const openRelay = await startRelayOnFreePort()
+denied = ''
+try {
+  await open(`ws://127.0.0.1:${openRelay.port}/fleet?session=anything`)
+} catch (err) {
+  denied = String(err.message)
+}
+check('会員の確認が無い中継では一斉制御に入れない', denied.includes('403'), denied)
+openRelay.proc.kill()
+
 supabase.close()
 checked.proc.kill()
 

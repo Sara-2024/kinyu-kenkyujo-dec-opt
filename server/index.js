@@ -30,7 +30,13 @@ const READ_COMMANDS = new Set(['get_status', 'status', 'get_positions', 'positio
 /** 売買の状態を変える指令。`can_trade` が false の会員には通さない */
 const WRITE_COMMANDS = new Set(['start_trading', 'set_variable', 'set_ai_gate'])
 /** 止める操作だけは、売買を禁止された会員にも許す（安全側にしか動かないため） */
-const STOP_COMMANDS = new Set(['stop_trading'])
+const STOP_COMMANDS = new Set(['stop_trading', 'close_all'])
+
+/**
+ * 一斉制御（/fleet）から流してよい指令。管理者だけが入れる入口なので、
+ * 止める・閉じる・再開の3つに絞る（ロット変更などは1口座ずつの画面でやる）。
+ */
+const FLEET_COMMANDS = new Set(['stop_trading', 'close_all', 'start_trading'])
 
 /** token → { at, member } */
 const members = new Map()
@@ -94,30 +100,45 @@ function normalizeRoom(raw) {
 }
 
 function roomOf(id) {
-  if (!rooms.has(id)) rooms.set(id, { bridge: null, apps: new Set(), status: null, since: null })
+  // fleet … この部屋を見ている一斉制御の画面。pending … ブリッジが居ないあいだに届いた一斉指令
+  if (!rooms.has(id)) rooms.set(id, { bridge: null, apps: new Set(), fleet: new Set(), status: null, since: null, pending: null })
   return rooms.get(id)
 }
 
 function pruneRoom(id) {
   const room = rooms.get(id)
   if (!room) return
-  if (!room.bridge && room.apps.size === 0) rooms.delete(id)
+  if (!room.bridge && room.apps.size === 0 && room.fleet.size === 0 && !room.pending) rooms.delete(id)
 }
 
 function broadcastToRoom(roomId, message) {
   const room = rooms.get(roomId)
   if (!room) return
   for (const ws of room.apps) send(ws, message)
+  // 一斉制御の画面には「どの部屋の出来事か」を付けて流す（何部屋も同時に見ているため）
+  for (const ws of room.fleet) send(ws, { type: 'fleet_event', room: roomId, message })
 }
 
 /**
  * その部屋の画面が何枚開いているかを、部屋のブリッジへ伝える。
  * 誰も見ていない間、ブリッジは口座の数字を送らなくてよい（無駄な通信を止める）。
+ * 一斉制御の画面も1枚と数える（見ているあいだは数字が欲しい）。
  */
 function notifyWatchers(roomId) {
   const room = rooms.get(roomId)
   if (!room || !room.bridge) return
-  send(room.bridge, { type: 'apps', count: room.apps.size })
+  send(room.bridge, { type: 'apps', count: room.apps.size + room.fleet.size })
+}
+
+/** 一斉制御の画面へ返す、1部屋ぶんの要約 */
+function roomSummary(roomId) {
+  const room = rooms.get(roomId)
+  return {
+    online: Boolean(room?.bridge),
+    since: room?.bridge ? room.since : null,
+    status: room?.status ?? null,
+    pending: room?.pending ? room.pending.command : null,
+  }
 }
 
 function roomIdFrom(req, url, isBridge) {
@@ -158,7 +179,7 @@ server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   const path = url.pathname
 
-  if (path !== '/bridge' && path !== '/app') {
+  if (path !== '/bridge' && path !== '/app' && path !== '/fleet') {
     socket.destroy()
     return
   }
@@ -172,6 +193,27 @@ server.on('upgrade', (req, socket, head) => {
       socket.destroy()
       return
     }
+  }
+
+  // 一斉制御（管理者だけ）。部屋は持たず、指令ごとに宛先の部屋を名指しする。
+  // 会員の確認が無い環境では、誰でも全部屋を止められてしまうので入口ごと閉じる。
+  if (path === '/fleet') {
+    if (!CHECK_MEMBERS) {
+      log('一斉制御は会員の確認が無いと使えません（SUPABASE_URL / SUPABASE_ANON_KEY）')
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+      socket.destroy()
+      return
+    }
+    memberOf(url.searchParams.get('session') || '').then((member) => {
+      if (!member || member.role !== 'admin') {
+        log('一斉制御に管理者以外が入ろうとしたので断りました')
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+        socket.destroy()
+        return
+      }
+      wss.handleUpgrade(req, socket, head, (ws) => handleFleet(ws, member))
+    })
+    return
   }
 
   const isBridge = path === '/bridge'
@@ -240,6 +282,13 @@ function handleBridge(ws, roomId) {
       room.status = payload
       log(`ブリッジ ${short(roomId)} 名乗り: 口座=${tail4(payload.account)} ${payload.server ?? ''}`)
       broadcastToRoom(roomId, { type: 'bridge_online', bridgeId: roomId, status: payload })
+      // ブリッジが居ないあいだに一斉指令が来ていれば、名乗った瞬間に渡す
+      if (room.pending) {
+        const waiting = room.pending
+        room.pending = null
+        log(`ブリッジ ${short(roomId)} に、待たせていた一斉指令を渡します: ${waiting.command}`)
+        send(ws, { ...waiting, bridgeId: roomId })
+      }
       return
     }
 
@@ -328,6 +377,97 @@ function handleApp(ws, roomId, member) {
     log(`画面が切断しました room=${short(roomId)}（残り ${room.apps.size} 画面）`)
     notifyWatchers(roomId)
     pruneRoom(roomId)
+  }
+  ws.on('close', drop)
+  ws.on('error', drop)
+}
+
+/**
+ * 一斉制御の画面（管理者）。
+ *
+ *   fleet_watch { rooms }           … これらの部屋を見る。いまの要約をまとめて返し、
+ *                                      以後はその部屋の出来事を fleet_event で流す
+ *   fleet_send  { rooms, command }  … これらの部屋へ同じ指令を一度に流す。
+ *                                      届いた部屋・ブリッジが居ない部屋を返し、
+ *                                      応答（ack）は fleet_event で部屋ごとに届く
+ *
+ * 1口座ずつ画面を開いて止めるのと同じ指令を、こちらで束ねて流しているだけ。
+ * ブリッジ側の歯止め（ALLOWED_VARIABLES など）はそのまま効く。
+ */
+function handleFleet(ws, member) {
+  const watching = new Set()
+  log(`一斉制御の画面が接続しました（管理者 ${short(member.id)}）`)
+
+  const unwatchAll = () => {
+    for (const roomId of watching) {
+      const room = rooms.get(roomId)
+      if (!room) continue
+      room.fleet.delete(ws)
+      notifyWatchers(roomId)
+      pruneRoom(roomId)
+    }
+    watching.clear()
+  }
+
+  const validRooms = (raw) =>
+    [...new Set((Array.isArray(raw) ? raw : []).map((r) => String(r)).filter((r) => MEMBER_ROOM_RE.test(r)))].slice(0, 500)
+
+  ws.on('message', (raw) => {
+    let payload
+    try {
+      payload = JSON.parse(raw.toString())
+    } catch {
+      return
+    }
+    const id = payload.id
+    const refuse = (error) => send(ws, { type: 'fleet_refused', id, error })
+
+    if (payload.type === 'fleet_watch') {
+      unwatchAll()
+      const summary = {}
+      for (const roomId of validRooms(payload.rooms)) {
+        const room = roomOf(roomId)
+        room.fleet.add(ws)
+        watching.add(roomId)
+        notifyWatchers(roomId)
+        summary[roomId] = roomSummary(roomId)
+      }
+      send(ws, { type: 'fleet_snapshot', id, rooms: summary })
+      return
+    }
+
+    if (payload.type === 'fleet_send') {
+      const command = String(payload.command ?? '')
+      if (!FLEET_COMMANDS.has(command)) {
+        refuse('この操作は一斉制御では使えません')
+        return
+      }
+      const targets = validRooms(payload.rooms)
+      const delivered = []
+      const waiting = []
+      const order = { id, command, reason: String(payload.reason ?? '一斉制御').slice(0, 80) }
+      for (const roomId of targets) {
+        const room = roomOf(roomId)
+        if (room.bridge) {
+          send(room.bridge, { ...order, bridgeId: roomId })
+          delivered.push(roomId)
+        } else {
+          // 居ないあいだに来た指令は、名乗った瞬間に渡す（最後の1つだけ覚える）
+          room.pending = order
+          waiting.push(roomId)
+        }
+      }
+      log(`一斉制御 → ${command}: 届いた ${delivered.length} / 待たせる ${waiting.length}`)
+      send(ws, { type: 'fleet_sent', id, command, delivered, waiting })
+      return
+    }
+
+    refuse('知らない指令です')
+  })
+
+  const drop = () => {
+    unwatchAll()
+    log('一斉制御の画面が切断しました')
   }
   ws.on('close', drop)
   ws.on('error', drop)
