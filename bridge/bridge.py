@@ -180,7 +180,10 @@ def _is_bridge_process(pid: int) -> bool:
     image = _process_image(pid).lower()
     if not image:
         return False
-    return "python" in image or image == Path(sys.executable).name.lower()
+    # 前の名前（AITrader.exe）で動いている古いブリッジも、自分と同じ名前のものも相手にする。
+    # exe の名前を変えたらここにも足す（connect.py の BRIDGE_IMAGE_HINTS と同じ考え方）
+    hints = ("python", "aitrader", "mt5automatic", "trelab", Path(sys.executable).name.lower())
+    return any(h in image for h in hints)
 
 
 def _terminate(pid: int) -> None:

@@ -618,6 +618,13 @@ check("画面が無ければ1台のものを自動で選ぶ", got is not None an
 connect.mt5_detect.list_terminals = real_list
 connect.find_logged_in_terminal = real_find
 
+# ── 16-3) 動いているブリッジを、いまの exe の名前で見つけられる ──
+#    名前を MT5Automatic に変えたとき、ここに足し忘れて古いブリッジを止められず、
+#    新しいブリッジも起動しないまま「接続完了」になっていた。
+for name in ("mt5automatic", "aitrader", "python"):
+    check(f"ブリッジの名前として {name} を知っている", any(name in h for h in connect.BRIDGE_IMAGE_HINTS), str(connect.BRIDGE_IMAGE_HINTS))
+check("いま動いている自分の名前も入っている", pathlib.Path(sys.executable).stem.lower() in connect.BRIDGE_IMAGE_HINTS, str(connect.BRIDGE_IMAGE_HINTS))
+
 # ── 17) 窓を作れなかったときでも、黙って終わらない ──
 #    tkinter を積み忘れた exe を作ってしまうと、お客様には
 #    「ダブルクリックしても何も起きない」としか見えない。

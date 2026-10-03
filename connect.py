@@ -776,7 +776,12 @@ def process_image(pid: int) -> str:
         return ""
 
 
-BRIDGE_IMAGE_HINTS = ("python", "aitrader", "trelab")
+# ブリッジとして動いていそうな実行ファイルの名前。exe の名前を変えたらここにも足す。
+# （MT5Automatic に変えたとき足し忘れ、動いている古いブリッジを「触らない」と判定して
+#   止められず、新しいブリッジも起動しないまま「接続完了」と言っていた）
+BRIDGE_IMAGE_HINTS = tuple(
+    sorted({"python", "aitrader", "trelab", "mt5automatic", Path(sys.executable).stem.lower()})
+)
 
 
 def list_bridge_processes() -> list[tuple[int, str]]:

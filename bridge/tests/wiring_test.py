@@ -146,6 +146,13 @@ fake.last_error = lambda: (-1, "test")
 b3.mt._initialize_blocking()
 check("選んだ MT5 が無ければ、まず名指しせずにほかを探す", bool(init_calls) and init_calls[0].get("path") != cfg3.mt5_path, str(init_calls))
 
+# ── 5-3) 古いブリッジを exe の名前で見分けられる（名前を変えても止められる） ──
+real_image = bridge_mod._process_image
+for image, expect in (("MT5Automatic.exe", True), ("AITrader.exe", True), ("pythonw.exe", True), ("notepad.exe", False)):
+    bridge_mod._process_image = lambda pid, _i=image: _i
+    check(f"{image} はブリッジ{'として扱う' if expect else 'ではない'}", bridge_mod._is_bridge_process(4242) is expect)
+bridge_mod._process_image = real_image
+
 # ── 6) 一斉制御の「全決済」が配線されている ──
 import asyncio  # noqa: E402
 

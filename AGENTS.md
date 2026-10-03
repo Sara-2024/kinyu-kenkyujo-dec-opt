@@ -81,6 +81,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   ロックに番号を書いていない古い版も居るので、止めるときはロック頼みにせず
   「`bridge.py` を実行中の python」をコマンドラインから探す
   （`connect.py list_bridge_processes()` / `bridge.py _list_bridge_processes()`）。
+  **exe の名前を変えたら `BRIDGE_IMAGE_HINTS`（connect.py）と `_is_bridge_process`（bridge.py）
+  にも足す。** 足し忘れると古いブリッジを「触らない」と判定して止められず、
+  新しいブリッジも起動しないまま「接続完了」になる（MT5Automatic への改名で実際に起きた）。
 - **手動の売買も同じように扱う。** magic の有無で拾う・拾わないを決めない
   （`by_system` は表示の区別に使うだけ）。
 
