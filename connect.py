@@ -1188,18 +1188,19 @@ def setup_phase1() -> int:
         return 1
 
     target = terminals[0]
-    if len(terminals) > 1:
-        if ui:
-            picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
-            if not picked:
-                log("選ばずに閉じられたので、何もしません")
-                return 1
-            for t in terminals:
-                if str(t.data_path) == picked:
-                    target = t
-                    break
-        else:
-            log("画面を出せないので、最後に使った MT5 を選びます")
+    # 1台しか無くても選んでもらう。「どの口座に入れたか」をお客様の目で確かめるため
+    # （口座番号が画面に出るので、違う口座なら気づける）
+    if ui:
+        picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+        if not picked:
+            log("選ばずに閉じられたので、何もしません")
+            return 1
+        for t in terminals:
+            if str(t.data_path) == picked:
+                target = t
+                break
+    elif len(terminals) > 1:
+        log("画面を出せないので、最後に使った MT5 を選びます")
     say(f"{target.label} が見つかりました。")
     log(f"対象 {target.data_path}")
 
@@ -1476,7 +1477,7 @@ def choose_terminal() -> int:
 
     ui = installer_ui.open_window()
     target = terminals[0]
-    if ui and len(terminals) > 1:
+    if ui:
         picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
         if not picked:
             # ✕ で閉じられた。勝手に1台目を選ばない
@@ -1691,8 +1692,7 @@ def choose_session(ui, log=log) -> tuple[dict | None, str] | None:
       ・覚えている MT5 があれば、そこにしか繋がない。別の MT5 にログインしていても
         黙って乗り換えず、「選んだ MT5 にログインしていません」と伝える
         （乗り換えると、サイトに別の口座が出て、お客様は何が起きたか分からない）
-      ・覚えていなくて MT5 が複数あれば、選んでもらって覚える
-      ・1台だけなら、それ
+      ・覚えていなければ、選んでもらって覚える（1台でも画面に出して確かめてもらう）
     """
     terminals = mt5_detect.list_terminals()
     chosen = str(connect_state.read().get("terminal") or "")
@@ -1704,7 +1704,8 @@ def choose_session(ui, log=log) -> tuple[dict | None, str] | None:
         connect_state.write(connect_state.current(), terminal=path)
 
     def ask_pick() -> str:
-        if ui is None or len(terminals) <= 1:
+        # 1台でも選んでもらう（口座番号を見て確かめてもらうため）
+        if ui is None:
             return str(terminals[0].data_path) if terminals else ""
         got = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
         return str(got or "")

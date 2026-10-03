@@ -593,6 +593,15 @@ connect_state.write(connect_state.INSTALL_ONLY, terminal="/mt5/A")
 got = connect.choose_session(None, log=quiet)  # 画面なし（自動起動）
 check("画面が無くても乗り換えず「未ログイン」として返す", got == (None, "/mt5/A"), str(got))
 
+# 1台しか無くても、画面があれば選んでもらう（口座番号を見て確かめてもらうため）
+connect.mt5_detect.list_terminals = lambda: terms[1:]
+connect_state.write(connect_state.INSTALL_ONLY, terminal="")
+ui = PickUI([], ["/mt5/B"])
+got = connect.choose_session(ui, log=quiet)
+check("MT5 が1台でも選択画面を出す", ui.pick_calls == 1 and got is not None and got[1] == "/mt5/B", str(got))
+got = connect.choose_session(None, log=quiet)
+check("画面が無ければ1台のものを自動で選ぶ", got is not None and got[1] == "/mt5/B", str(got))
+
 connect.mt5_detect.list_terminals = real_list
 connect.find_logged_in_terminal = real_find
 
