@@ -263,8 +263,12 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   （`TRUSTED_SITES`）。サイトのドメインを増やしたらここに足す。
   ブラウザは登録なしにPCのソフトを起動できないので、**初回だけツールを一度開いてもらう**
   導線は残しておく。配り方はサイトの「接続ツールをダウンロード」ボタン
-  （既定は `public/download/MT5Automatic.exe`。Windows で `tools/build-windows.bat` を実行して
-  できたものを置いて**コミットする**。Python 不要で、ユイの手順は「開くだけ」）。
+  （既定は `public/download/MT5Automatic.exe`。**exe は GitHub Actions が自動で作る**：
+  `connect.py` / `bridge/` / `tools/build-windows.bat` を main に push すると
+  `.github/workflows/build-exe.yml` が Windows で `build-windows.bat` を回し、
+  できた exe を `[skip ci]` 付きで commit する。手元の Windows で
+  `3_リリースする.bat` を押しても同じものができる。AIの見張りの合言葉は
+  リポジトリの Secrets `TRELAB_RISK_TOKEN` から入る。Python 不要で、ユイの手順は「開くだけ」）。
   Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/MT5Automatic.zip`
   で差し替えられる。`connect.py` や `bridge/` を変えたら exe を作り直して置き直すこと。
   メールで送る導線は廃止した。
