@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
 import { useFleet, type FleetCommand, type RoomState } from '../hooks/useFleet'
-import { fleetDelete, fleetErrorMessage, fleetList, fleetReveal, fleetSetIncluded, type FleetAccount } from '../data/fleet'
+import { fleetDelete, fleetErrorMessage, fleetList, fleetRegisterFor, fleetReveal, fleetSetIncluded, type FleetAccount } from '../data/fleet'
 
 const COMMAND_LABEL: Record<FleetCommand, string> = {
   stop_trading: 'エントリーのみ停止',
@@ -67,6 +67,30 @@ export function Fleet() {
   const targets = rows.filter((r) => r.included)
   const targetRooms = [...new Set(targets.map((r) => r.member_id))]
   const onlineCount = targetRooms.filter((room) => fleet.states[room]?.online).length
+  // つながっているのに登録簿に無い部屋（中継は登録前の部屋も要約に入れて返す）
+  const registeredRooms = new Set(rows.map((r) => r.member_id))
+  const unregistered = Object.entries(fleet.states).filter(([room, st]) => st.online && !registeredRooms.has(room))
+
+  const addConnected = async (room: string, st: RoomState) => {
+    if (!token) return
+    const s = st.status as (Record<string, unknown> & { account?: unknown; server?: unknown }) | null
+    const account = Number(s?.account)
+    const server = String(s?.server ?? '')
+    if (!account || !server) {
+      setError('この口座の番号がまだ届いていません。少し待ってから「いまの状況を取り直す」を押してください。')
+      return
+    }
+    setBusy(true)
+    try {
+      await fleetRegisterFor(token, room, account, server)
+      await reload()
+      setError(null)
+    } catch (err) {
+      setError(fleetErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const toggleIncluded = async (row: FleetAccount) => {
     if (!token) return
@@ -151,11 +175,12 @@ export function Fleet() {
           </Link>
         </div>
         <p className="mt-2 text-[15px] text-slate-400">
-          登録された口座のうち「対象」のものへ、同じ合図を一度に流します。口座の登録は
+          登録された口座のうち「対象」のものへ、同じ合図を一度に流します。口座の PC で MT5 Automatic がサイトと連携すると
+          下に「まだ登録されていない口座」として出るので、「一覧に加える」で登録できます（お客様が
           <Link to="/fleet/join" className="mx-1 font-bold" style={{ color: 'var(--accent)' }}>
             口座の登録ページ
           </Link>
-          から（口座の PC で MT5 Automatic がサイトと連携済みであることが前提です）。
+          から登録しても同じです）。
         </p>
 
         {(error || relayNote) && (
@@ -226,6 +251,28 @@ export function Fleet() {
             </div>
           )}
         </div>
+
+        {/* ── つながっているが未登録の口座（管理者がここから登録する） ── */}
+        {unregistered.length > 0 && (
+          <div className="mt-5 rounded-[4px] border px-5 py-4" style={{ borderColor: '#ffd23e', background: 'rgba(250,204,21,0.06)' }}>
+            <p className="text-[16px] font-bold">つながっているのに、まだ登録されていない口座が {unregistered.length} 台あります</p>
+            <p className="mt-1 text-[14px] text-slate-400">「一覧に加える」を押すと、対象として登録されます（パスワードは預かりません）。</p>
+            <ul className="mt-3 space-y-2">
+              {unregistered.map(([room, st]) => {
+                const s = st.status as (Record<string, unknown> & { account?: unknown; server?: unknown }) | null
+                return (
+                  <li key={room} className="flex flex-wrap items-center gap-4 text-[15px]">
+                    <span className="font-bold">{s?.account != null ? String(s.account) : '（口座番号を受信中）'}</span>
+                    <span className="text-slate-400">{s?.server != null ? String(s.server) : ''}</span>
+                    <Mini onClick={() => void addConnected(room, st)} disabled={busy}>
+                      一覧に加える
+                    </Mini>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* ── 口座一覧 ── */}
         <div className="mt-5 overflow-x-auto rounded-[4px] border" style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}>
@@ -336,7 +383,7 @@ export function Fleet() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
-                    まだ口座が登録されていません。
+                    まだ口座が登録されていません。口座の PC で MT5 Automatic がサイトと連携すると、上に「まだ登録されていない口座」として出ます。
                   </td>
                 </tr>
               )}

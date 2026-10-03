@@ -1,7 +1,7 @@
 -- Supabase ダッシュボード → SQL Editor でこのファイルを実行
 -- 何回実行しても大丈夫（既存の leads は残す）
 --
--- 初回の入場パスワード: TRELAB-ENTRY
+-- 初回の入場パスワード: AITrader-dream
 -- 最初に登録した人は管理者になります。入場パスワードは管理者画面から変えてください。
 
 create extension if not exists pgcrypto with schema extensions;
@@ -16,7 +16,7 @@ create table if not exists public.app_settings (
 );
 
 insert into public.app_settings (id, entry_password_hash)
-values (1, extensions.crypt('TRELAB-ENTRY', extensions.gen_salt('bf')))
+values (1, extensions.crypt('AITrader-dream', extensions.gen_salt('bf')))
 on conflict (id) do nothing;
 
 -- サイト全体の設定（研究員の名前など）。中身は {"names": {"rin": "…"}} の形
@@ -933,3 +933,59 @@ grant execute on function public.fleet_set_note(uuid, uuid, text) to anon, authe
 grant execute on function public.fleet_delete(uuid, uuid) to anon, authenticated;
 grant execute on function public.fleet_reveal(uuid, uuid) to anon, authenticated;
 
+-- ════════════════════════════════════════════════════════════
+-- 一斉制御: 管理者が「つながっている口座」を登録簿に加える
+--
+-- 連携済みの PC は中継に部屋（会員ID）として見えているので、お客様に
+-- /fleet/join を開いてもらわなくても、管理者が一覧から登録できるようにする。
+-- パスワードは預からない（空で入れる。あとで本人が /fleet/join で入れれば上書き）。
+-- ════════════════════════════════════════════════════════════
+create or replace function public.fleet_register_for(
+  p_token uuid,
+  p_member_id uuid,
+  p_account bigint,
+  p_server text,
+  p_password text default ''
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_member public.members;
+  v_server text := trim(coalesce(p_server, ''));
+  v_row public.fleet_accounts;
+begin
+  perform public._require_admin(p_token);
+  select * into v_member from public.members where id = p_member_id;
+  if v_member.id is null then
+    raise exception 'NOT_FOUND';
+  end if;
+  if p_account is null or p_account <= 0 then
+    raise exception 'BAD_ACCOUNT';
+  end if;
+  if v_server = '' or length(v_server) > 80 then
+    raise exception 'BAD_SERVER';
+  end if;
+
+  insert into public.fleet_accounts (member_id, account, server, password_enc)
+  values (
+    v_member.id,
+    p_account,
+    v_server,
+    extensions.pgp_sym_encrypt(coalesce(p_password, ''), public._fleet_key())
+  )
+  on conflict (account, server) do update
+    set member_id = excluded.member_id,
+        password_enc = case
+          when coalesce(p_password, '') = '' then public.fleet_accounts.password_enc
+          else excluded.password_enc
+        end,
+        updated_at = now()
+  returning * into v_row;
+  return public._fleet_row_json(v_row, v_member.email);
+end;
+$$;
+
+grant execute on function public.fleet_register_for(uuid, uuid, bigint, text, text) to anon, authenticated;

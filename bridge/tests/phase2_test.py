@@ -197,6 +197,16 @@ if fleet_mig.is_file():
     check("鍵のテーブルは外から読めない", "revoke all on table public.fleet_secret" in fleet_sql)
     check("一覧はパスワードを返さない", "password" not in fleet_sql[fleet_sql.index("_fleet_row_json(r public.fleet_accounts") : fleet_sql.index("fleet_register(")])
 
+# ── 8-1) 「つながっている口座を登録する」migration も schema.sql とずれていないか ──
+reg_mig = ROOT / "supabase" / "migrations" / "20261003_fleet_register_for.sql"
+check("管理者登録の migration がある", reg_mig.is_file())
+if reg_mig.is_file():
+    reg_sql = reg_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("管理者登録の migration の中身が schema.sql と同じ", reg_sql.strip() in schema_all)
+    check("管理者登録は管理者だけ", "_require_admin(p_token)" in reg_sql)
+    check("管理者登録は追加だけ（既存を落とさない）", "drop " not in reg_sql.lower().replace("do update", ""))
+
 # ── 8) DB の追加分（migration）と schema.sql がずれていないか ──
 mig_path = ROOT / "supabase" / "migrations" / "20260912_add_connect_tokens.sql"
 schema_path = ROOT / "supabase" / "schema.sql"

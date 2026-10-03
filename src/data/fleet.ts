@@ -39,6 +39,9 @@ export function fleetErrorMessage(error: unknown): string {
   if (raw.includes('FORBIDDEN')) return 'この操作を行う権限がありません。'
   if (raw.includes('NOT_FOUND')) return '対象の口座が見つかりません。'
   if (raw.includes('SESSION_EXPIRED')) return 'ログインの有効期限が切れました。もう一度ログインしてください。'
+  if (/fleet_register_for/.test(raw) && /could not find the function|does not exist|PGRST202/i.test(raw)) {
+    return 'データベースに「つながっている口座を登録する」設定がまだ入っていません（supabase/migrations/20261003_fleet_register_for.sql を流してください）。'
+  }
   if (/could not find the function|does not exist|PGRST202/i.test(raw)) {
     return 'データベースにまだ一斉制御の設定が入っていません（supabase/migrations/20261002_add_fleet.sql を流してください）。'
   }
@@ -47,6 +50,11 @@ export function fleetErrorMessage(error: unknown): string {
 
 export function fleetRegister(token: string, account: number, server: string, password: string): Promise<FleetAccount> {
   return rpc<FleetAccount>('fleet_register', { p_token: token, p_account: account, p_server: server, p_password: password })
+}
+
+/** 管理者が、つながっている部屋（会員）を登録簿に加える。パスワードは預からない。 */
+export function fleetRegisterFor(token: string, memberId: string, account: number, server: string): Promise<FleetAccount> {
+  return rpc<FleetAccount>('fleet_register_for', { p_token: token, p_member_id: memberId, p_account: account, p_server: server, p_password: '' })
 }
 
 export function fleetMyAccounts(token: string): Promise<FleetAccount[]> {

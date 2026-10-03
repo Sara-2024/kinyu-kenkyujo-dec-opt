@@ -337,6 +337,13 @@ check('要約が部屋ごとに返る', snap?.rooms?.[A]?.online === true && sna
 check('居ない部屋は切断中として返る', snap?.rooms?.[C]?.online === false, JSON.stringify(snap?.rooms?.[C]))
 check('会員IDの形でないものは無視する', !snap?.rooms?.['not-a-room'])
 check('口座の数字は中継が覚えていたものが返る', snap?.rooms?.[A]?.status?.account === 111, JSON.stringify(snap?.rooms?.[A]))
+fleet.send_({ type: 'fleet_watch', id: 'w1b', rooms: [C] })
+const snapAll = await fleet.nextWhere((m) => m.type === 'fleet_snapshot' && m.id === 'w1b')
+check(
+  '頼んでいない部屋でも、つながっていれば要約に入る（登録前の口座を一覧に出すため）',
+  snapAll?.rooms?.[A]?.online === true && snapAll?.rooms?.[B]?.online === true && snapAll?.rooms?.[C]?.online === false,
+  JSON.stringify(Object.keys(snapAll?.rooms ?? {})),
+)
 
 // 見ているあいだは、ブリッジへ「画面が開いている」と伝わる（数字を送ってもらうため）
 const appsA = await fbA.nextWhere((m) => m.type === 'apps' && m.count >= 1)

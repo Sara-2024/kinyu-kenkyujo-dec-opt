@@ -436,6 +436,15 @@ function handleFleet(ws, member) {
         notifyWatchers(roomId)
         summary[roomId] = roomSummary(roomId)
       }
+      // 登録前でも、ブリッジがつながっている部屋は見せる。
+      // 管理者が一覧から「一覧に加える」で登録できるように（お客様の操作なし）。
+      for (const [roomId, room] of rooms) {
+        if (!room.bridge || summary[roomId]) continue
+        room.fleet.add(ws)
+        watching.add(roomId)
+        notifyWatchers(roomId)
+        summary[roomId] = roomSummary(roomId)
+      }
       send(ws, { type: 'fleet_snapshot', id, rooms: summary })
       return
     }
