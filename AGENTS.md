@@ -171,6 +171,11 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   インストーラーが入れるときに消し（`MT5Automatic.iss` の `[Registry]`）、
   初回の設定でも残っていれば消す（`unregister_startup`）。
   連携が済めば、新しい版が自分の場所で登録し直す。
+- **ブリッジは「初回に選んだ MT5」に繋ぐ。** 接続ツールが `MT5_PATH` で渡した
+  terminal64.exe を、`bridge.py` の `_initialize_blocking` が最初に名指しで試す
+  （`_attach_to`）。path 無しの `initialize()` は「どれか」に繋ぐので、MT5 が何台もある
+  PC では EA を載せたのと別のターミナルに繋がり、そちらの「アルゴ取引」が OFF だと
+  サイトが「ON にしてください」から進まなくなる（`terminal_trade_allowed` は繋いだ側の値）。
 - **初回は EA を置くだけ。** `setup_phase1()`。MT5 の検出はログインも起動も要らない
   （`bridge/mt5_detect.py` が AppData のデータフォルダを数えるだけ）。
   MT5 が複数あるときだけ選択画面を出す。

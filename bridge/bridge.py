@@ -489,6 +489,34 @@ def setup_logging(cfg: Config) -> None:
 #   MetaTrader5 は同期APIなので、専用スレッド1本に閉じ込めて
 #   イベントループからは run_in_executor 経由でのみ触る。
 # ============================================================
+def _attach_to(exe: Path, timeout_ms: int) -> dict[str, Any] | None:
+    """名指しした MT5（terminal64.exe）に繋ぐ。ログインしていなければ None。
+
+    path を渡さない initialize は「どれか」に繋ぐので、MT5 が何台もある PC では
+    EA を載せたのと別のターミナルに繋がることがある。初回に選んだものへ繋ぐ入口。
+    """
+    if mt5 is None:
+        return None
+    try:
+        mt5.shutdown()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        if not mt5.initialize(path=str(exe), timeout=timeout_ms):
+            return None
+        info = mt5.account_info()
+    except Exception as exc:  # noqa: BLE001
+        log.debug("名指しの MT5 に繋げません: %s", exc)
+        return None
+    if info is None or not getattr(info, "login", None):
+        try:
+            mt5.shutdown()
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+    return {"account": getattr(info, "login", None), "server": getattr(info, "server", "")}
+
+
 class MT5Controller:
     def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
@@ -512,6 +540,23 @@ class MT5Controller:
     def _initialize_blocking(self) -> bool:
         if mt5 is None:
             raise RuntimeError("MetaTrader5 パッケージが見つかりません（Windows + 64bit Python が必要です）")
+
+        # 初回の設定で選んだ MT5（接続ツールが MT5_PATH で渡してくる）を最優先にする。
+        # ここを飛ばして「ログイン中のどれか」に繋ぐと、MT5 が何台もある PC では
+        # 別のターミナルに繋がり、EA を載せた側の「アルゴ取引」が ON でも
+        # サイトには OFF と見えたまま（terminal_trade_allowed は繋いだ側の値）になる。
+        chosen = Path(self.cfg.mt5_path) if self.cfg.mt5_path else None
+        if chosen is not None and chosen.is_file():
+            session = _attach_to(chosen, self.cfg.mt5_timeout)
+            if session:
+                log.info(
+                    "MT5 接続成功（初回に選んだターミナル）  口座=%s  サーバー=%s  %s",
+                    session.get("account"),
+                    session.get("server"),
+                    chosen,
+                )
+                return True
+            log.warning("初回に選んだ MT5 に繋げません（ログインしていない？）: %s。ほかを探します", chosen)
 
         # いまログインしている MT5 を優先（複数ターミナル・古い MT5_PATH より信頼できる）
         if find_logged_in_terminal is not None:

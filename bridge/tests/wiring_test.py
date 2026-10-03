@@ -111,6 +111,41 @@ used = {
 missing = [name for name in used if not hasattr(b.mt, name)]
 check("監督が呼ぶ MT5 の入口が全部ある", not missing, f"足りない: {missing}")
 
+# ── 5-2) ブリッジは「初回に選んだ MT5」に繋ぐ（MT5 が何台もある PC 向け） ──
+#    ここを飛ばすと別のターミナルに繋がり、EA を載せた側の「アルゴ取引」が ON でも
+#    サイトには OFF と見えたままになる。
+import pathlib as _pl
+import tempfile as _tf
+
+fake = sys.modules["MetaTrader5"]
+_fake_exe = _pl.Path(_tf.mkdtemp(prefix="mt5-")) / "terminal64.exe"
+_fake_exe.write_text("")
+init_calls = []
+
+
+def _fake_initialize(*a, **k):
+    init_calls.append(k)
+    return k.get("path") == str(_fake_exe)  # 名指ししたときだけ繋がる
+
+
+fake.initialize = _fake_initialize
+fake.account_info = lambda: types.SimpleNamespace(login=75602463, server="XMTrading-MT5 3")
+fake.terminal_info = lambda: types.SimpleNamespace(name="MetaTrader 5", build=5000, trade_allowed=True)
+cfg2 = bridge_mod.Config()
+cfg2.mt5_path = str(_fake_exe)
+b2 = bridge_mod.Bridge(cfg2)
+ok2 = b2.mt._initialize_blocking()
+check("初回に選んだ MT5 に繋ぐ", ok2 is True, str(init_calls))
+check("最初の接続が名指し（path つき）", bool(init_calls) and init_calls[0].get("path") == str(_fake_exe), str(init_calls[:1]))
+init_calls.clear()
+cfg3 = bridge_mod.Config()
+cfg3.mt5_path = str(_fake_exe.with_name("gone.exe"))  # 無いもの
+b3 = bridge_mod.Bridge(cfg3)
+fake.initialize = lambda *a, **k: (init_calls.append(k), False)[1]
+fake.last_error = lambda: (-1, "test")
+b3.mt._initialize_blocking()
+check("選んだ MT5 が無ければ、まず名指しせずにほかを探す", bool(init_calls) and init_calls[0].get("path") != cfg3.mt5_path, str(init_calls))
+
 # ── 6) 一斉制御の「全決済」が配線されている ──
 import asyncio  # noqa: E402
 
