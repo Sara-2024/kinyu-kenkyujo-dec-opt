@@ -1623,7 +1623,8 @@ def connect_all(room: str = "", show: bool = False) -> int:
     # 「ログイン中のどれか」に黙って繋ぐと、MT5 が何台もある PC では
     # 別の口座につながってしまう（しかもお客様には分からない）。
     say("MT5を確認しています…")
-    picked = choose_session(ui, log=log)
+    # 手で開いたときは毎回選んでもらう。黙って繋ぐと、お客様は「勝手に繋いだ」としか見えない
+    picked = choose_session(ui, log=log, always_ask=ui is not None)
     if picked is None:
         return 1
     session, chosen = picked
@@ -1686,15 +1687,17 @@ def _same_path(a: object, b: object) -> bool:
     return str(a or "").rstrip("\\/").lower() == str(b or "").rstrip("\\/").lower()
 
 
-def choose_session(ui, log=log) -> tuple[dict | None, str] | None:
+def choose_session(ui, log=log, always_ask: bool = False) -> tuple[dict | None, str] | None:
     """繋ぐ MT5 を決めて、ログイン済みならそのセッションを返す。
 
     返り値は (session, 選んだ MT5 のデータフォルダ)。session が None なら
     「選んだ MT5 にまだログインしていない」。None（全体）は「お客様がやめた」。
 
-      ・覚えている MT5 があれば、そこにしか繋がない。別の MT5 にログインしていても
-        黙って乗り換えず、「選んだ MT5 にログインしていません」と伝える
-        （乗り換えると、サイトに別の口座が出て、お客様は何が起きたか分からない）
+      ・always_ask（手で開いたとき）は、覚えていても毎回選んでもらう。
+        覚え書きは前の版が勝手に書いたものかもしれないので、信じて黙って繋がない。
+        覚えているものは一覧の先頭に出す
+      ・画面が無いとき（自動起動など）は、覚えている MT5 にしか繋がない。
+        別の MT5 にログインしていても乗り換えない
       ・覚えていなければ、選んでもらって覚える（1台でも画面に出して確かめてもらう）
     """
     terminals = mt5_detect.list_terminals()
@@ -1707,11 +1710,22 @@ def choose_session(ui, log=log) -> tuple[dict | None, str] | None:
         connect_state.write(connect_state.current(), terminal=path)
 
     def ask_pick() -> str:
-        # 1台でも選んでもらう（口座番号を見て確かめてもらうため）
+        # 1台でも選んでもらう（口座番号を見て確かめてもらうため）。覚えているものを先頭に
         if ui is None:
             return str(terminals[0].data_path) if terminals else ""
-        got = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+        ordered = sorted(terminals, key=lambda t: 0 if _same_path(t.data_path, chosen) else 1)
+        got = ui.choose_terminal([(str(t.data_path), t.label) for t in ordered])
         return str(got or "")
+
+    if ui is not None and always_ask and terminals:
+        picked = ask_pick()
+        if not picked:
+            log("選ばずに閉じられたので、何もしません")
+            return None
+        if chosen and not _same_path(picked, chosen):
+            log(f"MT5 を選び直しました: {chosen} → {picked}")
+        chosen = picked
+        remember(chosen)
 
     if not chosen:
         if len(terminals) > 1 and ui is None:

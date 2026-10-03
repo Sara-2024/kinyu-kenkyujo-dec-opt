@@ -593,6 +593,19 @@ connect_state.write(connect_state.INSTALL_ONLY, terminal="/mt5/A")
 got = connect.choose_session(None, log=quiet)  # 画面なし（自動起動）
 check("画面が無くても乗り換えず「未ログイン」として返す", got == (None, "/mt5/A"), str(got))
 
+# 手で開いたときは、覚えていても毎回選んでもらう（前の版が勝手に覚えたものを信じない）
+connect_state.write(connect_state.INSTALL_ONLY, terminal="/mt5/A")
+connect.find_logged_in_terminal = lambda prefer=None: {"account": 222, "server": "B", "data_path": str(prefer or "/mt5/B")}
+ui = PickUI([], ["/mt5/B"])
+got = connect.choose_session(ui, log=quiet, always_ask=True)
+check("手で開いたときは、覚えていても選択画面を出す", ui.pick_calls == 1, str(ui.pick_calls))
+check("選んだほうに繋ぐ（覚えていた A ではなく B）", got is not None and got[1] == "/mt5/B", str(got))
+check("選び直しを覚える", connect_state.read().get("terminal") == "/mt5/B")
+ui = PickUI([], [None])  # ✕ で閉じた
+got = connect.choose_session(ui, log=quiet, always_ask=True)
+check("選ばずに閉じたら、覚えているものにも繋がない", got is None, str(got))
+connect.find_logged_in_terminal = lambda prefer=None: {"account": 222, "server": "B", "data_path": "/mt5/B"}
+
 # 1台しか無くても、画面があれば選んでもらう（口座番号を見て確かめてもらうため）
 connect.mt5_detect.list_terminals = lambda: terms[1:]
 connect_state.write(connect_state.INSTALL_ONLY, terminal="")
