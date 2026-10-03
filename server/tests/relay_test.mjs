@@ -174,15 +174,31 @@ check('口座番号や残高は返さない', !JSON.stringify(asked).includes('9
 console.log('\n── ブリッジの入れ替わり（二重起動の交代）')
 
 const bridgeA2 = track(await open(bridge(A)))
-const replaced = await new Promise((resolve) => {
+const replacedP = new Promise((resolve) => {
   bridgeA.on('close', (code) => resolve(code))
   setTimeout(() => resolve(0), 1500)
 })
-check('同じ部屋に来た新しいブリッジが古いほうを閉じる', replaced === 4001, String(replaced))
+// 同じ口座から名乗れば「同じ PC の繋ぎ直し」。古いほうを閉じて新しいほうに入れ替える
+bridgeA2.send_({ type: 'hello', account: 987654321, server: 'Demo', balance: 1234, value: 1 })
+const replaced = await replacedP
+check('同じ口座のブリッジが来たら、古いほうを閉じて入れ替える', replaced === 4001, String(replaced))
 
 bridgeA2.send_({ type: 'status_update', account: 987654321, balance: 1234 })
 const afterSwap = await appA.nextWhere((m) => m.type === 'bridge_status')
 check('入れ替わったあとも同じ部屋に流れる', afterSwap?.status?.balance === 1234, JSON.stringify(afterSwap))
+
+// 別の口座のブリッジが同じ部屋に来ても、動いているほうは守る（追い出し合いを止める）
+const intruder = track(await open(bridge(A)))
+const intruderClosed = new Promise((resolve) => {
+  intruder.on('close', (code) => resolve(code))
+  setTimeout(() => resolve(0), 1500)
+})
+intruder.send_({ type: 'hello', account: 111222333, server: 'Other', balance: 1, value: 1 })
+check('★ 別の口座のブリッジは断る（4002）', (await intruderClosed) === 4002)
+check('動いていたブリッジは閉じられていない', bridgeA2.readyState === WebSocket.OPEN)
+bridgeA2.send_({ type: 'status_update', account: 987654321, balance: 1235 })
+const stillA2 = await appA.nextWhere((m) => m.type === 'bridge_status' && m.status?.balance === 1235)
+check('部屋は元のブリッジのまま', stillA2?.status?.account === 987654321, JSON.stringify(stillA2))
 
 console.log('\n── 画面の枚数がブリッジに伝わる（見ていない間は数字を送らない仕組み）')
 

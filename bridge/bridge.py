@@ -99,6 +99,9 @@ _LOCK_FH = None
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
 VERSION = "2026-09-10.1"
+# 同じ会員の部屋に、別の口座のブリッジがすでに動いているとき（中継が 4002 で断る）に待つ秒数。
+# すぐ繋ぎ直すと、動いているほうと追い出し合いになる。
+BUSY_WAIT_SEC = 300
 # exe 版は、作り直すたびに版が変わるようにする。同じ版だと「すでに動いている」と
 # みなして古いブリッジがそのまま残り、作り直した exe が効かない。
 if getattr(sys, "frozen", False):
@@ -2132,6 +2135,13 @@ class Bridge:
                         log.warning("別の接続ツールが接続したため、このブリッジは終了します")
                         self.request_stop()
                         break
+                    if getattr(ws, "close_code", None) == 4002:
+                        log.warning(
+                            "この会員には別の MT5 がすでにつながっています。%d 秒待ってから、もう一度だけ確かめます",
+                            BUSY_WAIT_SEC,
+                        )
+                        await _sleep_or_stop(BUSY_WAIT_SEC, self.stop)
+                        continue
                     # 切れた理由が後から分かるように、必ず番号と理由を残す。
                     # 1000/1001=中継からの正常な終了（再起動・入れ替え）、
                     # 1006=返事が無くなった（回線・PCのスリープ・中継の落ち）。
@@ -2151,6 +2161,13 @@ class Bridge:
                     log.warning("別の接続ツールが接続したため、このブリッジは終了します")
                     self.request_stop()
                     break
+                if code == 4002:
+                    log.warning(
+                        "この会員には別の MT5 がすでにつながっています。%d 秒待ってから、もう一度だけ確かめます",
+                        BUSY_WAIT_SEC,
+                    )
+                    await _sleep_or_stop(BUSY_WAIT_SEC, self.stop)
+                    continue
                 log.warning("中継サーバーに接続できません (%s): %s", type(exc).__name__, exc)
                 log.warning("→ server フォルダで npm start が動いているか確認（ポート 8080）")
             except Exception as exc:  # noqa: BLE001

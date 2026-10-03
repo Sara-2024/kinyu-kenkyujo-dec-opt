@@ -281,19 +281,44 @@ server.on('upgrade', (req, socket, head) => {
   })
 })
 
+/** これだけ pong が無ければ、そのブリッジは死んだものとして扱う（ping は 30 秒ごと） */
+const BRIDGE_DEAD_MS = 75 * 1000
+
 function handleBridge(ws, roomId) {
   const room = roomOf(roomId)
-  if (room.bridge && room.bridge !== ws) {
-    log(`部屋 ${short(roomId)} のブリッジが再接続したため、古い接続を閉じます`)
-    room.bridge.close(4001, 'replaced')
+  ws.lastPong = Date.now()
+  ws.on('pong', () => {
+    ws.lastPong = Date.now()
+  })
+  const alive = (b) => Boolean(b && b.readyState === b.OPEN && Date.now() - (b.lastPong ?? 0) < BRIDGE_DEAD_MS)
+
+  const takeOver = (why) => {
+    if (room.bridge && room.bridge !== ws) {
+      log(`部屋 ${short(roomId)} のブリッジを入れ替えます（${why}）。古い接続を閉じます`)
+      room.bridge.close(4001, 'replaced')
+    }
+    room.bridge = ws
+    room.since = Date.now()
+    log(`ブリッジ接続: ${short(roomId)}（現在 ${[...rooms.values()].filter((r) => r.bridge).length} 部屋）`)
+    notifyWatchers(roomId)
   }
-  room.bridge = ws
-  room.since = Date.now()
-  log(`ブリッジ接続: ${short(roomId)}（現在 ${[...rooms.values()].filter((r) => r.bridge).length} 部屋）`)
-  notifyWatchers(roomId)
+
+  // 同じ部屋に、返事のあるブリッジがすでに居るときは、名乗りを聞いてから決める。
+  //   同じ口座 … 同じ PC の繋ぎ直し（exe の更新・二重起動の交代）。新しいほうに入れ替える
+  //   別の口座 … 別の MT5 を同じ会員でつないでいる。動いているほうを守り、新しいほうを断る
+  //              （断らないと、追い出し合いが永久に続く。古い版は 4001 で終了しない）
+  // 返事が無いブリッジ（PC の再起動・回線切れ）は待たずに入れ替える。
+  let undecided = Boolean(room.bridge && room.bridge !== ws && alive(room.bridge) && room.status?.account != null)
+  if (!undecided) takeOver(room.bridge ? '前の接続から返事が無い' : '新規')
 
   const ping = setInterval(() => {
-    if (ws.readyState === ws.OPEN) ws.ping()
+    if (ws.readyState !== ws.OPEN) return
+    if (Date.now() - ws.lastPong > BRIDGE_DEAD_MS) {
+      log(`ブリッジ ${short(roomId)} から返事が無いので切ります`)
+      ws.terminate()
+      return
+    }
+    ws.ping()
   }, 30000)
 
   ws.on('message', (raw) => {
@@ -303,6 +328,19 @@ function handleBridge(ws, roomId) {
     } catch {
       log(`ブリッジ ${short(roomId)} から読めないデータ`)
       return
+    }
+
+    if (undecided) {
+      const account = payload.account
+      if (account == null) return
+      if (String(account) === String(room.status?.account)) {
+        undecided = false
+        takeOver('同じ口座からの繋ぎ直し')
+      } else {
+        log(`部屋 ${short(roomId)} には口座 ${tail4(room.status?.account)} のブリッジが動いているので、口座 ${tail4(account)} は断ります`)
+        ws.close(4002, 'busy')
+        return
+      }
     }
 
     if (payload.type === 'hello') {
