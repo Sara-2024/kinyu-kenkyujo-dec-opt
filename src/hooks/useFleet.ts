@@ -23,6 +23,8 @@ export interface SendResult {
   command: FleetCommand
   delivered: string[]
   waiting: string[]
+  /** 本人が「受け付けない」と決めていたので、中継が外した部屋 */
+  refused?: string[]
 }
 
 export type FleetPhase = 'connecting' | 'live' | 'denied' | 'error'

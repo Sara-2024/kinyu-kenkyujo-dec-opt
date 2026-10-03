@@ -6,7 +6,19 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
 import { useFleet, type FleetCommand, type RoomState } from '../hooks/useFleet'
-import { fleetDelete, fleetErrorMessage, fleetList, fleetRegisterFor, fleetReveal, fleetSetIncluded, type FleetAccount } from '../data/fleet'
+import {
+  fleetDelete,
+  fleetErrorMessage,
+  fleetList,
+  fleetOptouts,
+  fleetRegisterFor,
+  fleetReveal,
+  fleetSetIncluded,
+  type FleetAccount,
+} from '../data/fleet'
+
+/** 一覧の1行。登録簿に無い「連携だけの口座」は virtual（中継の要約から作る） */
+type Row = FleetAccount & { virtual?: boolean }
 
 const COMMAND_LABEL: Record<FleetCommand, string> = {
   stop_trading: 'エントリーのみ停止',
@@ -31,8 +43,9 @@ export function Fleet() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState<FleetCommand | null>(null)
-  const [report, setReport] = useState<{ command: FleetCommand; delivered: string[]; waiting: string[]; at: number } | null>(null)
+  const [report, setReport] = useState<{ command: FleetCommand; delivered: string[]; waiting: string[]; refused: string[]; at: number } | null>(null)
   const [revealed, setRevealed] = useState<Record<string, string>>({})
+  const [optouts, setOptouts] = useState<string[]>([])
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -46,6 +59,8 @@ export function Fleet() {
     if (!token) return
     try {
       setRows(await fleetList(token))
+      // 「受け付けない」の一覧は別に取る（まだ DB に入っていなくても一覧は出す）
+      setOptouts(await fleetOptouts(token).catch(() => []))
       setError(null)
     } catch (err) {
       setError(fleetErrorMessage(err))
@@ -64,12 +79,34 @@ export function Fleet() {
   if (ready && !member) return <Navigate to="/login" replace />
   if (ready && member && member.role !== 'admin') return <Navigate to="/" replace />
 
-  const targets = rows.filter((r) => r.included)
-  const targetRooms = [...new Set(targets.map((r) => r.member_id))]
-  const onlineCount = targetRooms.filter((room) => fleet.states[room]?.online).length
-  // つながっているのに登録簿に無い部屋（中継は登録前の部屋も要約に入れて返す）
+  // つながっているのに登録簿に無い部屋（中継は登録前の部屋も要約に入れて返す）。
+  // 連携した時点で同意とみなすので、登録簿に無くても「対象」として一覧に出す
   const registeredRooms = new Set(rows.map((r) => r.member_id))
   const unregistered = Object.entries(fleet.states).filter(([room, st]) => st.online && !registeredRooms.has(room))
+  const allRows: Row[] = [
+    ...rows,
+    ...unregistered.map(([room, st]) => {
+      const s = st.status as (Record<string, unknown> & { account?: unknown; server?: unknown }) | null
+      return {
+        id: `room:${room}`,
+        member_id: room,
+        email: '',
+        account: Number(s?.account) || 0,
+        server: String(s?.server ?? ''),
+        included: true,
+        note: '',
+        created_at: '',
+        updated_at: '',
+        virtual: true,
+      }
+    }),
+  ]
+  // 本人が「受け付けない」と決めた口座には流さない（中継側でも同じ確認をする）
+  const optedOut = new Set(optouts)
+  const targets = allRows.filter((r) => r.included && !optedOut.has(r.member_id))
+  const targetRooms = [...new Set(targets.map((r) => r.member_id))]
+  const onlineCount = targetRooms.filter((room) => fleet.states[room]?.online).length
+  const refusedCount = allRows.filter((r) => optedOut.has(r.member_id)).length
 
   const addConnected = async (room: string, st: RoomState) => {
     if (!token) return
@@ -92,11 +129,17 @@ export function Fleet() {
     }
   }
 
-  const toggleIncluded = async (row: FleetAccount) => {
+  const toggleIncluded = async (row: Row) => {
     if (!token) return
     setBusy(true)
     try {
-      await fleetSetIncluded(token, row.id, !row.included)
+      if (row.virtual) {
+        // 登録簿に無い口座を「対象外」にするには、まず登録簿に入れる
+        const created = await fleetRegisterFor(token, row.member_id, row.account, row.server)
+        await fleetSetIncluded(token, created.id, false)
+      } else {
+        await fleetSetIncluded(token, row.id, !row.included)
+      }
       await reload()
     } catch (err) {
       setError(fleetErrorMessage(err))
@@ -143,7 +186,7 @@ export function Fleet() {
     setError(null)
     try {
       const result = await fleet.send(command, targetRooms, COMMAND_LABEL[command])
-      setReport({ command, delivered: result.delivered, waiting: result.waiting, at: Date.now() })
+      setReport({ command, delivered: result.delivered, waiting: result.waiting, refused: result.refused ?? [], at: Date.now() })
     } catch (err) {
       setError(err instanceof Error ? err.message : '送れませんでした')
     } finally {
@@ -165,7 +208,7 @@ export function Fleet() {
           <span className="h-4 w-[3px]" style={{ background: 'var(--accent)' }} />
           <h1 className="text-[22px] font-bold">一斉制御</h1>
           <span className="text-[14px] text-slate-400">
-            登録 {rows.length} 口座 ／ 対象 {targets.length} 口座 ／ つながっている {onlineCount} 台
+            連携 {allRows.length} 口座 ／ 対象 {targets.length} 口座 ／ 受け付けない {refusedCount} 口座 ／ つながっている {onlineCount} 台
           </span>
           <Link to="/admin" className="ml-auto text-[15px] font-bold" style={{ color: 'var(--accent)' }}>
             管理者画面へ
@@ -175,12 +218,13 @@ export function Fleet() {
           </Link>
         </div>
         <p className="mt-2 text-[15px] text-slate-400">
-          登録された口座のうち「対象」のものへ、同じ合図を一度に流します。口座の PC で MT5 Automatic がサイトと連携すると
-          下に「まだ登録されていない口座」として出るので、「一覧に加える」で登録できます（お客様が
+          サイトと連携した口座は、その時点で一斉制御を受け付けたものとして、この一覧に「対象」で出ます（お客様の入力は要りません）。
+          お客様が管理画面で「受け付けない」にした口座には流しません。「対象外」はこちらで外すときに使います。
+          パスワードまで預かる場合だけ
           <Link to="/fleet/join" className="mx-1 font-bold" style={{ color: 'var(--accent)' }}>
             口座の登録ページ
           </Link>
-          から登録しても同じです）。
+          を使います。
         </p>
 
         {(error || relayNote) && (
@@ -244,6 +288,7 @@ export function Fleet() {
               <p className="font-bold">
                 {new Date(report.at).toLocaleTimeString('ja-JP')} に {COMMAND_LABEL[report.command]} を送りました：
                 届いた {report.delivered.length} 台 ／ 待たせている {report.waiting.length} 台
+                {report.refused.length > 0 ? ` ／ 受け付けない口座 ${report.refused.length} 台には流していません` : ''}
               </p>
               <p className="mt-1 text-slate-400">
                 各口座の「返事」の欄で、実際に止まったかを確かめてください（数秒で返ってきます）。
@@ -252,29 +297,7 @@ export function Fleet() {
           )}
         </div>
 
-        {/* ── つながっているが未登録の口座（管理者がここから登録する） ── */}
-        {unregistered.length > 0 && (
-          <div className="mt-5 rounded-[4px] border px-5 py-4" style={{ borderColor: '#ffd23e', background: 'rgba(250,204,21,0.06)' }}>
-            <p className="text-[16px] font-bold">つながっているのに、まだ登録されていない口座が {unregistered.length} 台あります</p>
-            <p className="mt-1 text-[14px] text-slate-400">「一覧に加える」を押すと、対象として登録されます（パスワードは預かりません）。</p>
-            <ul className="mt-3 space-y-2">
-              {unregistered.map(([room, st]) => {
-                const s = st.status as (Record<string, unknown> & { account?: unknown; server?: unknown }) | null
-                return (
-                  <li key={room} className="flex flex-wrap items-center gap-4 text-[15px]">
-                    <span className="font-bold">{s?.account != null ? String(s.account) : '（口座番号を受信中）'}</span>
-                    <span className="text-slate-400">{s?.server != null ? String(s.server) : ''}</span>
-                    <Mini onClick={() => void addConnected(room, st)} disabled={busy}>
-                      一覧に加える
-                    </Mini>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )}
-
-        {/* ── 口座一覧 ── */}
+        {/* ── 口座一覧（登録簿の口座と、連携だけの口座を同じ表に出す） ── */}
         <div className="mt-5 overflow-x-auto rounded-[4px] border" style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}>
           <table className="w-full min-w-[1100px] text-left text-[14px]">
             <thead>
@@ -294,15 +317,21 @@ export function Fleet() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {allRows.map((row) => {
                 const st: RoomState | undefined = fleet.states[row.member_id]
                 const s = st?.status
+                const refused = optedOut.has(row.member_id)
                 const liveAccount = s?.account != null ? String(s.account) : ''
                 const mismatch = st?.online && liveAccount && liveAccount !== String(row.account)
                 const running = s?.value != null ? Number(s.value) !== 0 : null
                 return (
-                  <tr key={row.id} className="border-b" style={{ borderColor: 'rgba(94,204,255,0.12)', opacity: row.included ? 1 : 0.55 }}>
+                  <tr key={row.id} className="border-b" style={{ borderColor: 'rgba(94,204,255,0.12)', opacity: refused ? 0.45 : row.included ? 1 : 0.55 }}>
                     <td className="px-3 py-3">
+                      {refused ? (
+                        <span className="text-[13px] font-bold" style={{ color: '#ffd23e' }}>
+                          本人が拒否
+                        </span>
+                      ) : (
                       <button
                         type="button"
                         disabled={busy}
@@ -316,12 +345,13 @@ export function Fleet() {
                       >
                         {row.included ? '対象' : '対象外'}
                       </button>
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <div className="font-bold">{row.account}</div>
                       <div className="text-[12px] text-slate-400">{row.server}</div>
                     </td>
-                    <td className="px-3 py-3 text-slate-300">{row.email}</td>
+                    <td className="px-3 py-3 text-slate-300">{row.virtual ? <span className="text-slate-500">連携のみ</span> : row.email}</td>
                     <td className="px-3 py-3">
                       {st?.online ? (
                         <span style={{ color: '#35f58a' }}>● つながっている</span>
@@ -370,20 +400,33 @@ export function Fleet() {
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-2">
-                        <Mini onClick={() => void reveal(row)}>{revealed[row.id] ? '隠す' : 'パスワード'}</Mini>
-                        <Mini onClick={() => void remove(row)} disabled={busy}>
-                          消す
-                        </Mini>
+                        {row.virtual ? (
+                          <Mini
+                            onClick={() => {
+                              if (st) void addConnected(row.member_id, st)
+                            }}
+                            disabled={busy || !st}
+                          >
+                            登録簿に入れる
+                          </Mini>
+                        ) : (
+                          <>
+                            <Mini onClick={() => void reveal(row)}>{revealed[row.id] ? '隠す' : 'パスワード'}</Mini>
+                            <Mini onClick={() => void remove(row)} disabled={busy}>
+                              消す
+                            </Mini>
+                          </>
+                        )}
                       </div>
                       {revealed[row.id] && <div className="mt-1 font-mono text-[13px] text-slate-300">{revealed[row.id]}</div>}
                     </td>
                   </tr>
                 )
               })}
-              {rows.length === 0 && (
+              {allRows.length === 0 && (
                 <tr>
                   <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
-                    まだ口座が登録されていません。口座の PC で MT5 Automatic がサイトと連携すると、上に「まだ登録されていない口座」として出ます。
+                    まだ口座がありません。口座の PC で MT5 Automatic がサイトと連携すると、ここに「対象」として出ます。
                   </td>
                 </tr>
               )}

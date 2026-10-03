@@ -39,6 +39,9 @@ export function fleetErrorMessage(error: unknown): string {
   if (raw.includes('FORBIDDEN')) return 'この操作を行う権限がありません。'
   if (raw.includes('NOT_FOUND')) return '対象の口座が見つかりません。'
   if (raw.includes('SESSION_EXPIRED')) return 'ログインの有効期限が切れました。もう一度ログインしてください。'
+  if (/fleet_optout|fleet_my_optout|fleet_optouts/.test(raw) && /could not find the function|does not exist|PGRST202/i.test(raw)) {
+    return 'データベースに「一斉停止を受け付けない」設定がまだ入っていません（supabase/migrations/20261003_fleet_optout.sql を流してください）。'
+  }
   if (/fleet_register_for/.test(raw) && /could not find the function|does not exist|PGRST202/i.test(raw)) {
     return 'データベースに「つながっている口座を登録する」設定がまだ入っていません（supabase/migrations/20261003_fleet_register_for.sql を流してください）。'
   }
@@ -55,6 +58,22 @@ export function fleetRegister(token: string, account: number, server: string, pa
 /** 管理者が、つながっている部屋（会員）を登録簿に加える。パスワードは預からない。 */
 export function fleetRegisterFor(token: string, memberId: string, account: number, server: string): Promise<FleetAccount> {
   return rpc<FleetAccount>('fleet_register_for', { p_token: token, p_member_id: memberId, p_account: account, p_server: server, p_password: '' })
+}
+
+/** 本人が「運営による一斉停止」を受け付けるかどうか（連携した時点では受け付ける） */
+export async function fleetMyOptout(token: string): Promise<boolean> {
+  const data = await rpc<{ optout?: boolean }>('fleet_my_optout', { p_token: token })
+  return Boolean(data?.optout)
+}
+
+export function fleetOptoutSet(token: string, optout: boolean): Promise<void> {
+  return rpc<void>('fleet_optout_set', { p_token: token, p_optout: optout })
+}
+
+/** 管理者: 受け付けないと決めた会員の ID 一覧 */
+export async function fleetOptouts(token: string): Promise<string[]> {
+  const data = await rpc<string[] | null>('fleet_optouts', { p_token: token })
+  return Array.isArray(data) ? data.map(String) : []
 }
 
 export function fleetMyAccounts(token: string): Promise<FleetAccount[]> {

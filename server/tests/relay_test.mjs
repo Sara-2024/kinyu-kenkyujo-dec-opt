@@ -231,12 +231,18 @@ const sessions = {
   'session-stopped': { id: A, status: 'active', can_trade: false },
   'session-suspended': { id: A, status: 'suspended', can_trade: true },
 }
+// 「一斉停止を受け付けない」と決めた会員（試験の途中で入れ替える）
+let refusing = []
 const supabase = createServer((req, res) => {
   let body = ''
   req.on('data', (c) => (body += c))
   req.on('end', () => {
     const token = JSON.parse(body || '{}').p_token
     res.setHeader('content-type', 'application/json')
+    if (String(req.url).includes('fleet_optouts')) {
+      res.end(JSON.stringify(sessions[token]?.role === 'admin' ? refusing : []))
+      return
+    }
     const member = sessions[token]
     if (!member) {
       res.statusCode = 401
@@ -356,6 +362,20 @@ check('届いた部屋と預かった部屋が分かる', sent?.delivered?.lengt
 const toFA = await fbA.nextCommand()
 const toFB = await fbB.nextCommand()
 check('★ 1回の操作で、2台のブリッジに同じ停止が届く', toFA?.command === 'stop_trading' && toFB?.command === 'stop_trading', JSON.stringify([toFA, toFB]))
+
+// 「受け付けない」と決めた会員（B）には流さない。画面が宛先に入れてきても中継が外す
+refusing = [B]
+fleet.send_({ type: 'fleet_send', id: 's1r', command: 'stop_trading', rooms: [A, B] })
+const sentR = await fleet.nextWhere((m) => m.type === 'fleet_sent' && m.id === 's1r')
+check(
+  '★ 受け付けない会員の部屋には流さない（中継が外す）',
+  sentR?.delivered?.length === 1 && sentR?.delivered?.[0] === A && sentR?.refused?.[0] === B,
+  JSON.stringify(sentR),
+)
+const toFA2 = await fbA.nextCommand()
+check('受け付ける部屋には届く', toFA2?.command === 'stop_trading' && toFA2?.id === 's1r', JSON.stringify(toFA2))
+check('受け付けない部屋のブリッジには届かない', (await fbB.nextCommand(400)) === null)
+refusing = []
 
 // ブリッジの返事が、部屋つきで一斉制御の画面に届く
 fbA.send_({ type: 'ack', id: 's1', command: 'stop_trading', ok: true, value: 0 })

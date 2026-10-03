@@ -74,6 +74,29 @@ async function memberOf(token) {
     return null
   }
 }
+/**
+ * 「運営による一斉停止を受け付けない」と決めた会員の部屋。
+ * 画面も同じ一覧で外しているが、画面を迂回して中継に直接つないだ相手にも
+ * 効かせるため、流す直前にここでもう一度確かめる。
+ * 取れなかったときは空（＝止めるほうを優先する）。
+ */
+async function refusingRooms(token) {
+  if (!token) return new Set()
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/fleet_optouts`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ p_token: token }),
+    })
+    if (!res.ok) return new Set()
+    const data = await res.json()
+    return new Set(Array.isArray(data) ? data.map((v) => normalizeRoom(String(v))) : [])
+  } catch (err) {
+    log(`受け付けない会員の一覧を取れませんでした: ${err.message}`)
+    return new Set()
+  }
+}
+
 const ROOM_RE = /^[A-Za-z0-9._:-]{1,80}$/
 // 画面が入れる部屋は会員ID（UUID）だけ。名前を当てて他の部屋に入れないようにする。
 const MEMBER_ROOM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -215,7 +238,7 @@ server.on('upgrade', (req, socket, head) => {
         socket.destroy()
         return
       }
-      wss.handleUpgrade(req, socket, head, (ws) => handleFleet(ws, member))
+      wss.handleUpgrade(req, socket, head, (ws) => handleFleet(ws, member, url.searchParams.get('session') || ''))
     })
     return
   }
@@ -398,7 +421,7 @@ function handleApp(ws, roomId, member) {
  * 1口座ずつ画面を開いて止めるのと同じ指令を、こちらで束ねて流しているだけ。
  * ブリッジ側の歯止め（ALLOWED_VARIABLES など）はそのまま効く。
  */
-function handleFleet(ws, member) {
+function handleFleet(ws, member, sessionToken = '') {
   const watching = new Set()
   log(`一斉制御の画面が接続しました（管理者 ${short(member.id)}）`)
 
@@ -455,23 +478,28 @@ function handleFleet(ws, member) {
         refuse('この操作は一斉制御では使えません')
         return
       }
-      const targets = validRooms(payload.rooms)
-      const delivered = []
-      const waiting = []
-      const order = { id, command, reason: String(payload.reason ?? '一斉制御').slice(0, 80) }
-      for (const roomId of targets) {
-        const room = roomOf(roomId)
-        if (room.bridge) {
-          send(room.bridge, { ...order, bridgeId: roomId })
-          delivered.push(roomId)
-        } else {
-          // 居ないあいだに来た指令は、名乗った瞬間に渡す（最後の1つだけ覚える）
-          room.pending = order
-          waiting.push(roomId)
+      const asked = validRooms(payload.rooms)
+      // 本人が「受け付けない」と決めた部屋は、画面が宛先に入れてきても外す
+      void refusingRooms(sessionToken).then((refusing) => {
+        const targets = asked.filter((roomId) => !refusing.has(roomId))
+        const refused = asked.filter((roomId) => refusing.has(roomId))
+        const delivered = []
+        const waiting = []
+        const order = { id, command, reason: String(payload.reason ?? '一斉制御').slice(0, 80) }
+        for (const roomId of targets) {
+          const room = roomOf(roomId)
+          if (room.bridge) {
+            send(room.bridge, { ...order, bridgeId: roomId })
+            delivered.push(roomId)
+          } else {
+            // 居ないあいだに来た指令は、名乗った瞬間に渡す（最後の1つだけ覚える）
+            room.pending = order
+            waiting.push(roomId)
+          }
         }
-      }
-      log(`一斉制御 → ${command}: 届いた ${delivered.length} / 待たせる ${waiting.length}`)
-      send(ws, { type: 'fleet_sent', id, command, delivered, waiting })
+        log(`一斉制御 → ${command}: 届いた ${delivered.length} / 待たせる ${waiting.length} / 受け付けない ${refused.length}`)
+        send(ws, { type: 'fleet_sent', id, command, delivered, waiting, refused })
+      })
       return
     }
 

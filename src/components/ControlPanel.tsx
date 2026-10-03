@@ -10,6 +10,8 @@ import type { Connection } from '../data/connection'
 import { formatBridgeError } from '../data/bridgeErrors'
 import { EA_SETTINGS, formatValue } from '../data/eaSettings'
 import type { useBridge } from '../hooks/useBridge'
+import { useAuth } from '../hooks/AuthContext'
+import { fleetErrorMessage, fleetMyOptout, fleetOptoutSet } from '../data/fleet'
 
 export function ControlPanel({
   conn,
@@ -28,6 +30,24 @@ export function ControlPanel({
   const [sending, setSending] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
+  // 運営による一斉停止を受け付けるか。連携した時点では受け付ける。本人がここで拒否できる
+  const { token } = useAuth()
+  const [optout, setOptout] = useState<boolean | null>(null)
+  const [optoutNote, setOptoutNote] = useState<string | null>(null)
+  useEffect(() => {
+    if (!token) return
+    fleetMyOptout(token).then(setOptout, () => setOptout(null))
+  }, [token])
+  const toggleOptout = async () => {
+    if (!token || optout == null) return
+    try {
+      await fleetOptoutSet(token, !optout)
+      setOptout(!optout)
+      setOptoutNote(null)
+    } catch (err) {
+      setOptoutNote(fleetErrorMessage(err))
+    }
+  }
   const [switching, setSwitching] = useState(false)
   /** お客様がこの画面で触った項目。ここだけは MT5 の値で上書きしない */
   const touched = useRef<Set<string>>(new Set())
@@ -344,6 +364,28 @@ export function ControlPanel({
           この端末の連携を解除
         </button>
       </div>
+
+      {/* 運営による一斉停止。連携した時点で受け付ける。本人がここで拒否できる（拒否は中継側でも効く） */}
+      {optout != null && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t pt-4 text-[15px]" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
+          <span className="text-slate-300">
+            運営による一斉停止：
+            <span className="ml-1 font-bold" style={{ color: optout ? '#ffd23e' : '#35f58a' }}>
+              {optout ? '受け付けない' : '受け付ける'}
+            </span>
+          </span>
+          <span className="text-[13px] text-slate-500">相場の急変などに、運営がまとめて新規注文を止めたり決済したりすることがあります。</span>
+          <button
+            type="button"
+            onClick={() => void toggleOptout()}
+            className="h-11 rounded-[4px] border px-4 text-[14px] font-bold text-slate-100"
+            style={{ borderColor: 'var(--panel-border)', background: 'rgba(8,14,26,0.7)' }}
+          >
+            {optout ? '受け付けるに戻す' : '受け付けない'}
+          </button>
+          {optoutNote && <span className="text-[13px] font-bold text-[#ff8484]">⚠ {optoutNote}</span>}
+        </div>
+      )}
     </div>
   )
 }

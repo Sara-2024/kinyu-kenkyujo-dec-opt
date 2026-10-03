@@ -207,6 +207,18 @@ if reg_mig.is_file():
     check("管理者登録は管理者だけ", "_require_admin(p_token)" in reg_sql)
     check("管理者登録は追加だけ（既存を落とさない）", "drop " not in reg_sql.lower().replace("do update", ""))
 
+# ── 8-2) 「一斉停止を受け付けない」migration も schema.sql とずれていないか ──
+opt_mig = ROOT / "supabase" / "migrations" / "20261003_fleet_optout.sql"
+check("受け付けないの migration がある", opt_mig.is_file())
+if opt_mig.is_file():
+    opt_sql = opt_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("受け付けないの migration の中身が schema.sql と同じ", opt_sql.strip() in schema_all)
+    check("切り替えは本人だけ（セッションの会員）", "_session_member(p_token)" in opt_sql[opt_sql.index("fleet_optout_set") :])
+    check("一覧は管理者だけ", "_require_admin(p_token)" in opt_sql[opt_sql.index("fleet_optouts(") :])
+    check("記録のテーブルは外から読めない", "revoke all on table public.fleet_optout" in opt_sql)
+    check("受け付けないの migration は追加だけ（既存を落とさない）", "drop " not in opt_sql.lower().replace("do update", ""))
+
 # ── 8) DB の追加分（migration）と schema.sql がずれていないか ──
 mig_path = ROOT / "supabase" / "migrations" / "20260912_add_connect_tokens.sql"
 schema_path = ROOT / "supabase" / "schema.sql"

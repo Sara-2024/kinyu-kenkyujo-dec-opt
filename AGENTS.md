@@ -327,11 +327,19 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   `pgp_sym_encrypt` で暗号化し、鍵（`fleet_secret`）は関数の中からしか読めない。
   一覧（`fleet_list`）はパスワードを返さず、取り出すのは `fleet_reveal`（管理者）だけ。
   「MT5のパスワードは扱わない」はお客様向けの商品の話で、こちらは自社口座の台帳。
-- **登録はお客様に頼まなくてよい。** 中継の `fleet_watch` は、頼まれた部屋に加えて
-  「ブリッジがつながっている部屋」も要約に入れて返すので、画面は登録簿に無い部屋を
-  「まだ登録されていない口座」として出し、管理者が「一覧に加える」で登録できる
-  （`fleet_register_for`。管理者だけ。パスワードは預からない）。
-  `supabase/migrations/20261003_fleet_register_for.sql`。
+- **連携した時点で「受け付けた」とみなす。** 中継の `fleet_watch` は、頼まれた部屋に加えて
+  「ブリッジがつながっている部屋」も要約に入れて返すので、画面は登録簿に無い部屋も
+  そのまま「対象」の行として出す（`Row.virtual`）。お客様の入力は要らない。
+  登録簿に入れるのは、管理者が「対象外」にするときか「登録簿に入れる」を押したとき
+  （`fleet_register_for`。管理者だけ。パスワードは預からない。
+  `supabase/migrations/20261003_fleet_register_for.sql`）。
+- **お客様は自分で拒否できる。** アルゴの管理画面（`ControlPanel`）の
+  「運営による一斉停止：受け付ける／受け付けない」。記録は `fleet_optout`
+  （`fleet_optout_set` / `fleet_my_optout` / `fleet_optouts`、
+  `supabase/migrations/20261003_fleet_optout.sql`）。
+  **拒否は画面だけでなく中継でも効かせる。** `fleet_send` は流す直前に
+  `fleet_optouts` を引いて、拒否した部屋を宛先から外す（`refusingRooms`、応答の `refused`）。
+  画面を迂回して中継に直接つないでも、拒否した口座には届かない。
 - **対象にする／対象外にする**は口座ごと（`included`）。一斉操作は対象の口座の部屋にだけ流す。
   同じ会員が複数口座を登録していても部屋は1つなので、画面は会員IDで束ねて送る。
 - DB は `supabase/migrations/20261002_add_fleet.sql`（`schema.sql` にも同じものが入っている。
