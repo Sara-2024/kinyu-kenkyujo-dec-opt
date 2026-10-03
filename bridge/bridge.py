@@ -1774,24 +1774,29 @@ class CommandRouter:
             ok, readback = await self.mt.set_trading(True)
             return self._ack(command, request_id, ok, value=readback)
 
-        if command == "close_all":
-            # 一斉制御の「新規を止めて全ポジションも決済」。
-            # まず新規を止めてから閉じる（閉じた直後に EA が建て直すのを防ぐ）
+        if command in ("close_all", "stop_system"):
+            # 一斉制御。
+            #   close_all   … 全決済だけ（新規は止めない。EA は続けて入ることがある）
+            #   stop_system … 新規を止めてから全決済（口座を空にして止める）
             reason = payload.get("reason", "")
-            log.warning("指令: 全決済  理由=%s", reason or "(指定なし)")
-            ok, readback = await self.mt.set_trading(False)
+            ok, readback = True, None
+            if command == "stop_system":
+                log.warning("指令: システム停止（新規停止＋全決済）  理由=%s", reason or "(指定なし)")
+                # 先に止める。閉じた直後に EA が建て直すのを防ぐ
+                ok, readback = await self.mt.set_trading(False)
+            else:
+                log.warning("指令: 全決済  理由=%s", reason or "(指定なし)")
             result = await self.mt.close_all()
             failed = result.get("failed") or []
-            return self._ack(
-                command,
-                request_id,
-                ok and not failed and not result.get("error"),
-                value=readback,
-                closed=result.get("closed", 0),
-                removed=result.get("removed", 0),
-                failed=failed,
-                error=result.get("error") or (f"{len(failed)} 件を閉じられませんでした" if failed else None),
-            )
+            extra: dict[str, Any] = {
+                "closed": result.get("closed", 0),
+                "removed": result.get("removed", 0),
+                "failed": failed,
+                "error": result.get("error") or (f"{len(failed)} 件を閉じられませんでした" if failed else None),
+            }
+            if command == "stop_system":
+                extra["value"] = readback  # 売買フラグの読み返し（全決済だけのときは混ぜない）
+            return self._ack(command, request_id, ok and not failed and not result.get("error"), **extra)
 
         if command == "set_variable":
             name = str(payload.get("name", "")).strip()

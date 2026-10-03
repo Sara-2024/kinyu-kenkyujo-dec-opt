@@ -9,16 +9,21 @@ import { useFleet, type FleetCommand, type RoomState } from '../hooks/useFleet'
 import { fleetDelete, fleetErrorMessage, fleetList, fleetReveal, fleetSetIncluded, type FleetAccount } from '../data/fleet'
 
 const COMMAND_LABEL: Record<FleetCommand, string> = {
-  stop_trading: '一斉停止（新規だけ止める）',
-  close_all: '一斉停止＋全決済',
+  stop_trading: 'エントリーのみ停止',
+  close_all: '一斉全決済',
+  stop_system: 'システム停止',
   start_trading: '一斉再開',
 }
 
 const COMMAND_NOTE: Record<FleetCommand, string> = {
-  stop_trading: '新しい注文を止めます。持っているポジションはそのまま（決済・SL/TP は今までどおり動きます）。',
-  close_all: '新しい注文を止めたうえで、持っているポジションと待機注文をすべて閉じます。元に戻せません。',
+  stop_trading: '新しい注文だけ止めます。持っているポジションはそのまま（決済・SL/TP は今までどおり動きます）。',
+  close_all: '持っているポジションと待機注文をすべて閉じます。新しい注文は止めないので、システムがまた入ることがあります。元に戻せません。',
+  stop_system: '新しい注文を止めたうえで、持っているポジションと待機注文をすべて閉じます。口座を空にして止めます。元に戻せません。',
   start_trading: '止めていた新規注文を再開します。',
 }
+
+/** 元に戻せない操作（確認の枠を赤くする） */
+const DESTRUCTIVE: ReadonlySet<FleetCommand> = new Set<FleetCommand>(['close_all', 'stop_system'])
 
 export function Fleet() {
   const { member, token, ready } = useAuth()
@@ -168,6 +173,9 @@ export function Fleet() {
             <Big onClick={() => setConfirm('close_all')} disabled={busy || targetRooms.length === 0} tone="danger">
               {COMMAND_LABEL.close_all}
             </Big>
+            <Big onClick={() => setConfirm('stop_system')} disabled={busy || targetRooms.length === 0} tone="danger">
+              {COMMAND_LABEL.stop_system}
+            </Big>
             <Big onClick={() => setConfirm('start_trading')} disabled={busy || targetRooms.length === 0} tone="ok">
               {COMMAND_LABEL.start_trading}
             </Big>
@@ -185,7 +193,7 @@ export function Fleet() {
           </div>
 
           {confirm && (
-            <div className="mt-4 rounded-[4px] border px-4 py-4" style={{ borderColor: confirm === 'close_all' ? '#ff8484' : 'var(--panel-border)' }}>
+            <div className="mt-4 rounded-[4px] border px-4 py-4" style={{ borderColor: DESTRUCTIVE.has(confirm) ? '#ff8484' : 'var(--panel-border)' }}>
               <p className="text-[17px] font-bold">
                 {COMMAND_LABEL[confirm]} — 対象 {targets.length} 口座（{targetRooms.length} 台、つながっている {onlineCount} 台）
               </p>
@@ -196,7 +204,7 @@ export function Fleet() {
                 </p>
               )}
               <div className="mt-3 flex flex-wrap gap-3">
-                <Big onClick={() => void fire(confirm)} disabled={busy} tone={confirm === 'close_all' ? 'danger' : 'ok'}>
+                <Big onClick={() => void fire(confirm)} disabled={busy} tone={DESTRUCTIVE.has(confirm) ? 'danger' : 'ok'}>
                   実行する
                 </Big>
                 <Big onClick={() => setConfirm(null)} disabled={busy} tone="plain">
@@ -305,7 +313,7 @@ export function Fleet() {
                       {st?.ack ? (
                         <span style={{ color: st.ack.ok ? '#35f58a' : '#ff8484' }}>
                           {COMMAND_LABEL[st.ack.command as FleetCommand] ?? st.ack.command}：{st.ack.ok ? '完了' : '失敗'}
-                          {st.ack.command === 'close_all' && st.ack.ok ? `（決済 ${st.ack.closed ?? 0}・取消 ${st.ack.removed ?? 0}）` : ''}
+                          {DESTRUCTIVE.has(st.ack.command as FleetCommand) && st.ack.ok ? `（決済 ${st.ack.closed ?? 0}・取消 ${st.ack.removed ?? 0}）` : ''}
                           {st.ack.error ? ` ${st.ack.error}` : ''}
                           <span className="ml-1 text-slate-500">{new Date(st.ack.at).toLocaleTimeString('ja-JP')}</span>
                         </span>

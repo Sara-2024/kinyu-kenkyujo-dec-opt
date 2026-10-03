@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { WS_URL, type BridgeStatus } from './useBridge'
 
-export type FleetCommand = 'stop_trading' | 'close_all' | 'start_trading'
+export type FleetCommand = 'stop_trading' | 'close_all' | 'stop_system' | 'start_trading'
 
 export interface RoomState {
   online: boolean

@@ -30,13 +30,17 @@ const READ_COMMANDS = new Set(['get_status', 'status', 'get_positions', 'positio
 /** 売買の状態を変える指令。`can_trade` が false の会員には通さない */
 const WRITE_COMMANDS = new Set(['start_trading', 'set_variable', 'set_ai_gate'])
 /** 止める操作だけは、売買を禁止された会員にも許す（安全側にしか動かないため） */
-const STOP_COMMANDS = new Set(['stop_trading', 'close_all'])
+const STOP_COMMANDS = new Set(['stop_trading', 'close_all', 'stop_system'])
 
 /**
  * 一斉制御（/fleet）から流してよい指令。管理者だけが入れる入口なので、
- * 止める・閉じる・再開の3つに絞る（ロット変更などは1口座ずつの画面でやる）。
+ *   stop_trading … エントリーのみ停止
+ *   close_all    … 一斉全決済（新規は止めない）
+ *   stop_system  … システム停止（新規停止＋全決済）
+ *   start_trading… 一斉再開
+ * に絞る（ロット変更などは1口座ずつの画面でやる）。
  */
-const FLEET_COMMANDS = new Set(['stop_trading', 'close_all', 'start_trading'])
+const FLEET_COMMANDS = new Set(['stop_trading', 'close_all', 'stop_system', 'start_trading'])
 
 /** token → { at, member } */
 const members = new Map()

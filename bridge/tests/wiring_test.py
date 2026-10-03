@@ -221,8 +221,16 @@ async def _close_all():
 b.mt.set_trading = _set_trading
 b.mt.close_all = _close_all
 ack = asyncio.run(b.router.handle({"command": "close_all", "id": "t1"}))
-check("close_all の指令が通る", ack["ok"] is True and ack["closed"] == 1, str(ack))
-check("閉じる前に新規を止める", calls == [("set_trading", False), ("close_all",)], str(calls))
+check("close_all（一斉全決済）の指令が通る", ack["ok"] is True and ack["closed"] == 1, str(ack))
+check("全決済だけのときは新規を止めない", calls == [("close_all",)], str(calls))
+check("全決済だけの応答に売買フラグを混ぜない", "value" not in ack, str(ack))
+calls.clear()
+ack = asyncio.run(b.router.handle({"command": "stop_system", "id": "t2"}))
+check("stop_system（システム停止）の指令が通る", ack["ok"] is True and ack["closed"] == 1, str(ack))
+check("システム停止は、閉じる前に新規を止める", calls == [("set_trading", False), ("close_all",)], str(calls))
+calls.clear()
+ack = asyncio.run(b.router.handle({"command": "stop_trading", "id": "t3"}))
+check("stop_trading（エントリーのみ停止）は閉じない", calls == [("set_trading", False)], str(calls))
 
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)
