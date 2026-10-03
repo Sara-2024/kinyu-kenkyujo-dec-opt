@@ -31,8 +31,18 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      # 英語の Windows なので、日本語の表示でこけないように UTF-8 にする
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+      # build-windows.bat は `py -3` で呼ぶ。MetaTrader5 の wheel がある版に固定する
+      PY_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Python の確認
         shell: cmd
