@@ -36,8 +36,16 @@ export interface BridgeStatus {
   ea_allowed?: string | null
   ea_state_at?: string | null
   ea_name?: string | null
-  /** EA が生きているか（10秒ごとの書き込みが届いているか） */
+  /** EA が生きているか（10秒ごとの書き込みが届いていて、いまつないでいる口座の Yumekku のもの） */
   ea_alive?: boolean
+  /** EA が載っているチャートの銘柄 */
+  ea_symbol?: string | null
+  /** その銘柄がゴールド（XAUUSD / GOLD）か */
+  ea_symbol_ok?: boolean | null
+  /** 載っているのが配っている EA（Yumekku）か */
+  ea_ours?: boolean | null
+  /** 手順が進まない理由（別の口座・別の EA・別の銘柄）。無ければ null */
+  ea_problem?: string | null
   /** EA とブリッジが同じフォルダを見ているか */
   ea_same_folder?: boolean | null
   /** サイトから最後に指示された状態と、その時刻・出どころ */
@@ -107,6 +115,10 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'ea_state_at',
   'ea_name',
   'ea_alive',
+  'ea_symbol',
+  'ea_symbol_ok',
+  'ea_ours',
+  'ea_problem',
   'ea_same_folder',
   'intent',
   'intent_by',

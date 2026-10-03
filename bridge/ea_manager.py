@@ -38,6 +38,17 @@ import os
 import re
 import shutil
 import time
+
+try:
+    from mt5_terminal import is_gold_symbol as _is_gold_symbol, is_our_ea as _is_our_ea
+except ImportError:  # pragma: no cover - 単体で読み込まれたとき
+
+    def _is_our_ea(stem: str) -> bool:
+        return "yumekku" in str(stem).lower()
+
+    def _is_gold_symbol(name: str) -> bool:
+        upper = str(name or "").upper()
+        return "XAUUSD" in upper or "GOLD" in upper
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -506,15 +517,19 @@ def heartbeat_path() -> Path:
     return Path(base) / "MetaQuotes" / "Terminal" / "Common" / "Files" / HEARTBEAT_FILE
 
 
-def heartbeat(fresh_sec: int = HEARTBEAT_FRESH_SEC) -> dict[str, Any]:
+def heartbeat(fresh_sec: int = HEARTBEAT_FRESH_SEC, account: int | str | None = None) -> dict[str, Any]:
     """EA がいまチャートで動いているか。
 
-    seen   … 控えがあるか（一度でも動いたか）
-    fresh  … いま動いているか
-    ea     … 動いている EA の名前
-    symbol … 載っているチャートの銘柄
+    seen          … 控えがあるか（一度でも動いたか）
+    fresh         … いま動いているか（account を渡したときは、その口座の EA が）
+    ea / symbol   … 動いている EA の名前と、載っているチャートの銘柄
+    ours / gold   … それがうちの EA か／ゴールドのチャートか（分からなければ None）
+    other_account … 控えを書いたのが別の口座の MT5（控えは PC 内で1つしかない）
     """
-    info: dict[str, Any] = {"seen": False, "fresh": False, "age": None, "ea": "", "symbol": ""}
+    info: dict[str, Any] = {
+        "seen": False, "fresh": False, "age": None, "ea": "", "symbol": "",
+        "account": "", "ours": None, "gold": None, "other_account": False,
+    }
     path = heartbeat_path()
     try:
         age = time.time() - path.stat().st_mtime
@@ -537,7 +552,15 @@ def heartbeat(fresh_sec: int = HEARTBEAT_FRESH_SEC) -> dict[str, Any]:
             continue
         for line in text.splitlines():
             key, _, value = line.partition("=")
-            if key.strip() in ("ea", "symbol"):
+            if key.strip() in ("ea", "symbol", "account"):
                 info[key.strip()] = value.strip()
         break
+    if info["ea"]:
+        info["ours"] = _is_our_ea(info["ea"])
+    if info["symbol"]:
+        info["gold"] = _is_gold_symbol(info["symbol"])
+    if account and info["account"] and str(info["account"]).strip() != str(account).strip():
+        # 別の MT5 に載せた EA が書いたもの。この MT5 では動いていない
+        info["other_account"] = True
+        info["fresh"] = False
     return info

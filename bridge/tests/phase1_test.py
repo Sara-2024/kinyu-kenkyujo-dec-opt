@@ -425,6 +425,27 @@ state_ini.write_bytes("ea=YumekkuEA_v11\nstate=1\nsymbol=GOLD\n".encode("utf-16"
 beat = ea_manager.heartbeat()
 check("別の文字コードでも読める", beat["symbol"] == "GOLD", str(beat))
 
+# 控えは PC 内の全 MT5 で1つ。別の口座の EA が書いたものは「この MT5 では動いていない」
+state_ini.write_text("ea=YumekkuEA_win\nstate=1\nsymbol=GOLD\naccount=198588095\n", encoding="utf-8")
+beat = ea_manager.heartbeat(account=75613879)
+check("別の口座の控えは「動いていない」", beat["fresh"] is False and beat["other_account"] is True, str(beat))
+beat = ea_manager.heartbeat(account=198588095)
+check("同じ口座なら「動いている」", beat["fresh"] is True and beat["other_account"] is False, str(beat))
+check("GOLD はゴールドと分かる", beat["gold"] is True, str(beat))
+check("Yumekku はうちの EA と分かる", beat["ours"] is True, str(beat))
+state_ini.write_text("ea=OtherEA\nstate=1\nsymbol=USDJPY\naccount=198588095\n", encoding="utf-8")
+beat = ea_manager.heartbeat(account=198588095)
+check("別の EA・別の銘柄は見分けられる", beat["ours"] is False and beat["gold"] is False, str(beat))
+import connect as _connect  # noqa: E402
+
+check("案内の文は、載っている別の EA の名前を言う", "OtherEA" in _connect.beat_hint(beat), _connect.beat_hint(beat))
+state_ini.write_text("ea=YumekkuEA_win\nstate=1\nsymbol=USDJPY\naccount=198588095\n", encoding="utf-8")
+beat = ea_manager.heartbeat(account=198588095)
+check("案内の文は、ゴールド以外の銘柄を言う", "USDJPY" in _connect.beat_hint(beat), _connect.beat_hint(beat))
+beat = ea_manager.heartbeat(account=75613879)
+check("案内の文は、別の口座で動いていることを言う", "198588095" in _connect.beat_hint(beat), _connect.beat_hint(beat))
+state_ini.write_bytes("ea=YumekkuEA_v11\nstate=1\nsymbol=GOLD\n".encode("utf-16"))
+
 # ── 15) 設置のあとの案内（「もう入っています」で終わらせない）──
 import connect  # noqa: E402
 
@@ -474,7 +495,7 @@ pressed = {"n": 0}
 real_heartbeat = ea_manager.heartbeat
 
 
-def fake_heartbeat(fresh_sec=ea_manager.HEARTBEAT_FRESH_SEC):
+def fake_heartbeat(fresh_sec=ea_manager.HEARTBEAT_FRESH_SEC, account=None):
     pressed["n"] += 1
     if pressed["n"] == 1:
         return {"seen": True, "fresh": False, "age": 600, "ea": "", "symbol": ""}

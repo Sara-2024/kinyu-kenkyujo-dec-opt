@@ -26,6 +26,16 @@ def is_our_ea(stem: str) -> bool:
     return EA_MATCH.lower() in str(stem).lower()
 
 
+def is_gold_symbol(name: str) -> bool:
+    """EA を載せてよい銘柄か（ドル建ての金）。
+
+    業者によって XAUUSD / GOLD / GOLD# / XAUUSD.r などと名前が違うので、
+    「XAUUSD か GOLD を含む」で見る。XAUEUR / XAUJPY はどちらも含まないので弾ける。
+    """
+    upper = str(name or "").upper()
+    return "XAUUSD" in upper or "GOLD" in upper
+
+
 def origin_folder(data_path: str | Path) -> Path | None:
     """origin.txt に書かれたインストール先。存在するかは見ない（読めなければ None）。"""
     origin = Path(data_path) / "origin.txt"

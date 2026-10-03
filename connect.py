@@ -1300,6 +1300,7 @@ def setup_phase1() -> int:
         placed=before.state,
         shown=shown,
         needs_restart=running and not restarted,
+        account=account_of(target),
     )
     log("初回の設定が終わりました（サイトとは接続していません）")
     return 0
@@ -1311,23 +1312,48 @@ def st_name(st) -> str:
     return f"{EA_NAME}（版 {version}）" if version else EA_NAME
 
 
+def account_of(terminal) -> str:
+    """選んだ MT5 の口座番号（表示名「…（口座 123）」から取る）。分からなければ空。"""
+    m = re.search(r"口座\s*(\d+)", str(getattr(terminal, "label", "") or ""))
+    return m.group(1) if m else ""
+
+
+def ea_running_here(beat: dict) -> bool:
+    """この MT5 で、うちの EA がゴールドのチャートで動いているか。"""
+    return bool(beat.get("fresh")) and beat.get("ours") is not False and beat.get("gold") is not False
+
+
+def beat_hint(beat: dict) -> str:
+    """動いていないとき、何が違うかを一言で。該当が無ければ空。"""
+    if beat.get("other_account"):
+        return f"（いま動いているのは別のMT5（口座 {beat.get('account')}）です。このMT5のチャートに載せてください）"
+    if beat.get("fresh") and beat.get("ours") is False:
+        return f"（載っているのは「{beat.get('ea')}」です。{EA_NAME} を載せてください）"
+    if beat.get("fresh") and beat.get("gold") is False:
+        return f"（{beat.get('symbol')} のチャートに載っています。ゴールドのチャートに載せてください）"
+    if beat.get("seen") and not beat.get("fresh"):
+        return "（前は動いていましたが、いまは止まっています）"
+    return ""
+
+
 def ask_what_to_do(ui, target, st, *, can_switch: bool) -> str | None:
     """すでに入っているときに出す画面。
 
     「いま入っているのはこれです」を見せてから、やることを選んでもらう。
     ここで黙って終わると、押しても何も起きないアプリになってしまう。
     """
-    beat = ea_manager.heartbeat()
+    beat = ea_manager.heartbeat(account=account_of(target))
     log(f"EA の動き: {beat}")
     lines = [
         f"入っているもの： {st_name(st)}",
         f"入れたMT5： {target.label}",
     ]
-    if beat["fresh"]:
+    hint = beat_hint(beat)
+    if ea_running_here(beat):
         where = beat["symbol"] or "チャート"
         lines.append(f"いまの様子： {where} のチャートで動いています")
-    elif beat["seen"]:
-        lines.append("いまの様子： いったん動きましたが、いまは止まっています")
+    elif hint:
+        lines.append("いまの様子： " + hint.strip("（）"))
     else:
         lines.append("いまの様子： まだチャートに載せていません")
 
@@ -1346,7 +1372,7 @@ CHART_STEPS = (
 )
 
 
-def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool) -> None:
+def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool, account: str = "") -> None:
     """設置が済んだあとの案内。
 
     「すでに入っています」で終わると、お客様はそこで止まってしまう。
@@ -1365,15 +1391,15 @@ def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool) -> 
 
     if ui is None:
         # 窓を作れなかったとき。せめて「何が起きたか」だけは見せる
-        beat = ea_manager.heartbeat()
-        lines = [head] if beat["fresh"] else [head, "", *CHART_STEPS]
+        beat = ea_manager.heartbeat(account=account)
+        lines = [head] if ea_running_here(beat) else [head, "", *CHART_STEPS]
         installer_ui.message_box("\n".join(lines))
         return
 
     while ui.alive():
-        beat = ea_manager.heartbeat()
+        beat = ea_manager.heartbeat(account=account)
         log(f"EA の動き: {beat}")
-        if beat["fresh"]:
+        if ea_running_here(beat):
             lines = [head]
             where = beat["symbol"] or "チャート"
             lines.append(f"{where} で動いています。準備ができました。")
@@ -1388,8 +1414,9 @@ def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool) -> 
             lines.append(f"（{shown} は、すぐ出せるように気配値表示に出してあります）")
         if needs_restart:
             lines.append("（一覧に出てこないときは、MT5を一度閉じて開き直してください）")
-        if beat["seen"] and not beat["fresh"]:
-            lines.append("（前は動いていましたが、いまは止まっています）")
+        hint = beat_hint(beat)
+        if hint:
+            lines.append(hint)
 
         if not ui.ask("あと1つだけ、MT5での操作をお願いします。", "できたので確かめる", "あとでやる", lines):
             log("チャートへの設置は、あとで行うことになりました")

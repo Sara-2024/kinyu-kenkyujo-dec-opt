@@ -73,12 +73,22 @@ except ImportError:  # pragma: no cover - Windows以外では import できな�
     mt5 = None  # type: ignore[assignment]
 
 try:
-    from mt5_terminal import EA_NAMES, find_logged_in_terminal, is_our_ea as _is_our_ea, resolve_terminal_exe
+    from mt5_terminal import (
+        EA_NAMES,
+        find_logged_in_terminal,
+        is_gold_symbol as _is_gold_symbol,
+        is_our_ea as _is_our_ea,
+        resolve_terminal_exe,
+    )
 except ImportError:
     EA_NAMES = ("YumekkuEA_win",)
 
     def _is_our_ea(stem: str) -> bool:
         return "yumekku" in str(stem).lower()
+
+    def _is_gold_symbol(name: str) -> bool:
+        upper = str(name or "").upper()
+        return "XAUUSD" in upper or "GOLD" in upper
     find_logged_in_terminal = None  # type: ignore[assignment,misc]
     resolve_terminal_exe = None  # type: ignore[assignment,misc]
 
@@ -972,7 +982,7 @@ class MT5Controller:
         out: dict[str, Any] = {}
         try:
             if not path.is_file():
-                return {"ea_state": None}
+                return {"ea_state": None, "ea_alive": False, "ea_ready": False, "ea_problem": None}
             # EA(MQL5)の書き出しは環境によって文字コードが変わる。読めるもので読む
             raw = path.read_bytes()
             text = ""
@@ -993,23 +1003,55 @@ class MT5Controller:
                 out[key.strip()] = raw.strip()
             age = time.time() - path.stat().st_mtime
         except OSError:
-            return {"ea_state": None}
+            return {"ea_state": None, "ea_alive": False, "ea_ready": False, "ea_problem": None}
         skipped = {
             key: int(float(out[key]))
             for key in ("ai_skip_buy", "ai_skip_sell", "ai_shadow_buy", "ai_shadow_sell")
             if key in out and str(out[key]).replace(".", "", 1).isdigit()
         }
+        # 控え（trelab_state.ini）は PC 内の全 MT5 で1つ（FILE_COMMON）。
+        # 別の MT5 に載せた EA が書いたものを「こちらの EA が生きている」と
+        # 数えないよう、口座番号・EA 名・銘柄を突き合わせる。
+        my_login = None
+        try:
+            info = mt5.account_info() if mt5 is not None else None
+            my_login = int(getattr(info, "login", 0) or 0) or None
+        except Exception:  # noqa: BLE001
+            my_login = None
+        try:
+            ea_account = int(float(str(out.get("account", "")).strip() or 0)) or None
+        except ValueError:
+            ea_account = None
+        ea_name = str(out.get("ea") or "").strip()
+        ea_symbol = str(out.get("symbol") or "").strip()
+        # EA は10秒ごとに書く。30秒以上古ければ、チャートから外れている
+        fresh = age < 30
+        same_account = (ea_account == my_login) if (ea_account and my_login) else None
+        ours = _is_our_ea(ea_name) if ea_name else None
+        symbol_ok = _is_gold_symbol(ea_symbol) if ea_symbol else None
+        alive = bool(fresh and same_account is not False and ours is not False)
+        problem = None
+        if fresh and same_account is False:
+            problem = f"別の口座（{ea_account}）のMT5で動いています。いまつないでいるのは口座 {my_login} です。"
+        elif fresh and ours is False:
+            problem = f"「{ea_name}」が載っています。{EA_NAMES[0]} を載せてください。"
+        elif alive and symbol_ok is False:
+            problem = f"{ea_symbol} のチャートに載っています。ゴールド（XAUUSD または GOLD）のチャートに載せてください。"
         return {
             "ea_state": out.get("state"),
             "ea_allowed": out.get("allowed"),
             "ea_state_at": out.get("at"),
-            "ea_name": out.get("ea"),
-            "ea_symbol": out.get("symbol"),
+            "ea_name": ea_name or None,
+            "ea_symbol": ea_symbol or None,
             # EA が自分の設定を書き出したもの。AI へ渡す戦略プロフィールの元になる
             "ea_profile_raw": out.get("profile"),
             "ea_skipped": skipped,
-            # EA は10秒ごとに書く。30秒以上古ければ、チャートから外れている
-            "ea_alive": age < 30,
+            "ea_alive": alive,
+            "ea_ours": ours,
+            "ea_symbol_ok": symbol_ok,
+            # サイトの手順が「済み」になる条件。生きていて、ゴールドのチャートにある
+            "ea_ready": bool(alive and symbol_ok is not False),
+            "ea_problem": problem,
             # EA が見ているフォルダと、こちらが書いているフォルダが同じか
             "ea_same_folder": (
                 str(out.get("common", "")).rstrip("\\/") == str(self._gate_path().parent.parent).rstrip("\\/")

@@ -153,6 +153,39 @@ for image, expect in (("MT5Automatic.exe", True), ("AITrader.exe", True), ("pyth
     check(f"{image} はブリッジ{'として扱う' if expect else 'ではない'}", bridge_mod._is_bridge_process(4242) is expect)
 bridge_mod._process_image = real_image
 
+# ── 5-4) EA の控えは PC 内で1つ。口座・EA 名・銘柄を突き合わせて「進める」を決める ──
+#    別の MT5 の EA が書いた控えで「生きている」と出たり、ゴールド以外のチャートで
+#    手順が「済み」になったりしないこと。
+_common = _pl.Path(_tf.mkdtemp(prefix="mt5common-"))
+(_common / "Files").mkdir()
+fake.terminal_info = lambda: types.SimpleNamespace(name="MetaTrader 5", build=5000, trade_allowed=True, commondata_path=str(_common))
+fake.account_info = lambda: types.SimpleNamespace(login=75613879, server="XMTrading-MT5 3")
+_state = _common / "Files" / b.mt.STATE_FILE
+
+
+def _ea_state(text):
+    _state.write_text(text, encoding="utf-8")
+    return b.mt._ea_state_blocking()
+
+
+s = _ea_state("state=稼働\nallowed=1\naccount=75613879\nea=YumekkuEA_win\nsymbol=GOLD\n")
+check("自分の口座・Yumekku・GOLD なら進める", s["ea_alive"] is True and s["ea_ready"] is True and s["ea_problem"] is None, str(s))
+s = _ea_state("state=稼働\nallowed=1\naccount=75613879\nea=YumekkuEA_win\nsymbol=XAUUSD.r\n")
+check("XAUUSD 系も進める", s["ea_ready"] is True, str(s))
+s = _ea_state("state=稼働\nallowed=1\naccount=198588095\nea=YumekkuEA_win\nsymbol=XAUUSD\n")
+check("別の口座の控えでは進めない", s["ea_alive"] is False and s["ea_ready"] is False and "198588095" in str(s["ea_problem"]), str(s))
+s = _ea_state("state=稼働\nallowed=1\naccount=75613879\nea=OrbitGoldEA_v6\nsymbol=GOLD\n")
+check("Yumekku 以外の EA では進めない", s["ea_alive"] is False and "OrbitGoldEA_v6" in str(s["ea_problem"]), str(s))
+s = _ea_state("state=稼働\nallowed=1\naccount=75613879\nea=YumekkuEA_win\nsymbol=USDJPY\n")
+check("ゴールド以外のチャートでは進めない（EA は生きている）", s["ea_alive"] is True and s["ea_ready"] is False and "USDJPY" in str(s["ea_problem"]), str(s))
+s = _ea_state("state=稼働\nallowed=1\naccount=75613879\nea=YumekkuEA_win\nsymbol=XAUEUR\n")
+check("XAUEUR はゴールド扱いしない", s["ea_ready"] is False, str(s))
+s = _ea_state("state=稼働\nallowed=1\nea=YumekkuEA_win\nsymbol=GOLD\n")
+check("口座を書かない古い EA でも進める", s["ea_alive"] is True and s["ea_ready"] is True, str(s))
+_state.unlink()
+s = b.mt._ea_state_blocking()
+check("控えが無ければ進めない", s.get("ea_alive") is False and s.get("ea_ready") is False, str(s))
+
 # ── 6) 一斉制御の「全決済」が配線されている ──
 import asyncio  # noqa: E402
 

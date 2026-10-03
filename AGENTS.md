@@ -182,6 +182,14 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **連携後のつなぎ直しも、覚えている MT5 にしか繋がない**（`choose_session`）。
   別の MT5 にログインしていても黙って乗り換えず、「選んだ MT5 にログインしていません」と
   出して「別のMT5を選ぶ」を用意する。覚えていなくて複数あれば、そこで選んでもらう。
+- **EA の控え（`trelab_state.ini`）は PC 内の全 MT5 で1つ**（`FILE_COMMON`）。
+  だから「生きているか」は鮮度だけで決めず、控えの `account=` / `ea=` / `symbol=` を
+  いまつないでいる口座・Yumekku・ゴールド（`is_gold_symbol`：XAUUSD か GOLD を含む）と
+  突き合わせる（`_ea_state_blocking` の `ea_alive` / `ea_ready` / `ea_problem`、
+  アプリ側は `ea_manager.heartbeat(account=…)`）。別の MT5 に載せた EA を「動いている」と
+  数えたり、USDJPY のチャートで手順が「済み」になったりしないため。
+  サイトの手順（`mt5StepIndex`）は `ea_alive` と `ea_symbol_ok` を見て、
+  違うときは `ea_problem` の文をそのまま画面に出す。
 - **初回は EA を置くだけ。** `setup_phase1()`。MT5 の検出はログインも起動も要らない
   （`bridge/mt5_detect.py` が AppData のデータフォルダを数えるだけ）。
   選択画面は MT5 が1台でも出す（口座番号を見て「どこに入れるか」を確かめてもらう）。

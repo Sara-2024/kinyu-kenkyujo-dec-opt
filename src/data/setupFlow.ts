@@ -243,7 +243,7 @@ export const MT5_STEPS: UserStep[] = [
   {
     no: 1,
     title: 'システムをチャートに載せる',
-    detail: 'ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA_win をゴールド（XAUUSD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK',
+    detail: 'ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA_win をゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK',
   },
   {
     no: 2,
@@ -257,9 +257,11 @@ export const MT5_STEPS: UserStep[] = [
  * 返り値は「いまやってもらう手順」の添字。すべて済んでいれば null。
  */
 export function mt5StepIndex(
-  s: { ea_alive?: boolean; ea_state?: string | null; terminal_trade_allowed?: boolean } | null | undefined,
+  s: { ea_alive?: boolean; ea_symbol_ok?: boolean | null; ea_state?: string | null; terminal_trade_allowed?: boolean } | null | undefined,
 ): number | null {
   if (!s || s.ea_alive !== true) return 0
+  // 動いていても、ゴールド以外のチャートなら「載せる」からやり直し
+  if (s.ea_symbol_ok === false) return 0
   if (s.terminal_trade_allowed === false || s.ea_state === '自動売買ボタンがオフ') return 1
   return null
 }

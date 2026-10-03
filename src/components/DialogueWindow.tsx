@@ -1188,6 +1188,12 @@ export function DialogueWindow({
           <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
             <p className="mb-2.5 text-[13px] font-bold text-slate-400">MT5 の画面で、一度だけお願いします。</p>
             <InstallSteps steps={MT5_STEPS} active={mt5StepIndex(bridge.status) ?? MT5_STEPS.length} />
+            {/* 動いてはいるが条件が違う（別の口座・別の EA・別の銘柄）ときは、その理由を出す */}
+            {bridge.status?.ea_problem && (
+              <p className="mt-3 text-[15px] font-bold" style={{ color: '#ffd23e' }}>
+                {bridge.status.ea_problem}
+              </p>
+            )}
 
             <div
               className="mt-4 flex flex-wrap items-center gap-4 rounded-[6px] border px-5 py-4"
