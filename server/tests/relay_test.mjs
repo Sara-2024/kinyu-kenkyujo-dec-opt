@@ -247,14 +247,21 @@ const sessions = {
   'session-stopped': { id: A, status: 'active', can_trade: false },
   'session-suspended': { id: A, status: 'suspended', can_trade: true },
 }
-// 「一斉停止を受け付けない」と決めた会員（試験の途中で入れ替える）
+// 「一斉停止を受け付けない」と決めた会員／BAN 中の会員（試験の途中で入れ替える）
 let refusing = []
+let blocked = []
 const supabase = createServer((req, res) => {
   let body = ''
   req.on('data', (c) => (body += c))
   req.on('end', () => {
     const token = JSON.parse(body || '{}').p_token
     res.setHeader('content-type', 'application/json')
+    if (String(req.url).includes('bridges_blocked')) {
+      // 渡された会員IDのうち、BAN 中のものだけ返す（本物の DB と同じ形）
+      const ids = JSON.parse(body || '{}').p_ids ?? []
+      res.end(JSON.stringify(ids.filter((id) => blocked.includes(id))))
+      return
+    }
     if (String(req.url).includes('fleet_optouts')) {
       res.end(JSON.stringify(sessions[token]?.role === 'admin' ? refusing : []))
       return
@@ -271,6 +278,7 @@ const supabase = createServer((req, res) => {
 await new Promise((r) => supabase.listen(0, r))
 
 const checked = await startRelayOnFreePort({
+  BLOCK_SWEEP_MS: '300', // BAN の見回りを速くする（本番は 60 秒）
   SUPABASE_URL: `http://127.0.0.1:${supabase.address().port}`,
   SUPABASE_ANON_KEY: 'anon',
 })
@@ -392,6 +400,30 @@ const toFA2 = await fbA.nextCommand()
 check('受け付ける部屋には届く', toFA2?.command === 'stop_trading' && toFA2?.id === 's1r', JSON.stringify(toFA2))
 check('受け付けない部屋のブリッジには届かない', (await fbB.nextCommand(400)) === null)
 refusing = []
+
+// BAN した会員のブリッジは、つないでいても切られ、入り直せない
+console.log('\n── BAN（管理者画面で止めた会員のブリッジは、中継が切る）')
+const D = '44444444-4444-4444-8444-444444444444'
+const fbD = track(await open(cbridge(D)))
+fbD.send_({ type: 'hello', account: 444, server: 'Demo', balance: 1, value: 1 })
+await new Promise((r) => setTimeout(r, 200))
+blocked = [D]
+const bannedCode = await new Promise((resolve) => {
+  fbD.on('close', (code) => resolve(code))
+  setTimeout(() => resolve(0), 2500)
+})
+check('★ BAN した会員のブリッジは見回りで切られる（4003）', bannedCode === 4003, String(bannedCode))
+denied = ''
+try {
+  await open(cbridge(D))
+} catch (err) {
+  denied = String(err.message)
+}
+check('BAN 中は入り直せない', denied.includes('403'), denied)
+blocked = []
+const fbD2 = track(await open(cbridge(D)))
+check('BAN を解くと入れる', fbD2.readyState === WebSocket.OPEN)
+fbD2.close()
 
 // ブリッジの返事が、部屋つきで一斉制御の画面に届く
 fbA.send_({ type: 'ack', id: 's1', command: 'stop_trading', ok: true, value: 0 })

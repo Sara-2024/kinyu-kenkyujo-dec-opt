@@ -2142,6 +2142,10 @@ class Bridge:
                         )
                         await _sleep_or_stop(BUSY_WAIT_SEC, self.stop)
                         continue
+                    if getattr(ws, "close_code", None) == 4003:
+                        log.error("この会員は利用を止められています。ブリッジを終了します")
+                        self.request_stop()
+                        break
                     # 切れた理由が後から分かるように、必ず番号と理由を残す。
                     # 1000/1001=中継からの正常な終了（再起動・入れ替え）、
                     # 1006=返事が無くなった（回線・PCのスリープ・中継の落ち）。
@@ -2168,6 +2172,10 @@ class Bridge:
                     )
                     await _sleep_or_stop(BUSY_WAIT_SEC, self.stop)
                     continue
+                if code == 4003:
+                    log.error("この会員は利用を止められています。ブリッジを終了します")
+                    self.request_stop()
+                    break
                 log.warning("中継サーバーに接続できません (%s): %s", type(exc).__name__, exc)
                 log.warning("→ server フォルダで npm start が動いているか確認（ポート 8080）")
             except Exception as exc:  # noqa: BLE001

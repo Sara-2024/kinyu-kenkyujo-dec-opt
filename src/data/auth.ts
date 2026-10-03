@@ -58,6 +58,7 @@ export function authErrorMessage(error: unknown): string {
   if (raw.includes('SESSION_EXPIRED')) return 'ログインの有効期限が切れました。もう一度ログインしてください。'
   if (raw.includes('FORBIDDEN')) return 'この操作を行う権限がありません。'
   if (raw.includes('LAST_ADMIN')) return '最後の管理者は、自分の権限を外せません。'
+  if (raw.includes('SELF_DELETE')) return '自分自身のアカウントは削除できません。'
   if (raw.includes('NOT_FOUND')) return '対象のアカウントが見つかりません。'
   return '処理に失敗しました。時間をおいてもう一度お試しください。'
 }
@@ -134,6 +135,11 @@ export async function adminUpdateMember(
     p_status: patch.status ?? null,
     p_can_trade: patch.can_trade ?? null,
   })
+}
+
+/** 会員を消す（セッション・連携・一斉制御の記録も一緒に消える）。自分と最後の管理者は消せない */
+export async function adminDeleteMember(token: string, memberId: string): Promise<void> {
+  await rpc<unknown>('admin_delete_member', { p_token: token, p_member_id: memberId })
 }
 
 export async function adminSetPassword(token: string, memberId: string, password: string): Promise<void> {

@@ -349,6 +349,13 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 
 - **部屋 = 会員のUUID。** 画面は `useBridge(member.id, token)`、ブリッジは `BRIDGE_ID`。
   中継（`server/index.js`）は同じ部屋の中だけを行き来させる。
+- **BAN（管理者画面の「BAN」＝ `status = 'suspended'`）はブリッジも切る。** ブリッジは合言葉を
+  持たず部屋（会員ID）だけで入ってくるので、中継が `bridges_blocked`（匿名で呼べる。返すのは
+  「止められているか」だけ）を接続時に引いて断り、つないでいる間も `BLOCK_SWEEP_MS`（既定 60 秒）
+  ごとに見回って 4003 `banned` で切る。削除（`admin_delete_member`）も同じ扱いになる
+  （会員が無ければ「止められている」）。新しい版のブリッジは 4003 で終了する。
+  自分自身と最後の管理者は消せない。
+  `supabase/migrations/20261003_admin_delete_and_bridges_blocked.sql`。
 - **同じ部屋に2台目のブリッジが来たら、名乗り（口座番号）を聞いてから決める**（`handleBridge`）。
   同じ口座なら「同じ PC の繋ぎ直し」として新しいほうに入れ替える（古いほうは 4001）。
   別の口座なら、動いているほうを守って新しいほうを断る（4002 `busy`）。

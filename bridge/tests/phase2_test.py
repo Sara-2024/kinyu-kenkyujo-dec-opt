@@ -219,6 +219,19 @@ if opt_mig.is_file():
     check("記録のテーブルは外から読めない", "revoke all on table public.fleet_optout" in opt_sql)
     check("受け付けないの migration は追加だけ（既存を落とさない）", "drop " not in opt_sql.lower().replace("do update", ""))
 
+# ── 8-3) 「会員の削除」と「BAN した会員のブリッジを切る」migration も schema.sql とずれていないか ──
+ban_mig = ROOT / "supabase" / "migrations" / "20261003_admin_delete_and_bridges_blocked.sql"
+check("削除・BAN の migration がある", ban_mig.is_file())
+if ban_mig.is_file():
+    ban_sql = ban_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("削除・BAN の migration の中身が schema.sql と同じ", ban_sql.strip() in schema_all)
+    check("削除は管理者だけ", "_require_admin(p_token)" in ban_sql[ban_sql.index("admin_delete_member") :])
+    check("自分自身は消せない", "SELF_DELETE" in ban_sql)
+    check("最後の管理者は消せない", "LAST_ADMIN" in ban_sql)
+    check("ブリッジの確認は「止められているか」だけ返す", "status = 'active'" in ban_sql[ban_sql.index("bridges_blocked") :])
+    check("削除・BAN の migration は既存のテーブルを落とさない", "drop table" not in ban_sql.lower())
+
 # ── 8) DB の追加分（migration）と schema.sql がずれていないか ──
 mig_path = ROOT / "supabase" / "migrations" / "20260912_add_connect_tokens.sql"
 schema_path = ROOT / "supabase" / "schema.sql"

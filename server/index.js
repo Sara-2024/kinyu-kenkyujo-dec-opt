@@ -97,6 +97,30 @@ async function refusingRooms(token) {
   }
 }
 
+/**
+ * 渡した会員IDのうち「利用できない」もの（BAN 中・削除済み）。
+ * ブリッジは合言葉を持たずに部屋（会員ID）だけで入ってくるので、
+ * 接続時と、つないでいるあいだ定期的に確かめて、BAN した会員のブリッジを切る。
+ * 取れなかったときは空（＝止めない。中継の都合でお客様のブリッジを落とさない）。
+ */
+async function bridgesBlocked(ids) {
+  const wanted = [...new Set(ids)].filter((id) => MEMBER_ROOM_RE.test(id))
+  if (!CHECK_MEMBERS || wanted.length === 0) return new Set()
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/bridges_blocked`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ p_ids: wanted }),
+    })
+    if (!res.ok) return new Set()
+    const data = await res.json()
+    return new Set(Array.isArray(data) ? data.map((v) => normalizeRoom(String(v))) : [])
+  } catch (err) {
+    log(`利用できない会員の一覧を取れませんでした: ${err.message}`)
+    return new Set()
+  }
+}
+
 const ROOM_RE = /^[A-Za-z0-9._:-]{1,80}$/
 // 画面が入れる部屋は会員ID（UUID）だけ。名前を当てて他の部屋に入れないようにする。
 const MEMBER_ROOM_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -253,7 +277,16 @@ server.on('upgrade', (req, socket, head) => {
   }
 
   if (isBridge) {
-    wss.handleUpgrade(req, socket, head, (ws) => handleBridge(ws, roomId))
+    // BAN 中・削除済みの会員のブリッジは入れない（部屋が会員IDのときだけ確かめる）
+    bridgesBlocked([roomId]).then((blocked) => {
+      if (blocked.has(roomId)) {
+        log(`利用を止めている会員のブリッジを断りました: ${short(roomId)}`)
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+        socket.destroy()
+        return
+      }
+      wss.handleUpgrade(req, socket, head, (ws) => handleBridge(ws, roomId))
+    })
     return
   }
 
@@ -551,6 +584,24 @@ function handleFleet(ws, member, sessionToken = '') {
   ws.on('close', drop)
   ws.on('error', drop)
 }
+
+// つないでいるブリッジを定期的に見回り、BAN 中・削除済みの会員のものは切る。
+// 管理者画面で BAN した瞬間ではなく、次の見回り（既定 60 秒）で切れる。
+const BLOCK_SWEEP_MS = Math.max(200, Number(process.env.BLOCK_SWEEP_MS) || 60 * 1000)
+setInterval(() => {
+  const connected = [...rooms.entries()].filter(([, room]) => room.bridge).map(([roomId]) => roomId)
+  if (connected.length === 0) return
+  void bridgesBlocked(connected).then((blocked) => {
+    for (const roomId of connected) {
+      if (!blocked.has(roomId)) continue
+      const room = rooms.get(roomId)
+      if (!room?.bridge) continue
+      log(`利用を止めている会員のブリッジを切ります: ${short(roomId)}`)
+      room.pending = null
+      room.bridge.close(4003, 'banned')
+    }
+  })
+}, BLOCK_SWEEP_MS).unref()
 
 server.listen(PORT, () => {
   log('='.repeat(56))

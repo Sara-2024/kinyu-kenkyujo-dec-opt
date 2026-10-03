@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import {
+  adminDeleteMember,
   adminListMembers,
   adminSetEntryPassword,
   adminSetPassword,
@@ -78,6 +79,12 @@ export function Admin() {
     act(row.id, async () => {
       await adminUpdateMember(token!, row.id, { can_trade })
     })
+  const removeMember = (row: Member) => {
+    if (!window.confirm(`${row.email} を削除しますか？\n連携・一斉制御の記録も一緒に消えます。元に戻せません。`)) return
+    return act(row.id, async () => {
+      await adminDeleteMember(token!, row.id)
+    })
+  }
 
   const savePassword = async () => {
     if (!pwTarget || !token) return
@@ -149,7 +156,9 @@ export function Admin() {
                     ) : null}
                   </td>
                   <td className="px-3 py-3">{row.role === 'admin' ? '管理者' : '一般'}</td>
-                  <td className="px-3 py-3">{row.status === 'active' ? '利用中' : '停止'}</td>
+                  <td className="px-3 py-3">
+                    {row.status === 'active' ? '利用中' : <span style={{ color: '#ff8484' }}>BAN中</span>}
+                  </td>
                   <td className="px-3 py-3">{row.can_trade ? '許可' : '不可'}</td>
                   <td className="px-3 py-3 text-slate-300">
                     {row.account ? `${row.account} / ${row.server ?? ''}` : '—'}
@@ -169,7 +178,10 @@ export function Admin() {
                         disabled={busyId === row.id}
                         onClick={() => void changeStatus(row, row.status === 'active' ? 'suspended' : 'active')}
                       >
-                        {row.status === 'active' ? '停止' : '再開'}
+                        {row.status === 'active' ? 'BAN' : 'BAN解除'}
+                      </Mini>
+                      <Mini disabled={busyId === row.id} onClick={() => void removeMember(row)}>
+                        削除
                       </Mini>
                       <Mini
                         disabled={busyId === row.id}
