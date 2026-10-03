@@ -1669,11 +1669,14 @@ def connect_all(room: str = "", show: bool = False) -> int:
     banner("接続完了")
     log(f"口座 {session['account']} / {session['server']}")
     if show:
-        # 待つのは1回だけ（ここで最大10秒。二度聞くと待ち時間も二倍になる）
+        # 待つのは1回だけ（ここで最大25秒。二度聞くと待ち時間も二倍になる）。
+        # ブリッジは同じ exe をもう一度展開して起きるので、名乗り出るまで 6〜15 秒かかる。
         seen = relay_sees_us()
         lines = connect_result_lines(session, seen)
         if ui:
-            ui.finish(lines, ok=seen is not False)
+            # MT5 につながっていれば設定は済んでいる。中継にまだ届いていないのは
+            # 「失敗」ではなく「時間がかかっている」だけなので、見出しは完了にする
+            ui.finish(lines, ok=True)
         else:
             installer_ui.message_box("\n".join(lines))
     return 0
