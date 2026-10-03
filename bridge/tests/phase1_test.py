@@ -552,6 +552,50 @@ check("設置しなおすと置き直す", target_ea.stat().st_mtime != before_m
 check("置き直しても中身は同じ", ea_manager.sha256_of(target_ea) == newer_src.sha256)
 
 
+# ── 16-2) 連携後に開いたとき、繋ぐ MT5 を黙って乗り換えない ──
+#    MT5 が何台もある PC で「ログイン中のどれか」に繋ぐと、別の口座がサイトに出る。
+class PickUI(FakeUI):
+    def __init__(self, answers, picks):
+        super().__init__(answers)
+        self.picks = list(picks)
+        self.pick_calls = 0
+
+    def choose_terminal(self, items):
+        self.pick_calls += 1
+        return self.picks.pop(0) if self.picks else None
+
+
+terms = [Term("A社（口座 111）", pathlib.Path("/mt5/A")), Term("B社（口座 222）", pathlib.Path("/mt5/B"))]
+real_list = connect.mt5_detect.list_terminals
+real_find = connect.find_logged_in_terminal
+connect.mt5_detect.list_terminals = lambda: terms
+# ログイン中なのは B だけ（A は開いていない）
+connect.find_logged_in_terminal = lambda prefer=None: {"account": 222, "server": "B", "data_path": "/mt5/B"}
+quiet = lambda _m: None  # noqa: E731
+
+connect_state.write(connect_state.INSTALL_ONLY, terminal="/mt5/A")  # 覚えているのは A
+ui = PickUI([False], [])  # 「閉じる」
+got = connect.choose_session(ui, log=quiet)
+check("覚えている MT5 と違う MT5 には黙って乗り換えない", got is None and len(ui.asked) == 1, str(got))
+check("ログインしていないことを伝える", "ログインしていません" in ui.asked[0][0], str(ui.asked))
+
+ui = PickUI([True], ["/mt5/B"])  # 「別のMT5を選ぶ」→ B
+got = connect.choose_session(ui, log=quiet)
+check("別のMT5を選べば、そこに繋ぐ", got is not None and got[0] and got[0]["account"] == 222 and got[1] == "/mt5/B", str(got))
+check("選び直した MT5 を覚える", connect_state.read().get("terminal") == "/mt5/B")
+
+connect_state.write(connect_state.INSTALL_ONLY, terminal="")
+ui = PickUI([], ["/mt5/B"])
+got = connect.choose_session(ui, log=quiet)
+check("覚えていなくて複数なら、選んでもらう", ui.pick_calls == 1 and got is not None and got[1] == "/mt5/B", str(got))
+
+connect_state.write(connect_state.INSTALL_ONLY, terminal="/mt5/A")
+got = connect.choose_session(None, log=quiet)  # 画面なし（自動起動）
+check("画面が無くても乗り換えず「未ログイン」として返す", got == (None, "/mt5/A"), str(got))
+
+connect.mt5_detect.list_terminals = real_list
+connect.find_logged_in_terminal = real_find
+
 # ── 17) 窓を作れなかったときでも、黙って終わらない ──
 #    tkinter を積み忘れた exe を作ってしまうと、お客様には
 #    「ダブルクリックしても何も起きない」としか見えない。

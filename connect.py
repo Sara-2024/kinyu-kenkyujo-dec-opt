@@ -436,7 +436,7 @@ def launch_mt5(exe: Path) -> None:
         log(f"MT5 を起動できませんでした: {exc}")
 
 
-def wait_for_login(timeout_sec: int = 600) -> dict | None:
+def wait_for_login(timeout_sec: int = 600, prefer: str | None = None) -> dict | None:
     try:
         import MetaTrader5  # noqa: F401
     except ImportError as exc:
@@ -447,7 +447,7 @@ def wait_for_login(timeout_sec: int = 600) -> dict | None:
             log("setup-windows.bat を先に実行してください")
         return None
 
-    existing = find_logged_in_terminal()
+    existing = find_logged_in_terminal(prefer)
     if existing:
         log(f"ログイン済み: {existing['account']} / {existing['server']}")
         return existing
@@ -455,7 +455,7 @@ def wait_for_login(timeout_sec: int = 600) -> dict | None:
     banner("MT5 へのログインを待っています")
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
-        status = find_logged_in_terminal()
+        status = find_logged_in_terminal(prefer)
         if status:
             log(f"ログインを確認: {status['account']} / {status['server']}")
             return status
@@ -1618,27 +1618,26 @@ def connect_all(room: str = "", show: bool = False) -> int:
     register_protocol()
     register_startup()
 
-    # 初回に選んだ MT5 を覚えていれば、そこを優先する。
-    # 覚えていなければ、これまでどおり「いまログイン中の MT5」を使う。
+    # どの MT5 に繋ぐか。覚えていればそこ。覚えていなくて複数あれば、選んでもらう。
+    # 「ログイン中のどれか」に黙って繋ぐと、MT5 が何台もある PC では
+    # 別の口座につながってしまう（しかもお客様には分からない）。
     say("MT5を確認しています…")
-    chosen = str(connect_state.read().get("terminal") or "")
-    session = find_logged_in_terminal(chosen or None)
-    if session:
-        if chosen and str(session.get("data_path", "")).rstrip("\\/") == chosen.rstrip("\\/"):
-            log("初回に選んだ MT5 を使います")
-        else:
-            log("すでにログイン中の MT5 を使います")
-    else:
+    picked = choose_session(ui, log=log)
+    if picked is None:
+        return 1
+    session, chosen = picked
+    if session is None:
         say("MT5を開いています…")
-        exe = find_mt5_exe() or ensure_mt5()
+        target = next((t for t in mt5_detect.list_terminals() if _same_path(t.data_path, chosen)), None) if chosen else None
+        exe = (target.exe if target else None) or find_mt5_exe() or ensure_mt5()
         if exe is None:
             return give_up(
                 "MT5が見つかりませんでした。",
                 "MT5を開いてログインしてから、もう一度このアプリを開いてください。",
             )
         launch_mt5(exe)
-        session = wait_for_login()
-        if session is None:
+        session = wait_for_login(prefer=chosen or None)
+        if session is None or (chosen and not _same_path(session.get("data_path", ""), chosen)):
             return give_up(
                 "MT5にログインできていません。",
                 "MT5で口座にログインしてから、もう一度このアプリを開いてください。",
@@ -1679,6 +1678,79 @@ def connect_all(room: str = "", show: bool = False) -> int:
     return 0
 
 
+def _same_path(a: object, b: object) -> bool:
+    return str(a or "").rstrip("\\/").lower() == str(b or "").rstrip("\\/").lower()
+
+
+def choose_session(ui, log=log) -> tuple[dict | None, str] | None:
+    """繋ぐ MT5 を決めて、ログイン済みならそのセッションを返す。
+
+    返り値は (session, 選んだ MT5 のデータフォルダ)。session が None なら
+    「選んだ MT5 にまだログインしていない」。None（全体）は「お客様がやめた」。
+
+      ・覚えている MT5 があれば、そこにしか繋がない。別の MT5 にログインしていても
+        黙って乗り換えず、「選んだ MT5 にログインしていません」と伝える
+        （乗り換えると、サイトに別の口座が出て、お客様は何が起きたか分からない）
+      ・覚えていなくて MT5 が複数あれば、選んでもらって覚える
+      ・1台だけなら、それ
+    """
+    terminals = mt5_detect.list_terminals()
+    chosen = str(connect_state.read().get("terminal") or "")
+    if chosen and not any(_same_path(t.data_path, chosen) for t in terminals):
+        log(f"覚えていた MT5 がもう無いので、選び直します: {chosen}")
+        chosen = ""
+
+    def remember(path: str) -> None:
+        connect_state.write(connect_state.current(), terminal=path)
+
+    def ask_pick() -> str:
+        if ui is None or len(terminals) <= 1:
+            return str(terminals[0].data_path) if terminals else ""
+        got = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+        return str(got or "")
+
+    if not chosen:
+        if len(terminals) > 1 and ui is None:
+            log("画面を出せないので、ログイン中の MT5 を使います")
+            session = find_logged_in_terminal()
+            return (session, str(session.get("data_path", "")) if session else "")
+        chosen = ask_pick()
+        if not chosen:
+            log("選ばずに閉じられたので、何もしません")
+            return None
+        remember(chosen)
+
+    for _ in range(3):
+        session = find_logged_in_terminal(chosen)
+        if session and _same_path(session.get("data_path", ""), chosen):
+            log(f"選んだ MT5 を使います: {session.get('account')} / {session.get('server')}")
+            return (session, chosen)
+        label = next((t.label for t in terminals if _same_path(t.data_path, chosen)), "選んだMT5")
+        if session:
+            log(f"選んだ MT5 に繋げません。ログイン中なのは別の MT5: {session.get('account')}")
+        else:
+            log("選んだ MT5 にログインしていません")
+        if ui is None:
+            # 画面が無い（自動起動など）ときは、乗り換えずに「まだログインしていない」扱い
+            return (None, chosen)
+        if not ui.ask(
+            f"{label} にログインしていません。",
+            "別のMT5を選ぶ",
+            "閉じる",
+            [
+                "そのMT5でログインしてから、もう一度このアプリを開いてください。",
+                "ほかのMT5を使うときは「別のMT5を選ぶ」を押してください。",
+            ],
+        ):
+            return None
+        picked = ask_pick()
+        if not picked:
+            return None
+        chosen = picked
+        remember(chosen)
+    return (None, chosen)
+
+
 def show_failure(message: str, hint: str = "") -> int:
     """画面を出して「次に何をすればいいか」だけ伝え、1 を返す。
 
@@ -1688,7 +1760,7 @@ def show_failure(message: str, hint: str = "") -> int:
     return 1
 
 
-def relay_sees_us(tries: int = 10) -> bool | None:
+def relay_sees_us(tries: int = 25) -> bool | None:
     """サイトから、この PC のブリッジが見えているか。
 
     ブリッジは起こしてから名乗り出るまで数秒かかるので、少し待って何度か聞く。
