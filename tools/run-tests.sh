@@ -30,6 +30,7 @@ TESTS=(
   "サイトからの連携（合図の検証・状態の移り変わり）|python3 bridge/tests/phase2_test.py"
   "新規連携の受付を止めているあいだの安全確認|python3 bridge/tests/connect_paused_test.py"
   "Mac ルート：EA の書くファイルを読む部品と全決済|python3 bridge/tests/mt5_files_test.py"
+  "Mac ルート：入口の差し替え・MT5 探し・自動起動・配布の定義|python3 bridge/tests/connect_mac_test.py"
   "合図を確かめる所（/api/connect）|node --experimental-strip-types api/_lib/connect.test.mjs"
   "中継の部屋分け・会員の確認（通し試験）|node server/tests/relay_test.mjs"
   "判定の突き合わせ道具（通し試験）|node --experimental-strip-types tools/tests/compare_risk_models_test.mjs"

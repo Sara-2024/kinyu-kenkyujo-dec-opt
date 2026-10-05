@@ -1,0 +1,8 @@
+# MT5 Automatic の Mac 版（connect_mac.py）に要る部品。
+# MetaTrader5 は Windows 専用なので入れない（代わりに bridge/mt5_files.py が EA のファイルを読む）。
+websockets>=12.0
+python-dotenv>=1.0.1
+pyinstaller>=6.0
+# Mac の Python は HTTPS の証明書を持っていない（中継 wss:// にも サイト https:// にも
+# つながらない）。certifi の証明書を同梱して SSL_CERT_FILE で使う（connect_mac.py）
+certifi>=2024.2.2

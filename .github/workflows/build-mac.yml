@@ -1,0 +1,79 @@
+# お客様に配る Mac 版（MT5 Automatic.app）を、GitHub の macOS で自動で作る。
+#
+# connect.py / connect_mac.py / bridge/ / tools/mac/ を変えて push すると、
+# ここが .app を作り直して public/download/MT5Automatic-mac.zip を commit する
+# → Vercel がサイトに載せる（Windows 版の build-exe.yml と同じ流れ）。
+#
+# 署名はしない（Apple Developer の証明書が要る）。お客様は初回だけ
+# 右クリック →「開く」で通す（サイトの手順に書いてある）。
+name: build-mac
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - connect.py
+      - connect_mac.py
+      - bridge/**
+      - tools/mac/**
+      - .github/workflows/build-mac.yml
+  workflow_dispatch:
+
+concurrency:
+  group: build-mac
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 合言葉を同梱する（Secrets に無ければ「切」）
+        env:
+          TRELAB_RISK_TOKEN: ${{ secrets.TRELAB_RISK_TOKEN }}
+        run: |
+          if [ -z "$TRELAB_RISK_TOKEN" ]; then
+            echo "::warning::TRELAB_RISK_TOKEN が Secrets に無いので、AIの見張りは「切」の版になります"
+          else
+            printf 'TOKEN = "%s"\n' "$TRELAB_RISK_TOKEN" > bridge/risk_secret.py
+            echo "合言葉を同梱します"
+          fi
+
+      - name: EA の控え（ea_manifest.json）を作る
+        run: python3 tools/make-ea-manifest.py
+
+      - name: .app を作る
+        run: bash tools/mac/build-mac.sh
+
+      - name: できたか確かめる
+        run: |
+          zip="public/download/MT5Automatic-mac.zip"
+          test -f "$zip" || { echo ".zip ができていません"; exit 1; }
+          size=$(stat -f%z "$zip")
+          echo "MT5Automatic-mac.zip: $size bytes"
+          test "$size" -gt 5000000 || { echo ".zip が小さすぎます"; exit 1; }
+          # 本体が起動して、引数の処理まで通ることを確かめる（MT5 は無い）
+          "dist/MT5 Automatic.app/Contents/Resources/bin/MT5Automatic" --self-test || true
+
+      - name: サイトの置き場へ commit する
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/download/MT5Automatic-mac.zip
+          if git diff --cached --quiet; then
+            echo ".zip は変わっていません（commit なし）"
+            exit 0
+          fi
+          sha=$(git rev-parse --short HEAD)
+          git commit -m "[skip ci] Mac 版を作り直す（自動ビルド $sha）"
+          git pull --rebase origin main
+          git push

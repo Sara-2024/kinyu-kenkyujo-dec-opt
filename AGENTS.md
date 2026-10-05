@@ -165,7 +165,28 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   **誰がどちらを使っているかは2か所に残す**：サイトが初期設定を始めた／選んだときに
   `member_platform_set`（`member_connections.platform`、管理者画面と一斉制御の「OS」列）、
   ブリッジが名乗るときに `status.platform`（動いている側の事実。一斉制御はこちらを優先）。
-  `supabase/migrations/20261004_platform.sql`。Mac 版ツールそのものは `tools/mac/`（別項）。
+  `supabase/migrations/20261004_platform.sql`。Mac 版ツールそのものは次の項。
+- **Mac 版ツールは「Windows 版の本体 ＋ OS 依存の差し替え」。** 入口は `connect_mac.py`。
+  `connect.py` をそのまま読み込み、MT5 の探し方・ログイン済みの判定・MT5 の開き直し・
+  自動起動（`~/Library/LaunchAgents/jp.trelab.mt5automatic.plist`）・プロセスの見つけ方・
+  ブリッジの起こし方・MessageBox（osascript）だけを差し替える（`_patch()`）。
+  初回の設定・合図（token）・`start_bridge()` の歯止め・一斉制御の指令は Windows と同じコード。
+  - **MT5 は Wine の中**：`~/Library/Application Support/<アプリ>/drive_c/users/<user>/AppData/Roaming/
+    MetaQuotes/Terminal/<ID>/`（`bridge/mt5_detect_mac.py`）。選んだら `point_appdata_at()` で
+    **APPDATA をその Wine の Roaming に向ける**。これで `mt5_terminal` / `ea_manager`（控えの場所・
+    EA の置き場）が Mac でもそのまま使える。設定と記録は `~/Library/Application Support/MT5Automatic/`
+    （LOCALAPPDATA に見せる）。
+  - **MetaTrader5 の代わりは `bridge/mt5_files.py`**：EA が共通フォルダに書くファイルを読み、
+    閉じる・取り消すは `trelab_cmd.ini` → `trelab_cmd_ack.ini` の往復（`docs/mac-ea-files.md`）。
+    `sys.modules["MetaTrader5"] = mt5_files` と差し込むので `bridge.py` は変えない。
+    **EA 側の対応が要る**（口座・建玉・待機注文・履歴の書き出しと指令の実行）。EA が控えを
+    書いていなければ「ログインしていない」扱いになる（`initialize()` が False）。
+  - **配るのは `MT5 Automatic.app` を ZIP にしたもの**（`public/download/MT5Automatic-mac.zip`）。
+    `tools/mac/build-mac.sh` が PyInstaller で本体を 1 ファイルにし、`tools/mac/launcher.applescript`
+    （`osacompile`）で包み、Info.plist に `aitrader://` を書く。`.github/workflows/build-mac.yml` が
+    macOS で自動で回す。署名はしないので、お客様は初回だけ右クリック→「開く」。
+  - 試験：`bridge/tests/mt5_files_test.py`（EA のふりをして往復）、`bridge/tests/connect_mac_test.py`
+    （差し替え・MT5 探し・自動起動・配布の定義）。どちらも Mac も MT5 も要らない。
 - **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。
   記録は `%LOCALAPPDATA%\AITrader\state.json`。
   - `INSTALL_ONLY` … MT5 を探して EA を置くところまで。**サイトとは一切通信しない。**

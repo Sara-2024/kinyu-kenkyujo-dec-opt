@@ -42,6 +42,15 @@ class MacTerminal:
         return self.roaming / "MetaQuotes" / "Terminal" / "Common" / "Files"
 
     @property
+    def exe(self) -> Path | None:
+        """Windows 版の Terminal と同じ名前。Mac では Wine の中なので「無い」扱い。"""
+        return None
+
+    @property
+    def install_dir(self) -> Path | None:
+        return None
+
+    @property
     def terminal_id(self) -> str:
         return self.data_path.name
 
