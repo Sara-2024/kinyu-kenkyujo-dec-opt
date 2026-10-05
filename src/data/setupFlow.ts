@@ -4,25 +4,39 @@ export interface UserStep {
   no: number
   title: string
   detail: string
-  /** 押す場所を示す絵（未署名のプログラムなので Windows が確認を出す） */
-  figure?: 'browserWarning' | 'smartScreen'
+  /** 押す場所を示す絵（署名の無いプログラムなので Windows / Mac が確認を出す） */
+  figure?: 'browserWarning' | 'smartScreen' | 'macNotOpened' | 'macOpenAnyway'
 }
 
 /**
  * ダウンロードしたあと、お客様にしていただくこと。
  * exe（1本にまとめた版）は「開くだけ」。zip はいったん展開して はじめる.bat を開く。
+ * Mac は署名が無いので、macOS 15 以降は「システム設定 → このまま開く」を一度だけ通す
+ * （右クリック→開く は macOS 14 までの通し方。15 からは出てこない）。
  */
 export function installSteps(kind: 'exe' | 'zip' | 'mac'): UserStep[] {
   if (kind === 'mac') {
     return [
-      { no: 1, title: 'ダウンロードした ZIP を開く', detail: 'ダウンロード欄の「MT5 Automatic.zip」をクリックすると、自動で展開されて「MT5 Automatic」が出ます' },
+      {
+        no: 1,
+        title: 'ダウンロードした ZIP を開く',
+        detail: 'ダウンロード欄の「MT5Automatic-mac.zip」をクリック（Safari は自動で展開されます）。「MT5 Automatic」が出ます',
+      },
       {
         no: 2,
-        title: '「MT5 Automatic」を右クリック →「開く」',
-        detail: '「開発元を確認できません」と出たら、そのまま「開く」。Finder の右クリック（または control を押しながらクリック）から開けます',
+        title: '「MT5 Automatic」をダブルクリック → 「完了」',
+        detail: '「開けません」「Apple は確認できませんでした」と出たら「完了」を押します。「ゴミ箱に入れる」は押さないでください',
+        figure: 'macNotOpened',
       },
-      { no: 3, title: 'MT5はログインしたままに', detail: 'いつも通り口座に入っていれば、そのままで大丈夫です' },
-      { no: 4, title: 'あとは待つだけ', detail: 'ツールが起動すると、この画面が自動で先へ進みます' },
+      {
+        no: 3,
+        title: 'システム設定 →「このまま開く」',
+        detail:
+          '画面左上の  →「システム設定」→ 左の「プライバシーとセキュリティ」→ 下へスクロール →「"MT5 Automatic" は Mac を保護するためにブロックされました」の「このまま開く」→ Mac のパスワード（または Touch ID）→ もう一度「このまま開く」。これは初回だけです。macOS 14 以前は、右クリック →「開く」→「開く」で通ります',
+        figure: 'macOpenAnyway',
+      },
+      { no: 4, title: 'MT5はログインしたままに', detail: 'いつも通り口座に入っていれば、そのままで大丈夫です' },
+      { no: 5, title: 'あとは待つだけ', detail: 'ツールが起動すると、この画面が自動で先へ進みます' },
     ]
   }
   if (kind === 'exe') {

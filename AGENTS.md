@@ -188,7 +188,18 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
     `--assemble` が `dist/MT5Automatic-*` を集めて `.app` に包み、Info.plist に `aitrader://` を書く。
     `.github/workflows/build-mac.yml` は `macos-15`（arm64）と `macos-15-intel`（x86_64）で本体を
     1 つずつ作ってからまとめる。手元の Apple シリコンでは Rosetta ＋ universal2 の Python があれば
-    引数なしで両方できる。署名はしないので、お客様は初回だけ右クリック→「開く」。
+    引数なしで両方できる。
+  - **Gatekeeper の通し方（買う署名は無い）。** macOS 15 以降は右クリック→「開く」の抜け道が無く、
+    お客様は初回だけ「開けません」→「完了」→ システム設定 →「プライバシーとセキュリティ」→
+    「このまま開く」を通す（`installSteps('mac')` と `SetupFigures` の絵）。それを通せる形に
+    しておくため、作り方に 2 つ決まりがある（どちらも macOS 15 で実際に踏んだ）：
+    ① `--assemble` の最後で **アドホック署名し直す**（`codesign --force --deep --sign -`）。
+    osacompile の .app は署名付きなので、Info.plist を書き換えて bin/ を足したままだと
+    「壊れているため開けません。ゴミ箱に入れてください」になり、「このまま開く」が出ない。
+    ② **launcher は本体を .app の中から直接起こさない。** 外側を許可しても、隔離の印が付いた
+    中の本体はその場で強制終了される（しかも Downloads から開いた .app は読み取り専用の仮の
+    場所で動くので印を外せない）。`~/Library/Application Support/MT5Automatic/bin/` に
+    `cp -X`（拡張属性なし）で写し、そちらを起こす。自動起動の LaunchAgent もその写しを指す。
     Mac の Python は HTTPS の証明書を持たないので certifi を同梱し `SSL_CERT_FILE` で使う
     （無いと中継にもサイトにもつながらない）。
   - 試験：`bridge/tests/mt5_files_test.py`（EA のふりをして往復）、`bridge/tests/connect_mac_test.py`

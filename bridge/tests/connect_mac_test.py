@@ -148,6 +148,15 @@ check("URL の登録は .app 任せ（何もしないで True）", connect_mac.r
 # ── 8) 配布の定義がずれていない ──
 build = (ROOT / "tools" / "mac" / "build-mac.sh").read_text(encoding="utf-8")
 launcher = (ROOT / "tools" / "mac" / "launcher.applescript").read_text(encoding="utf-8")
+
+# ── Gatekeeper の通し方（macOS 15 で実際に踏んだ 2 つの落とし穴）──
+# 1) 書き換えた .app を署名し直さないと「壊れている」扱いになり、許可の道が出ない
+check("build-mac.sh は .app をアドホック署名して整合を取る", "codesign --force --deep --sign -" in build)
+check("build-mac.sh は署名の整合を確かめてから ZIP にする", "codesign --verify --deep --strict" in build)
+# 2) 外側を許可しても、隔離の印が付いた中の本体はその場で強制終了される
+check("launcher は本体を Application Support に印なしで写す（cp -X）", "cp -X" in launcher and "application support folder" in launcher)
+check("launcher は写しの隔離の印も外す", "xattr -d com.apple.quarantine" in launcher)
+check("launcher は動いている写しを直接上書きしない（別名→差し替え）", ".new" in launcher and "mv -f" in launcher)
 workflow = (ROOT / ".github" / "workflows" / "build-mac.yml").read_text(encoding="utf-8")
 connector = (ROOT / "src" / "data" / "connector.ts").read_text(encoding="utf-8")
 check("build-mac.sh は websockets を同梱する", "--hidden-import websockets" in build)

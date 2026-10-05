@@ -139,7 +139,14 @@ with open(path, "wb") as fh:
     plistlib.dump(info, fh)
 print("   Info.plist に aitrader:// を書きました")
 PYEOF
-  # 署名は無い（Gatekeeper には右クリック→開く で通す）。隔離属性だけ外しておく
+  # 署名の体裁を整える（証明書の要らないアドホック署名）。
+  # osacompile が作る .app には署名が付いていて、Info.plist を書き換えたり bin/ を足したり
+  # すると「署名が壊れたアプリ」になる。macOS 15 はそれを「壊れているため開けません。
+  # ゴミ箱に入れてください」と出し、システム設定の「このまま開く」も出さない（手元で確認）。
+  # 整合を取り直せば「確認できない開発元」の扱いになり、お客様が設定から許可できる。
+  # 買う署名（Developer ID）とは別の話で、警告そのものは消えない。
+  codesign --force --deep --sign - "$APP"
+  codesign --verify --deep --strict "$APP" || { echo "署名の整合が取れていません" >&2; exit 1; }
   xattr -cr "$APP" 2>/dev/null || true
 
   echo "== ZIP にしてサイトの置き場へ"
