@@ -182,9 +182,15 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
     **EA 側の対応が要る**（口座・建玉・待機注文・履歴の書き出しと指令の実行）。EA が控えを
     書いていなければ「ログインしていない」扱いになる（`initialize()` が False）。
   - **配るのは `MT5 Automatic.app` を ZIP にしたもの**（`public/download/MT5Automatic-mac.zip`）。
-    `tools/mac/build-mac.sh` が PyInstaller で本体を 1 ファイルにし、`tools/mac/launcher.applescript`
-    （`osacompile`）で包み、Info.plist に `aitrader://` を書く。`.github/workflows/build-mac.yml` が
-    macOS で自動で回す。署名はしないので、お客様は初回だけ右クリック→「開く」。
+    **Apple シリコン用（arm64）と Intel 用（x86_64）の本体を両方同梱**し、
+    `tools/mac/launcher.applescript` が `uname -m` で使い分ける（お客様はどちらでも同じ ZIP）。
+    `tools/mac/build-mac.sh --binary` が PyInstaller で動かしている機種の本体を作り、
+    `--assemble` が `dist/MT5Automatic-*` を集めて `.app` に包み、Info.plist に `aitrader://` を書く。
+    `.github/workflows/build-mac.yml` は `macos-15`（arm64）と `macos-15-intel`（x86_64）で本体を
+    1 つずつ作ってからまとめる。手元の Apple シリコンでは Rosetta ＋ universal2 の Python があれば
+    引数なしで両方できる。署名はしないので、お客様は初回だけ右クリック→「開く」。
+    Mac の Python は HTTPS の証明書を持たないので certifi を同梱し `SSL_CERT_FILE` で使う
+    （無いと中継にもサイトにもつながらない）。
   - 試験：`bridge/tests/mt5_files_test.py`（EA のふりをして往復）、`bridge/tests/connect_mac_test.py`
     （差し替え・MT5 探し・自動起動・配布の定義）。どちらも Mac も MT5 も要らない。
 - **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。

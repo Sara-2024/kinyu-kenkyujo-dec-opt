@@ -1,7 +1,8 @@
 # お客様に配る Mac 版（MT5 Automatic.app）を、GitHub の macOS で自動で作る。
 #
 # connect.py / connect_mac.py / bridge/ / tools/mac/ を変えて push すると、
-# ここが .app を作り直して public/download/MT5Automatic-mac.zip を commit する
+#   1. Apple シリコン（macos-15）と Intel（macos-15-intel）で本体を 1 つずつ作り
+#   2. 1 つの .app にまとめて public/download/MT5Automatic-mac.zip を commit する
 # → Vercel がサイトに載せる（Windows 版の build-exe.yml と同じ流れ）。
 #
 # 署名はしない（Apple Developer の証明書が要る）。お客様は初回だけ
@@ -27,8 +28,16 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: macos-14
+  binary:
+    # 機種ごとに本体を作る（PyInstaller は動かしている機種の本体しか作れない）
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -51,8 +60,46 @@ jobs:
       - name: EA の控え（ea_manifest.json）を作る
         run: python3 tools/make-ea-manifest.py
 
-      - name: .app を作る
-        run: bash tools/mac/build-mac.sh
+      - name: 本体を作る（${{ matrix.arch }}）
+        run: bash tools/mac/build-mac.sh --binary
+
+      - name: 機種が合っているか確かめる
+        run: |
+          bin="dist/MT5Automatic-${{ matrix.arch }}"
+          test -x "$bin" || { echo "本体ができていません: $bin"; exit 1; }
+          file "$bin" | grep -q "${{ matrix.arch }}" || { echo "機種が違います"; file "$bin"; exit 1; }
+          # 起動して、引数の処理まで通ることを確かめる（MT5 は無い）
+          "$bin" --self-test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MT5Automatic-${{ matrix.arch }}
+          path: dist/MT5Automatic-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 3
+
+  assemble:
+    needs: binary
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: MT5Automatic-*
+          path: dist
+          merge-multiple: true
+
+      - name: 2 機種ぶんの本体がそろっているか
+        run: |
+          chmod +x dist/MT5Automatic-arm64 dist/MT5Automatic-x86_64
+          ls -la dist/
+          test -x dist/MT5Automatic-arm64 || { echo "Apple シリコン用がありません"; exit 1; }
+          test -x dist/MT5Automatic-x86_64 || { echo "Intel 用がありません"; exit 1; }
+
+      - name: .app に包む
+        run: bash tools/mac/build-mac.sh --assemble
 
       - name: できたか確かめる
         run: |
@@ -60,9 +107,8 @@ jobs:
           test -f "$zip" || { echo ".zip ができていません"; exit 1; }
           size=$(stat -f%z "$zip")
           echo "MT5Automatic-mac.zip: $size bytes"
-          test "$size" -gt 5000000 || { echo ".zip が小さすぎます"; exit 1; }
-          # 本体が起動して、引数の処理まで通ることを確かめる（MT5 は無い）
-          "dist/MT5 Automatic.app/Contents/Resources/bin/MT5Automatic" --self-test || true
+          test "$size" -gt 10000000 || { echo ".zip が小さすぎます（2 機種ぶん入っていない？）"; exit 1; }
+          ls "dist/MT5 Automatic.app/Contents/Resources/bin/"
 
       - name: サイトの置き場へ commit する
         run: |
