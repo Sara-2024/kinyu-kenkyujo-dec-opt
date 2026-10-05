@@ -124,7 +124,8 @@ jobs:
             exit 0
           fi
           sha=$(git rev-parse --short HEAD)
-          git commit -m "[skip ci] Mac 版を作り直す（自動ビルド $sha）"
+          # bash は「$sha）」の全角かっこを変数名に含めてしまうので ${sha} と書く
+          git commit -m "[skip ci] Mac 版を作り直す（自動ビルド ${sha}）"
           # 同じ push で動く Windows 側の自動ビルド（build-exe）が先に commit していることがある。
           # 押し負けたら取り直して、もう一度押す
           for i in 1 2 3 4 5; do
