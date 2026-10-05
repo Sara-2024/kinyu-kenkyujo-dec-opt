@@ -89,4 +89,13 @@ jobs:
           }
           $sha = (git rev-parse --short HEAD)
           git commit -m "[skip ci] exe を作り直す（自動ビルド $sha）"
-          git push
+          # 同じ push で動く Mac 側の自動ビルド（build-mac）が先に commit していることがある。
+          # 押し負けたら取り直して、もう一度押す
+          for ($i = 1; $i -le 5; $i++) {
+            git pull --rebase origin main
+            git push
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Write-Host "push できなかったので取り直します（$i 回目）"
+            Start-Sleep -Seconds 20
+          }
+          throw "push できませんでした"

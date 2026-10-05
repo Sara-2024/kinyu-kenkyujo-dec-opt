@@ -82,6 +82,10 @@ jobs:
     needs: binary
     runs-on: macos-15
     timeout-minutes: 15
+    env:
+      # macOS ランナーの既定の文字コードだと、日本語の commit メッセージが化ける
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
     steps:
       - uses: actions/checkout@v4
 
@@ -121,5 +125,12 @@ jobs:
           fi
           sha=$(git rev-parse --short HEAD)
           git commit -m "[skip ci] Mac 版を作り直す（自動ビルド $sha）"
-          git pull --rebase origin main
-          git push
+          # 同じ push で動く Windows 側の自動ビルド（build-exe）が先に commit していることがある。
+          # 押し負けたら取り直して、もう一度押す
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push && exit 0
+            echo "push できなかったので取り直します（$i 回目）"
+            sleep 20
+          done
+          echo "push できませんでした"
+          exit 1
