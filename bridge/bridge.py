@@ -99,6 +99,8 @@ _LOCK_FH = None
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
 # 「直したのに直っていない」ときは、たいてい古いブリッジが残っている。
 VERSION = "2026-09-10.1"
+# どのパソコンで動いているか（サイトの管理者画面・一斉制御に出す）
+_PLATFORM = "windows" if os.name == "nt" else ("mac" if sys.platform == "darwin" else sys.platform)
 # 同じ会員の部屋に、別の口座のブリッジがすでに動いているとき（中継が 4002 で断る）に待つ秒数。
 # すぐ繋ぎ直すと、動いているほうと追い出し合いになる。
 BUSY_WAIT_SEC = 300
@@ -1732,6 +1734,7 @@ class MT5Controller:
         ea = await self._call(self._ea_state_blocking) if self.ready else {}
         return {
             "version": VERSION,
+            "platform": _PLATFORM,
             "gate_path": str(await self._call(self._gate_path)) if self.ready else None,
             "intent_by": self.intent_by,
             "intent_at": self.intent_at,

@@ -29,7 +29,22 @@ import {
 } from '../data/setupFlow'
 import { LiveReportView, type LiveReport } from './LiveReport'
 import { SetupFigure } from './SetupFigures'
-import { CONNECT_PAUSED, CONNECTOR_DOWNLOAD, CONNECTOR_WAIT_MS, DEFAULT_ROOM, DEFAULT_ROOM_FRESH_MS, DEFAULT_ROOM_POLL_MS, downloadConnector, launchConnector, relaunchConnector, probeRoom } from '../data/connector'
+import {
+  CONNECT_PAUSED,
+  CONNECTOR_WAIT_MS,
+  DEFAULT_ROOM,
+  DEFAULT_ROOM_FRESH_MS,
+  DEFAULT_ROOM_POLL_MS,
+  connectorDownload,
+  downloadConnector,
+  launchConnector,
+  loadPlatform,
+  recordPlatform,
+  relaunchConnector,
+  probeRoom,
+  savePlatform,
+  type Platform,
+} from '../data/connector'
 import { formatReviewAnswer, reviewTrades, type TradeHistory } from '../data/tradeReview'
 import { PixelPerson } from './PixelPerson'
 import { AI_FAILURE_TEXT, askAi, setPendingQuestion, takePendingQuestion, type AiRole } from '../data/ai'
@@ -41,7 +56,8 @@ import { eventLabel, formatEventDate, formatEventTime, upcoming, type EconomicEv
 type Phase = 'talk' | 'intro' | 'tour' | 'launching' | 'download' | 'waiting' | 'connecting' | 'mt5' | 'done' | 'control'
 
 /** ダウンロード後の手順（exe か zip かで変わる） */
-const INSTALL_STEPS = installSteps(CONNECTOR_DOWNLOAD.kind)
+/** お使いのパソコンに合わせた、ダウンロードしたあとの手順 */
+const stepsFor = (platform: Platform) => installSteps(connectorDownload(platform).kind)
 
 /** この選択肢は、答えを作らずに MT5 から取ってきた数字をそのまま出す */
 const LIVE_QUESTIONS: Record<string, LiveReport['kind']> = {
@@ -107,6 +123,18 @@ export function DialogueWindow({
   // ── おまかせ接続 ──
   const [phase, setPhase] = useState<Phase>('talk')
   const [stepIndex, setStepIndex] = useState(0)
+  // お使いのパソコン（Windows / Mac）。配るものと手順が変わる。画面で選び直せる
+  const [platform, setPlatformState] = useState<Platform>(() => loadPlatform())
+  const choosePlatform = (p: Platform) => {
+    setPlatformState(p)
+    savePlatform(p)
+    void recordPlatform(sessionToken, p)
+  }
+  // どちらのパソコンかを運営が把握できるように、設定を始めた時点で記録する
+  useEffect(() => {
+    if (phase === 'launching' || phase === 'download') void recordPlatform(sessionToken, platform)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
   const [checks, setChecks] = useState<ConnectCheck[]>([])
   const [error, setError] = useState<string | null>(null)
   const [conn, setConn] = useState<Connection | null>(() => loadConnection())
@@ -512,7 +540,7 @@ export function DialogueWindow({
 
   // ダウンロードを始めたら、ツールの起動を待つ（起動すると実応答で接続に進む）
   const startDownload = () => {
-    downloadConnector()
+    downloadConnector(platform)
     setError(null)
     setChecks([])
     setStepIndex(0)
@@ -1135,6 +1163,26 @@ export function DialogueWindow({
               ))}
             </div>
 
+            {/* お使いのパソコンを選ぶ（配るものと手順が変わる） */}
+            <p className="mb-2 text-[13px] font-bold text-slate-400">{SETUP.platformQuestion}</p>
+            <div className="mb-4 flex gap-3">
+              {(['windows', 'mac'] as Platform[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => choosePlatform(p)}
+                  className="h-12 flex-1 rounded-[6px] border text-[16px] font-bold transition"
+                  style={{
+                    borderColor: platform === p ? 'var(--accent)' : 'var(--panel-border)',
+                    background: platform === p ? 'rgba(94,204,255,0.15)' : 'rgba(8,14,26,0.7)',
+                    color: platform === p ? 'var(--accent)' : '#94a3b8',
+                  }}
+                >
+                  {p === 'windows' ? SETUP.platformWindows : SETUP.platformMac}
+                </button>
+              ))}
+            </div>
+
             <button
               type="button"
               onClick={startDownload}
@@ -1142,12 +1190,14 @@ export function DialogueWindow({
               style={{ background: 'rgba(250,204,21,0.92)', borderColor: '#a16207', color: '#1c1607', boxShadow: '0 0 18px rgba(250,204,21,0.3)' }}
             >
               ⬇ {SETUP.downloadButton}
-              <span className="font-mono text-[12px] font-bold opacity-70">{CONNECTOR_DOWNLOAD.saveAs}</span>
+              <span className="font-mono text-[12px] font-bold opacity-70">{connectorDownload(platform).saveAs}</span>
             </button>
-            <p className="font-mono mt-2 text-center text-[12px] text-slate-500">{SETUP.downloadNote}</p>
+            <p className="font-mono mt-2 text-center text-[12px] text-slate-500">
+              {platform === 'mac' ? SETUP.downloadNoteMac : SETUP.downloadNote}
+            </p>
 
             <p className="mb-2 mt-4 text-[13px] font-bold text-slate-400">ダウンロードしたあとの手順（私が順にご案内します）</p>
-            <InstallSteps active={0} />
+            <InstallSteps active={0} steps={stepsFor(platform)} lastIsWait />
 
             <div className="mt-3 flex">
               <button type="button" onClick={backToTalk} className="font-mono ml-auto text-[12px] text-slate-400 underline-offset-4 hover:underline">
@@ -1160,7 +1210,7 @@ export function DialogueWindow({
         {/* ══════ ダウンロードしたあと：起動を待つ ══════ */}
         {phase === 'waiting' && (
           <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
-            <InstallSteps active={1} />
+            <InstallSteps active={1} steps={stepsFor(platform)} lastIsWait />
 
             <div
               className="mt-4 flex flex-wrap items-center gap-4 rounded-[6px] border px-5 py-4"
@@ -1347,9 +1397,8 @@ function SetupButton({ primary, onClick, children }: { primary?: boolean; onClic
 }
 
 /** お客様がする手順の一覧。active より前は済み、active はいま、あとは待ち */
-function InstallSteps({ active, steps = INSTALL_STEPS }: { active: number; steps?: UserStep[] }) {
-  // ダウンロード手順の最後は「あとは待つだけ」なので、やる前から緑で出す
-  const lastIsWait = steps === INSTALL_STEPS
+function InstallSteps({ active, steps, lastIsWait = false }: { active: number; steps: UserStep[]; lastIsWait?: boolean }) {
+  // ダウンロード手順の最後は「あとは待つだけ」なので、やる前から緑で出す（lastIsWait）
   return (
     <ol className="space-y-2.5">
       {steps.map((u, i) => {

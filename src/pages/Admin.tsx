@@ -142,6 +142,7 @@ export function Admin() {
                 <th className="px-3 py-3 font-bold">状態</th>
                 <th className="px-3 py-3 font-bold">自動売買</th>
                 <th className="px-3 py-3 font-bold">MT5口座</th>
+                <th className="px-3 py-3 font-bold">OS</th>
                 <th className="px-3 py-3 font-bold">最終ログイン</th>
                 <th className="px-3 py-3 font-bold">操作</th>
               </tr>
@@ -163,6 +164,7 @@ export function Admin() {
                   <td className="px-3 py-3 text-slate-300">
                     {row.account ? `${row.account} / ${row.server ?? ''}` : '—'}
                   </td>
+                  <td className="px-3 py-3">{row.platform === 'mac' ? 'Mac' : row.platform === 'windows' ? 'Windows' : '—'}</td>
                   <td className="px-3 py-3 text-slate-400">
                     {row.last_login_at ? new Date(row.last_login_at).toLocaleString('ja-JP') : '—'}
                   </td>
@@ -206,7 +208,7 @@ export function Admin() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
                     まだアカウントがありません。
                   </td>
                 </tr>

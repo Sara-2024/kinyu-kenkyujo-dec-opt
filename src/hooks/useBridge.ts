@@ -31,6 +31,8 @@ export interface BridgeStatus {
   server_time?: string
   /** 動いているブリッジの版 */
   version?: string
+  /** ブリッジが動いているパソコン（windows / mac） */
+  platform?: string | null
   /** MT5 のチャートに実際に出ている状態（EAが書き出したもの） */
   ea_state?: string | null
   ea_allowed?: string | null
@@ -110,6 +112,7 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'positions',
   'server_time',
   'version',
+  'platform',
   'ea_state',
   'ea_allowed',
   'ea_state_at',

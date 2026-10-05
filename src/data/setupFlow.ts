@@ -12,7 +12,19 @@ export interface UserStep {
  * ダウンロードしたあと、お客様にしていただくこと。
  * exe（1本にまとめた版）は「開くだけ」。zip はいったん展開して はじめる.bat を開く。
  */
-export function installSteps(kind: 'exe' | 'zip'): UserStep[] {
+export function installSteps(kind: 'exe' | 'zip' | 'mac'): UserStep[] {
+  if (kind === 'mac') {
+    return [
+      { no: 1, title: 'ダウンロードした ZIP を開く', detail: 'ダウンロード欄の「MT5 Automatic.zip」をクリックすると、自動で展開されて「MT5 Automatic」が出ます' },
+      {
+        no: 2,
+        title: '「MT5 Automatic」を右クリック →「開く」',
+        detail: '「開発元を確認できません」と出たら、そのまま「開く」。Finder の右クリック（または control を押しながらクリック）から開けます',
+      },
+      { no: 3, title: 'MT5はログインしたままに', detail: 'いつも通り口座に入っていれば、そのままで大丈夫です' },
+      { no: 4, title: 'あとは待つだけ', detail: 'ツールが起動すると、この画面が自動で先へ進みます' },
+    ]
+  }
   if (kind === 'exe') {
     return [
       {

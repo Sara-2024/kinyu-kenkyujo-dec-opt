@@ -156,6 +156,16 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 配るのは1つの exe（`MT5Automatic.exe`／表示名は MT5 Automatic）。
 中身は接続ツールとブリッジで、**状態で動きが変わる**。
 
+- **ルートは2つ（Windows / Mac）。** サイト・中継・一斉制御・会員・BAN は共通で、
+  違うのはお客様のパソコンで動く部分だけ。初期設定の「接続ツールのダウンロード」で
+  お客様がどちらかを選ぶ（`DialogueWindow` の `platform`。ブラウザから推定し、選び直せる。
+  `localStorage` の `mt5automatic.platform` に覚える）。配るものは `connector.ts` の
+  `CONNECTOR_DOWNLOADS`（windows = `MT5Automatic.exe`、mac = `MT5Automatic-mac.zip`、
+  `VITE_CONNECTOR_URL_MAC` で差し替え）。手順は `installSteps('mac')`。
+  **誰がどちらを使っているかは2か所に残す**：サイトが初期設定を始めた／選んだときに
+  `member_platform_set`（`member_connections.platform`、管理者画面と一斉制御の「OS」列）、
+  ブリッジが名乗るときに `status.platform`（動いている側の事実。一斉制御はこちらを優先）。
+  `supabase/migrations/20261004_platform.sql`。Mac 版ツールそのものは `tools/mac/`（別項）。
 - **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。
   記録は `%LOCALAPPDATA%\AITrader\state.json`。
   - `INSTALL_ONLY` … MT5 を探して EA を置くところまで。**サイトとは一切通信しない。**
@@ -376,6 +386,11 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **書き換えてよい変数と範囲は、お客様のPC側でも確かめる**（`bridge.py` の
   `ALLOWED_VARIABLES`）。画面の `eaSettings.ts` と同じ値を置く。片方だけ変えない。
 - **ログに会員IDと口座番号をそのまま残さない。** 中継のログは第三者の手にも渡りうる。
+- **止めた会員のブリッジは HTTP 403 で門前払いしない。** ブリッジは 403 を
+  「中継に繋がらない」としか読めず、60 秒おきに叩き直してログが毎分増える。
+  最初の 1 回は WebSocket を開いてから 4003（利用停止）で閉じ、ブリッジに自分から
+  終了させる（`rejectBannedBridge`）。4003 を知らない古い版が叩き直してくるあいだは、
+  会員の確認だけして黙って 403 を返す（ログは部屋ごとに 1 時間に 1 行）。
 
 ## 動作確認
 

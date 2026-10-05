@@ -305,6 +305,7 @@ export function Fleet() {
                 <th className="px-3 py-3 font-bold">対象</th>
                 <th className="px-3 py-3 font-bold">登録した口座</th>
                 <th className="px-3 py-3 font-bold">登録者</th>
+                <th className="px-3 py-3 font-bold">OS</th>
                 <th className="px-3 py-3 font-bold">接続</th>
                 <th className="px-3 py-3 font-bold">つながっている口座</th>
                 <th className="px-3 py-3 font-bold">自動売買</th>
@@ -352,6 +353,7 @@ export function Fleet() {
                       <div className="text-[12px] text-slate-400">{row.server}</div>
                     </td>
                     <td className="px-3 py-3 text-slate-300">{row.virtual ? <span className="text-slate-500">連携のみ</span> : row.email}</td>
+                    <td className="px-3 py-3">{platformLabel((s as { platform?: unknown } | null | undefined)?.platform ?? row.platform)}</td>
                     <td className="px-3 py-3">
                       {st?.online ? (
                         <span style={{ color: '#35f58a' }}>● つながっている</span>
@@ -425,7 +427,7 @@ export function Fleet() {
               })}
               {allRows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={13} className="px-3 py-8 text-center text-slate-500">
                     まだ口座がありません。口座の PC で MT5 Automatic がサイトと連携すると、ここに「対象」として出ます。
                   </td>
                 </tr>
@@ -436,6 +438,13 @@ export function Fleet() {
       </div>
     </div>
   )
+}
+
+/** OS の表示。ブリッジが名乗ったもの（動いている側）を優先し、無ければ初期設定で選んだ記録 */
+function platformLabel(v: unknown): string {
+  if (v === 'mac' || v === 'darwin') return 'Mac'
+  if (v === 'windows' || v === 'win32') return 'Windows'
+  return '—'
 }
 
 function money(v: unknown, currency?: string, sign = false): string {

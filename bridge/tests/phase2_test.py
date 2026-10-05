@@ -232,6 +232,18 @@ if ban_mig.is_file():
     check("ブリッジの確認は「止められているか」だけ返す", "status = 'active'" in ban_sql[ban_sql.index("bridges_blocked") :])
     check("削除・BAN の migration は既存のテーブルを落とさない", "drop table" not in ban_sql.lower())
 
+# ── 8-4) 「お使いのパソコン（Windows / Mac）の記録」migration も schema.sql とずれていないか ──
+pf_mig = ROOT / "supabase" / "migrations" / "20261004_platform.sql"
+check("OS の記録の migration がある", pf_mig.is_file())
+if pf_mig.is_file():
+    pf_sql = pf_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("OS の記録の migration の中身が schema.sql と同じ", pf_sql.strip() in schema_all)
+    check("記録は本人だけ（セッションの会員）", "_session_member(p_token)" in pf_sql[pf_sql.index("member_platform_set") :])
+    check("windows / mac 以外は受け付けない", "('windows', 'mac')" in pf_sql)
+    check("管理者の一覧に OS が出る", "c.platform," in pf_sql)
+    check("OS の記録の migration は既存のテーブルを落とさない", "drop table" not in pf_sql.lower())
+
 # ── 8) DB の追加分（migration）と schema.sql がずれていないか ──
 mig_path = ROOT / "supabase" / "migrations" / "20260912_add_connect_tokens.sql"
 schema_path = ROOT / "supabase" / "schema.sql"

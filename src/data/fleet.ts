@@ -15,6 +15,8 @@ export interface FleetAccount {
   note: string
   created_at: string
   updated_at: string
+  /** その会員が初期設定で選んだパソコン（記録があれば） */
+  platform?: 'windows' | 'mac' | null
 }
 
 function client() {

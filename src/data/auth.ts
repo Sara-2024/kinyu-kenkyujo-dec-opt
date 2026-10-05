@@ -15,6 +15,8 @@ export interface Member {
   server?: string | null
   running?: boolean | null
   connected_at?: string | null
+  /** お使いのパソコン。初期設定で選んだ／始めたときに記録される */
+  platform?: 'windows' | 'mac' | null
 }
 
 export interface AuthSession {
@@ -140,6 +142,11 @@ export async function adminUpdateMember(
 /** 会員を消す（セッション・連携・一斉制御の記録も一緒に消える）。自分と最後の管理者は消せない */
 export async function adminDeleteMember(token: string, memberId: string): Promise<void> {
   await rpc<unknown>('admin_delete_member', { p_token: token, p_member_id: memberId })
+}
+
+/** お使いのパソコン（Windows / Mac）を記録する。運営が「誰が何を使っているか」を見るため */
+export async function memberPlatformSet(token: string, platform: 'windows' | 'mac'): Promise<void> {
+  await rpc<unknown>('member_platform_set', { p_token: token, p_platform: platform })
 }
 
 export async function adminSetPassword(token: string, memberId: string, password: string): Promise<void> {

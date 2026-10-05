@@ -5,7 +5,7 @@
 // このURLを開くとブラウザがツールを起動してくれる。
 // （ツールがまだ入っていないPCでは何も起きない。その場合はここからダウンロードしてもらう）
 
-import { issueConnectToken } from './auth'
+import { issueConnectToken, memberPlatformSet } from './auth'
 
 export const CONNECTOR_SCHEME = 'aitrader'
 
@@ -129,7 +129,15 @@ export function relaunchConnector(): void {
 //   同じ場所にあり、VITE_CONNECTOR_URL=/download/MT5Automatic.zip で差し替えられる。
 //   .exe なら「開くだけ」、.zip なら「展開して はじめる.bat を開く」と案内が変わる。
 // ────────────────────────────────
-export type ConnectorKind = 'exe' | 'zip'
+export type ConnectorKind = 'exe' | 'zip' | 'mac'
+
+/**
+ * お客様のパソコン。配るものと手順が変わる。
+ *   windows … MT5Automatic.exe（Python 部品で MT5 を直接読む）
+ *   mac     … MT5Automatic-mac.zip（EA が書くファイルを読む。tools/mac/ 参照）
+ * サイト・中継・一斉制御はどちらも同じ。
+ */
+export type Platform = 'windows' | 'mac'
 
 export interface ConnectorDownload {
   url: string
@@ -138,27 +146,86 @@ export interface ConnectorDownload {
   /** お客様のPCに保存されるときの名前。ここが画面にも出る */
   saveAs: string
   kind: ConnectorKind
+  platform: Platform
 }
 
 /** お客様が受け取るファイルの名前。中身は同じで、名前だけ分かりやすくする */
 const SAVE_AS = 'MT5 Automatic.exe'
+const SAVE_AS_MAC = 'MT5 Automatic.zip'
 
-export const CONNECTOR_DOWNLOAD: ConnectorDownload = (() => {
+function windowsDownload(): ConnectorDownload {
   const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/MT5Automatic.exe'
   const filename = url.split('?')[0].split('/').pop() || 'MT5Automatic.zip'
   const kind: ConnectorKind = /\.exe$/i.test(filename) ? 'exe' : 'zip'
   // ZIP を配るときは中身が違うので、名前もそのまま使う
-  return { url, filename, saveAs: kind === 'exe' ? SAVE_AS : filename, kind }
-})()
+  return { url, filename, saveAs: kind === 'exe' ? SAVE_AS : filename, kind, platform: 'windows' }
+}
+
+function macDownload(): ConnectorDownload {
+  const url = (import.meta.env.VITE_CONNECTOR_URL_MAC as string | undefined)?.trim() || '/download/MT5Automatic-mac.zip'
+  const filename = url.split('?')[0].split('/').pop() || 'MT5Automatic-mac.zip'
+  return { url, filename, saveAs: SAVE_AS_MAC, kind: 'mac', platform: 'mac' }
+}
+
+/** Windows 用（これまでどおり。古い呼び出し口のために残す） */
+export const CONNECTOR_DOWNLOAD: ConnectorDownload = windowsDownload()
+
+export const CONNECTOR_DOWNLOADS: Record<Platform, ConnectorDownload> = {
+  windows: CONNECTOR_DOWNLOAD,
+  mac: macDownload(),
+}
+
+export function connectorDownload(platform: Platform): ConnectorDownload {
+  return CONNECTOR_DOWNLOADS[platform]
+}
+
+/** ブラウザの申告から、お使いのパソコンを推定する（画面で選び直せる） */
+export function detectPlatform(): Platform {
+  if (typeof navigator === 'undefined') return 'windows'
+  const ua = navigator.userAgent || ''
+  return /Mac OS X|Macintosh/.test(ua) && !/Windows/.test(ua) ? 'mac' : 'windows'
+}
+
+const PLATFORM_KEY = 'mt5automatic.platform'
+
+/** 選んだパソコン。選んでいなければブラウザから推定 */
+export function loadPlatform(): Platform {
+  try {
+    const saved = localStorage.getItem(PLATFORM_KEY)
+    if (saved === 'mac' || saved === 'windows') return saved
+  } catch {
+    // 保存できない環境では推定だけ
+  }
+  return detectPlatform()
+}
+
+export function savePlatform(platform: Platform): void {
+  try {
+    localStorage.setItem(PLATFORM_KEY, platform)
+  } catch {
+    // 保存できなくても画面は続ける
+  }
+}
+
+/** 運営が「誰が何を使っているか」を見られるように、サイト側に記録する。失敗しても画面は止めない */
+export async function recordPlatform(sessionToken: string | null | undefined, platform: Platform): Promise<void> {
+  if (!sessionToken) return
+  try {
+    await memberPlatformSet(sessionToken, platform)
+  } catch {
+    // 記録は見るためのもの。連携そのものには影響させない
+  }
+}
 
 /** ブラウザに保存ダイアログを出す（普通のダウンロード） */
-export function downloadConnector(): void {
+export function downloadConnector(platform: Platform = loadPlatform()): void {
   if (typeof document === 'undefined') return
   // 古い接続ツールを新しく配らない（受付を止めているあいだ）
   if (CONNECT_PAUSED) return
+  const target = connectorDownload(platform)
   const a = document.createElement('a')
-  a.href = CONNECTOR_DOWNLOAD.url
-  a.download = CONNECTOR_DOWNLOAD.saveAs
+  a.href = target.url
+  a.download = target.saveAs
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
