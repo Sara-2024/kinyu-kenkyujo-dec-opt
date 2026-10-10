@@ -44,6 +44,8 @@ ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resol
 # PyInstaller で1つの exe にまとめた場合、EA などの同梱物はここに展開される
 ASSETS = Path(getattr(sys, "_MEIPASS", ROOT))
 BRIDGE_DIR = ASSETS / "bridge"
+# 同梱の EA（.ex5）の置き場。普段は bridge/ と同じ。Mac 版が手元で動くときは bridge/mac/ に向ける
+EA_ASSETS_DIR = BRIDGE_DIR
 SERVER_DIR = ROOT / "server"
 sys.path.insert(0, str(BRIDGE_DIR))
 
@@ -497,7 +499,7 @@ def copy_ea_files(session: dict) -> Path:
         log(f"OK  Include\\{name}")
 
     for name in EA_FILES:
-        src = BRIDGE_DIR / name
+        src = EA_ASSETS_DIR / name
         if not src.is_file():
             raise SystemExit(f"元ファイルがありません: {src}")
         shutil.copy2(src, experts / name)
@@ -1099,7 +1101,8 @@ def start_bridge(session: dict | None = None) -> None:
 # ────────────────────────────────────────────────
 def self_test() -> int:
     banner("自己確認（MT5なし）")
-    missing = [n for n in (*INCLUDE_FILES, *EA_FILES) if not (BRIDGE_DIR / n).is_file()]
+    missing = [n for n in INCLUDE_FILES if not (BRIDGE_DIR / n).is_file()]
+    missing += [n for n in EA_FILES if not (EA_ASSETS_DIR / n).is_file()]
     if missing:
         log(f"NG 元ファイルがありません: {missing}")
         return 1

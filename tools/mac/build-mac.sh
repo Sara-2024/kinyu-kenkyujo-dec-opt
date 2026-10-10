@@ -34,16 +34,20 @@ ZIP="$ROOT/public/download/MT5Automatic-mac.zip"
 PY="${PYTHON:-python3}"
 MODE="${1:-all}"
 
+# Mac 用の EA は bridge/mac/ に置く（Windows 用は bridge/ 直下）。
+# 分けるのは、Windows の 3_リリースする.bat が bridge/ 直下の「別名の Yumekku .ex5」を
+# 片づける作りで、同じ場所に置くと Mac 用が消されるため。
+MAC_EA_DIR="$ROOT/bridge/mac"
+
 check_ea() {
-  echo "== 同梱する EA を確かめる"
-  EX5="$(ls "$ROOT"/bridge/*Yumekku*.ex5 2>/dev/null | head -1 || true)"
+  echo "== 同梱する EA を確かめる（Mac 用）"
+  EX5="$(ls "$MAC_EA_DIR"/*Yumekku*.ex5 2>/dev/null | head -1 || true)"
   if [ -z "$EX5" ]; then
-    echo "bridge/ に Yumekku の .ex5 がありません。2_EAを入れ替える.bat（Windows）で入れてください" >&2
+    echo "bridge/mac/ に Yumekku の .ex5 がありません。tools/mac/compile-ea.sh で作ってください" >&2
     exit 1
   fi
-  if [ ! -f "$ROOT/bridge/ea_manifest.json" ]; then
-    "$PY" "$ROOT/tools/make-ea-manifest.py"
-  fi
+  # 控え（版と SHA-256）は毎回作り直す。.ex5 を差し替えたのに古い控えが残ると「壊れている」扱いになる
+  "$PY" "$ROOT/tools/make-ea-manifest.py" --dir "$MAC_EA_DIR" --quiet
   echo "   EA: $(basename "$EX5")"
 }
 
@@ -65,9 +69,11 @@ build_binary() {
   "$vpy" -m pip install --quiet --force-reinstall --no-cache-dir -r "$ROOT/bridge/requirements-mac.txt"
   rm -rf "$DIST/$out" "$ROOT/build/$out" "$ROOT/build/$out.spec"
   local add_data=(--add-data "$ROOT/connect.py:.")
-  # bridge/ の Python と同梱物（EA・控え・TradingGate.mqh・合言葉）をそのまま bridge/ に置く。
+  # bridge/ の Python と同梱物（TradingGate.mqh・合言葉）をそのまま bridge/ に置く。
+  # EA と控えは Mac 用（bridge/mac/）だけを入れる。Windows 用の .ex5 と ea_manifest.json は
+  # 入れない（入れると ea_manager が Windows 用を優先して置いてしまう）。
   # connect.py / connect_mac.py は実行時に sys.path へ入れて読む（Windows 版と同じ）
-  for f in "$ROOT"/bridge/*.py "$ROOT"/bridge/*.ex5 "$ROOT"/bridge/ea_manifest.json "$ROOT"/bridge/TradingGate.mqh; do
+  for f in "$ROOT"/bridge/*.py "$ROOT"/bridge/TradingGate.mqh "$MAC_EA_DIR"/*.ex5 "$MAC_EA_DIR"/ea_manifest.json; do
     [ -f "$f" ] || continue
     case "$(basename "$f")" in *_test.py) continue ;; esac
     add_data+=(--add-data "$f:bridge")

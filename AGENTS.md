@@ -186,8 +186,21 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   - **MetaTrader5 の代わりは `bridge/mt5_files.py`**：EA が共通フォルダに書くファイルを読み、
     閉じる・取り消すは `trelab_cmd.ini` → `trelab_cmd_ack.ini` の往復（`docs/mac-ea-files.md`）。
     `sys.modules["MetaTrader5"] = mt5_files` と差し込むので `bridge.py` は変えない。
-    **EA 側の対応が要る**（口座・建玉・待機注文・履歴の書き出しと指令の実行）。EA が控えを
-    書いていなければ「ログインしていない」扱いになる（`initialize()` が False）。
+    EA が控えを書いていなければ「ログインしていない」扱いになる（`initialize()` が False）。
+  - **Mac 用の EA は `bridge/mac/YumekkuEA_mac.mq5` → `bridge/mac/YumekkuEA_mac.ex5`。**
+    Windows 用（`bridge/YumekkuEA_win`）と売買の判断は同じで、違いは「接続ツールとのファイルの
+    やり取り（`Tb*` の関数。`docs/mac-ea-files.md` の形式）」と、ロットが入力（固定／残高％・上限）
+    になっていること。**bridge/ 直下に置かない**：Windows の `3_リリースする.bat` が直下の
+    「別名の Yumekku .ex5」を片づけるので消される。ソース（`.mq5`）は `.gitignore`（配らない・
+    リポジトリに入れない）。`.ex5` だけコミットする。
+    **コンパイルはこの Mac でできる**：`bash tools/mac/compile-ea.sh` が
+    `/Applications/MetaTrader 5.app` の中の Wine で MetaEditor64.exe を黙って動かし、
+    `.ex5` と `bridge/mac/ea_manifest.json` を作る（Windows も MetaEditor の画面も要らない）。
+    `build-mac.sh` は `bridge/mac/` の `.ex5` と控えだけを `.app` に入れ、Windows 用の `.ex5` と
+    `bridge/ea_manifest.json` は入れない（入れると `ea_manager` が Windows 用を優先して置く）。
+    連携の配線（`SiteAllowsEntry` / `AiAllowsEntry` / `SiteLot` / `OnTimer`）と Mac のファイル
+    書き出しが揃っているかは `bridge/tests/ea_gate_test.py` が見る（ソースがある手元だけ）。
+    `TodayRealizedPnL` は M30 軸も数える（Windows 用の元ソースは M1/H1 だけ数えていた）。
   - **配るのは `MT5 Automatic.app` を ZIP にしたもの**（`public/download/MT5Automatic-mac.zip`）。
     **Apple シリコン用（arm64）と Intel 用（x86_64）の本体を両方同梱**し、
     `tools/mac/launcher.applescript` が `uname -m` で使い分ける（お客様はどちらでも同じ ZIP）。
@@ -212,9 +225,10 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
     中の本体が止められて何も起きない（実機で 8 個登録されていた）。launcher が開かれるたびに
     `lsregister -f` で自分を登録し直し、`--assemble` は `CFBundleVersion` を毎回新しくする。
   - **Mac では別名の Yumekku EA を片づけない**（`connect_mac._patch` が `cleanup_other_versions` を
-    無効にする）。いま同梱しているのは Windows 向けの `.ex5` で、Mac 用 EA はこれから決まる。
-    手で置いた Mac 用の EA を「前の版」として消してしまった実機の事故から。Mac 用 EA を同梱する
-    ようになったら外す。ソース（`.mq5`）はどちらの OS でも消さない（`cleanup_other_versions` は `.ex5` だけ）。
+    無効にする）。手で置いた Mac 用の EA を「前の版」として消してしまった実機の事故から。
+    Mac は台数が少なく、手で置いた検証用の EA が並んでいることがあるので、消さずに残す
+    （どれを載せるかは案内文の名前 `YumekkuEA_mac` で分かる）。
+    ソース（`.mq5`）はどちらの OS でも消さない（`cleanup_other_versions` は `.ex5` だけ）。
     Mac の Python は HTTPS の証明書を持たないので certifi を同梱し `SSL_CERT_FILE` で使う
     （無いと中継にもサイトにもつながらない）。
   - 試験：`bridge/tests/mt5_files_test.py`（EA のふりをして往復）、`bridge/tests/connect_mac_test.py`

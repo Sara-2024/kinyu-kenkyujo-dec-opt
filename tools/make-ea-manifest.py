@@ -34,21 +34,36 @@ BRIDGE = ROOT / "bridge"
 sys.path.insert(0, str(BRIDGE))
 from ea_manager import version_from_ex5  # noqa: E402  .ex5 から版を読む
 
-EA_NAME = "YumekkuEA_win"
+from mt5_terminal import EA_NAMES  # noqa: E402  いま配っている名前（Windows 用）
+
+EA_NAME = EA_NAMES[0]
 VERSION_RE = re.compile(r'#property\s+version\s+"([^"]+)"')
 
 
-def find_ex5() -> Path | None:
-    """同梱の EA を探す。名前の後半は変わりうるので Yumekku で探す。"""
-    found = [p for p in BRIDGE.glob("*.ex5") if "yumekku" in p.stem.lower()]
+def find_ex5(folder: Path) -> Path | None:
+    """同梱の EA を探す。名前の後半は変わりうるので Yumekku で探す。
+
+    いま配っている名前（EA_NAMES[0]）があればそれを最優先にする。
+    bridge/ 直下に別の Yumekku .ex5 が一時的に残っていても、それの控えを作らないため
+    （控えと配布物の SHA-256 が食い違うと、お客様の PC で「壊れている」扱いになる）。
+    """
+    found = [p for p in folder.glob("*.ex5") if "yumekku" in p.stem.lower()]
     if not found:
         return None
+    for p in found:
+        if p.stem == EA_NAME:
+            return p
     found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return found[0]
 
 
 def main() -> int:
-    ex5 = find_ex5() or (BRIDGE / f"{EA_NAME}.ex5")
+    # --dir bridge/mac … Mac 用の EA の控えを、その場所に作る（build-mac.sh が呼ぶ）
+    folder = BRIDGE
+    quiet = "--quiet" in sys.argv
+    if "--dir" in sys.argv:
+        folder = Path(sys.argv[sys.argv.index("--dir") + 1]).resolve()
+    ex5 = find_ex5(folder) or (folder / f"{EA_NAME}.ex5")
     mq5 = ex5.with_suffix(".mq5")
 
     if not ex5.is_file():
@@ -67,7 +82,10 @@ def main() -> int:
             version = found.group(1)
     if not version:
         print(f"[WARN] 版が読めませんでした（{ex5.name}）。")
-        version = input("      版を手で入力してください（例 6.10）: ").strip() or "0"
+        if quiet or not sys.stdin.isatty():
+            version = "0"   # 自動ビルドでは聞けない。版は .ex5 の名前で見分ける
+        else:
+            version = input("      版を手で入力してください（例 6.10）: ").strip() or "0"
 
     manifest = {
         "ea": ex5.stem,
@@ -77,16 +95,17 @@ def main() -> int:
         "size": ex5.stat().st_size,
         "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
-    out = BRIDGE / "ea_manifest.json"
+    out = folder / "ea_manifest.json"
     out.write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
     print(f"  EA      : {ex5.name}（{manifest['size']:,} バイト）")
     print(f"  版      : {version}")
     print(f"  SHA-256 : {digest}")
     print(f"  書いた  : {out}")
-    print()
-    print("  この .ex5 と ea_manifest.json をコミットしてから、")
-    print("  tools\\build-windows.bat で exe を作り直してください。")
+    if not quiet:
+        print()
+        print("  この .ex5 と ea_manifest.json をコミットしてから、")
+        print("  tools\\build-windows.bat で exe を作り直してください。")
     return 0
 
 

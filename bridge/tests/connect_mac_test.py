@@ -207,6 +207,15 @@ check("launcher は動いている写しを直接上書きしない（別名→�
 check("launcher は開かれるたびに自分を aitrader:// の受け手として登録し直す", "lsregister -f" in launcher)
 check("build-mac.sh は CFBundleVersion を毎回新しくする（古い .app より優先される）", 'info["CFBundleVersion"]' in build)
 
+# ── Mac 用の EA は bridge/mac/ から入れる（Windows 用を入れると ea_manager がそちらを優先する）──
+check("build-mac.sh は bridge/mac/ の EA を同梱する", 'MAC_EA_DIR="$ROOT/bridge/mac"' in build and '"$MAC_EA_DIR"/*.ex5' in build)
+check("build-mac.sh は Windows 用の .ex5 を同梱しない", '"$ROOT"/bridge/*.ex5' not in build)
+check("build-mac.sh は Windows 用の控え（ea_manifest.json）を同梱しない", '"$ROOT"/bridge/ea_manifest.json' not in build)
+check("build-mac.sh は Mac 用の控えを毎回作り直す", "make-ea-manifest.py\" --dir \"$MAC_EA_DIR\"" in build)
+check("Mac 用の .ex5 がリポジトリにある", (ROOT / "bridge" / "mac" / "YumekkuEA_mac.ex5").is_file())
+check("Mac 用のソースはコミットしない（.gitignore）", "bridge/mac/*.mq5" in (ROOT / ".gitignore").read_text(encoding="utf-8"))
+check("コンパイルの手順がある（tools/mac/compile-ea.sh）", (ROOT / "tools" / "mac" / "compile-ea.sh").is_file())
+
 # ── Mac では、手で置いた別名の Yumekku EA を片づけない（Mac 用 EA が決まるまで）──
 import ea_manager as _ea  # noqa: E402
 

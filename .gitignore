@@ -18,6 +18,9 @@ bridge/.env
 bridge/risk_secret.py
 # 配る EA のソース。コンパイルに使うだけで、配らないし入れない
 bridge/*Yumekku*.mq5
+# Mac 用 EA のソースも配らない（.ex5 だけコミットする）。控えは build-mac.sh が作る
+bridge/mac/*.mq5
+bridge/mac/ea_manifest.json
 # EA の控え。ビルドのたびに作り直すので、git では持たない
 # （持つと、取り込みのたびにぶつかる）
 bridge/ea_manifest.json

@@ -352,9 +352,9 @@ def _patch() -> None:
     connect.process_image = process_image
     connect.kill_process = kill_process
     connect.start_bridge = start_bridge
-    # Mac では「別名の Yumekku」を片づけない。いま同梱しているのは Windows 向けの .ex5 で、
-    # Mac 用の EA はこれから決まる。お客様や EA の人が手で置いた Mac 用の EA を
-    #「前の版」として消してしまう（実機で起きた）。Mac 用 EA を同梱するようになったら外す
+    # Mac では「別名の Yumekku」を片づけない。手で置いた検証用の EA を「前の版」として
+    # 消してしまった（実機で起きた）。Mac は台数が少なく、並んでいても案内文の名前
+    #（YumekkuEA_mac）で見分けられるので、消さずに残す
     import ea_manager
 
     def _keep_other_versions(experts, keep, *, log=lambda _m: None):
@@ -362,6 +362,39 @@ def _patch() -> None:
         return []
 
     ea_manager.cleanup_other_versions = _keep_other_versions
+
+    # 同梱している EA は Mac 用（YumekkuEA_mac）。connect.py は読み込み時に Windows 用の名前
+    #（EA_NAMES[0]）で EA_NAME / EA_FILES を決めるので、同梱の .ex5 の名前に差し替える。
+    # 差し替えないと、自己確認が「YumekkuEA_win.ex5 が無い」で止まり、案内文も Windows の名前になる。
+    # .app では bridge/ に Mac 用だけが入っている。手元（frozen でない）では bridge/mac/ を見る
+    import mt5_terminal
+
+    ea_dir = connect.BRIDGE_DIR if FROZEN else connect.BRIDGE_DIR / "mac"
+    mac_ea = ea_manager.find_source_file(ea_dir) if ea_dir.is_dir() else None
+    if mac_ea is not None:
+        connect.EA_NAME = mac_ea.stem
+        connect.EA_FILES = (mac_ea.name,)
+        connect.EA_ASSETS_DIR = ea_dir
+        for mod_name in ("mt5_terminal", "bridge"):
+            mod = sys.modules.get(mod_name)
+            if mod is not None and hasattr(mod, "EA_NAMES"):
+                mod.EA_NAMES = (mac_ea.stem,)
+        if not FROZEN:
+            # 手元では .ex5 と控えが bridge/mac/、TradingGate.mqh は bridge/ にある
+            _orig_load_source = ea_manager.load_source
+
+            def _load_mac_source(assets_dir):
+                src = _orig_load_source(ea_dir)
+                if src is None:
+                    return None
+                src.includes = tuple(
+                    Path(assets_dir) / n for n in ea_manager.INCLUDE_FILES if (Path(assets_dir) / n).is_file()
+                )
+                if src.broken.startswith("同梱物が足りない") and len(src.includes) == len(ea_manager.INCLUDE_FILES):
+                    src.broken = ""
+                return src
+
+            ea_manager.load_source = _load_mac_source
     # 気配値への表示は MT5 本体に聞かないとできない。Mac では EA 側に任せる
     connect.gold_symbol.show_in_market_watch = lambda *_a, **_k: ""
     installer_ui.message_box = message_box
