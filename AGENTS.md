@@ -176,6 +176,13 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
     **APPDATA をその Wine の Roaming に向ける**。これで `mt5_terminal` / `ea_manager`（控えの場所・
     EA の置き場）が Mac でもそのまま使える。設定と記録は `~/Library/Application Support/MT5Automatic/`
     （LOCALAPPDATA に見せる）。
+    **Mac 公式の MT5 はポータブルモード**（`portable.txt`）で、AppData 側には `origin.txt` と
+    `config` しか無く、MQL5 と logs は `origin.txt` が指す本体フォルダ（`drive_c/Program Files/
+    MetaTrader 5` や `drive_c/MT5-Test`）にある。`resolve_data_dir()` が C:\ を drive_c に読み替えて
+    MQL5 がある側を `data_path` にする（AppData 側だけ見ると 1 台も見つからない。実機で起きた）。
+    Common/Files（EA の控え）は変わらず Roaming の下。同じ本体を Wine の別ユーザー
+    （`users/mao` と `users/user`）から見ている重複は 1 台にまとめ、Roaming は Common/Files が
+    新しいほうを採る。`terminal_id` は AppData 側のフォルダ名のまま。
   - **MetaTrader5 の代わりは `bridge/mt5_files.py`**：EA が共通フォルダに書くファイルを読み、
     閉じる・取り消すは `trelab_cmd.ini` → `trelab_cmd_ack.ini` の往復（`docs/mac-ea-files.md`）。
     `sys.modules["MetaTrader5"] = mt5_files` と差し込むので `bridge.py` は変えない。

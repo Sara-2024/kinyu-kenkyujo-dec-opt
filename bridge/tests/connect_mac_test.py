@@ -53,6 +53,42 @@ def make_wine(app_id: str, terminal_id: str, *, account: str = "", server: str =
 
 XM = make_wine("com.xm.metatrader5", "ABCDEF0123456789ABCDEF0123456789", account="75613879", server="XMTrading-MT5 3")
 MQ = make_wine("net.metaquotes.wine.metatrader5", "0123456789ABCDEF0123456789ABCDEF")
+
+
+def make_portable(app_id: str, terminal_id: str, origin: str, *, user: str = "mao", with_body: bool = True, account: str = "") -> pathlib.Path:
+    """Mac 公式の MT5 の並び（ポータブルモード）。
+
+    AppData 側には origin.txt / portable.txt / config しか無く、MQL5 と logs は
+    origin.txt が指す本体フォルダ（drive_c の下）にある。with_body=False は消したあとの抜け殻。
+    返すのは本体フォルダ（MQL5 がある側）。
+    """
+    prefix = APP_SUPPORT / app_id
+    roaming = prefix / "drive_c" / "users" / user / "AppData" / "Roaming"
+    appdata = roaming / "MetaQuotes" / "Terminal" / terminal_id
+    (appdata / "config").mkdir(parents=True, exist_ok=True)
+    (appdata / "origin.txt").write_bytes(origin.encode("utf-16"))
+    (appdata / "portable.txt").write_bytes(b"")
+    (roaming / "MetaQuotes" / "Terminal" / "Common" / "Files").mkdir(parents=True, exist_ok=True)
+    body = prefix / "drive_c" / origin[3:].replace("\\", "/")
+    if with_body:
+        (body / "MQL5" / "Experts").mkdir(parents=True, exist_ok=True)
+        (body / "MQL5" / "Include").mkdir(parents=True, exist_ok=True)
+        (body / "terminal64.exe").write_bytes(b"MZ")
+        if account:
+            (body / "logs").mkdir(exist_ok=True)
+            line = f"0\t12:00:00.000\tNetwork\t'{account}': authorized on MetaQuotes-Demo\n"
+            (body / "logs" / "20261010.log").write_bytes(line.encode("utf-16-le"))
+    return body
+
+
+# 実機（macOS 15 の公式 MT5）で見た並び：
+#   ・本体 C:\MT5-Test（ポータブル）。users/mao と users/user の両方から同じ ID で見える
+#   ・本体 C:\MT5-Lic は消されていて抜け殻（AppData 側だけ残る）
+PORTABLE = make_portable("net.metaquotes.wine.metatrader5", "97CA37B1C43E6F1147A1242DE4B2114F", "C:\\MT5-Test", account="5012345")
+make_portable("net.metaquotes.wine.metatrader5", "97CA37B1C43E6F1147A1242DE4B2114F", "C:\\MT5-Test", user="user")
+make_portable("net.metaquotes.wine.metatrader5", "0919DF745C5C9C0BC17168811BFA2CE9", "C:\\MT5-Lic", with_body=False)
+# users/mao の Common/Files を新しくしておく（MT5 が実際に使っているほう）
+os.utime(APP_SUPPORT / "net.metaquotes.wine.metatrader5" / "drive_c" / "users" / "mao" / "AppData" / "Roaming" / "MetaQuotes" / "Terminal" / "Common" / "Files", (time.time(), time.time()))
 make_wine("net.metaquotes.wine.metatrader4", "FFFF", program=True)  # MT4（MQL5 無し）
 (APP_SUPPORT / "net.metaquotes.wine.metatrader4" / "drive_c" / "users" / "mao" / "AppData" / "Roaming" / "MetaQuotes" / "Terminal" / "FFFF" / "MQL5").rename(
     APP_SUPPORT / "net.metaquotes.wine.metatrader4" / "drive_c" / "users" / "mao" / "AppData" / "Roaming" / "MetaQuotes" / "Terminal" / "FFFF" / "MQL4"
@@ -87,7 +123,17 @@ check("設定の置き場が ~/Library/Application Support の下", str(connect.
 # ── 2) MT5 を探す ──
 terminals = connect_mac.list_terminals()
 labels = [t.label for t in terminals]
-check("MT5 が 2 台見つかる（MT4 は除く）", len(terminals) == 2, str(labels))
+check("MT5 が 3 台見つかる（MT4 と、消した抜け殻は除く。別ユーザーからの重複は 1 台に）", len(terminals) == 3, str(labels))
+portable = next((t for t in terminals if t.terminal_id == "97CA37B1C43E6F1147A1242DE4B2114F"), None)
+check("ポータブルの MT5（Mac 公式の並び）も見つける", portable is not None, str(labels))
+if portable is not None:
+    check("ポータブルは本体フォルダ（MQL5 がある側）を data_path にする", portable.data_path == PORTABLE, str(portable.data_path))
+    check("ID は AppData 側のフォルダ名のまま", portable.terminal_id == "97CA37B1C43E6F1147A1242DE4B2114F")
+    check("ポータブルの口座番号も本体側のログから拾う", portable.account == "5012345", portable.label)
+    check("表示にフォルダ名が入る（同じ業者が何台もあっても区別できる）", "MT5-Test" in portable.label, portable.label)
+    check("Roaming は Common/Files が新しい users/mao のほう", "/users/mao/" in str(portable.roaming), str(portable.roaming))
+    check("EA の置き場は本体側の MQL5/Experts", (portable.data_path / "MQL5" / "Experts").is_dir())
+check("抜け殻（本体が消えた MT5-Lic）は出さない", all(t.terminal_id != "0919DF745C5C9C0BC17168811BFA2CE9" for t in terminals), str(labels))
 xm = next((t for t in terminals if t.app_id == "com.xm.metatrader5"), None)
 check("業者の Wine を区別できる（XM）", xm is not None and xm.app_label == "XM", str(labels))
 check("口座番号とサーバーをログから拾う", xm is not None and xm.account == "75613879" and "XMTrading-MT5 3" in xm.label, str(labels))
