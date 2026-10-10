@@ -352,6 +352,16 @@ def _patch() -> None:
     connect.process_image = process_image
     connect.kill_process = kill_process
     connect.start_bridge = start_bridge
+    # Mac では「別名の Yumekku」を片づけない。いま同梱しているのは Windows 向けの .ex5 で、
+    # Mac 用の EA はこれから決まる。お客様や EA の人が手で置いた Mac 用の EA を
+    #「前の版」として消してしまう（実機で起きた）。Mac 用 EA を同梱するようになったら外す
+    import ea_manager
+
+    def _keep_other_versions(experts, keep, *, log=lambda _m: None):
+        log("Mac では、ほかの名前の EA は片づけません")
+        return []
+
+    ea_manager.cleanup_other_versions = _keep_other_versions
     # 気配値への表示は MT5 本体に聞かないとできない。Mac では EA 側に任せる
     connect.gold_symbol.show_in_market_watch = lambda *_a, **_k: ""
     installer_ui.message_box = message_box

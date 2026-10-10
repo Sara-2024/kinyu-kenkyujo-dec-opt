@@ -372,10 +372,13 @@ def cleanup_other_versions(
 
     名前の後半（版）が変わると、古い版が別名で残る。
     2つ並んでいると、お客様がどちらを載せればいいか分からない。
+
+    消すのはコンパイル済み（.ex5）だけ。ソース（.mq5）はナビゲーターに並ばないし、
+    人が手で置いた作業中のものかもしれないので触らない（Mac の実機で消してしまった）。
     """
     removed: list[str] = []
     try:
-        candidates = [p for p in experts.iterdir() if p.suffix.lower() in (".ex5", ".mq5")]
+        candidates = [p for p in experts.iterdir() if p.suffix.lower() == ".ex5"]
     except OSError:
         return removed
     for path in candidates:

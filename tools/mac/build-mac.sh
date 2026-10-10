@@ -118,15 +118,18 @@ assemble() {
     chmod +x "$APP/Contents/Resources/bin/$(basename "$b")"
     echo "   同梱: $(basename "$b")"
   done
-  "$PY" - "$APP/Contents/Info.plist" "$BUNDLE_ID" "$APP_NAME" <<'PYEOF'
+  "$PY" - "$APP/Contents/Info.plist" "$BUNDLE_ID" "$APP_NAME" "$(date -u +%Y%m%d%H%M)" <<'PYEOF'
 import plistlib, sys
-path, bundle_id, app_name = sys.argv[1:4]
+path, bundle_id, app_name, build = sys.argv[1:5]
 with open(path, "rb") as fh:
     info = plistlib.load(fh)
 info["CFBundleIdentifier"] = bundle_id
 info["CFBundleName"] = app_name
 info["CFBundleDisplayName"] = app_name
 info["CFBundleShortVersionString"] = "1.0"
+# 作るたびに新しくする。Downloads に古い .app が残っていても、aitrader:// は
+# 同じ名前のうち版が新しいほうに届く（launcher の registerSelf と合わせて）
+info["CFBundleVersion"] = build
 # サイトのボタン（aitrader://）で起こせるように
 info["CFBundleURLTypes"] = [{
     "CFBundleURLName": "MT5 Automatic connect",

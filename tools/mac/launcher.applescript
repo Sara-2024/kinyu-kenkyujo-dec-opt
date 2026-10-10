@@ -41,10 +41,23 @@ on launchWith(args)
 	do shell script quoted form of binPath() & " " & args & " > /dev/null 2>&1 &"
 end launchWith
 
+-- 同じ .app が何個も残っていると（Downloads に「MT5 Automatic 2.app」「3.app」…）、
+-- サイトのボタン（aitrader://）がどれに届くか分からない。古い版に届くと、中の本体が
+-- Gatekeeper に止められて何も起きない（実機で起きた）。
+-- 開かれた .app を登録し直して、以後の aitrader:// はこちらに来るようにする。
+-- 作るときに CFBundleVersion を毎回新しくしているので、同じ名前なら新しいほうが選ばれる。
+on registerSelf()
+	try
+		do shell script "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f " & quoted form of (POSIX path of (path to me))
+	end try
+end registerSelf
+
 on run
+	registerSelf()
 	launchWith("")
 end run
 
 on open location theURL
+	registerSelf()
 	launchWith("--silent --from-site " & quoted form of theURL)
 end open location

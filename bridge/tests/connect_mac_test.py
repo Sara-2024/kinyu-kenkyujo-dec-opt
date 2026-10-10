@@ -203,6 +203,21 @@ check("build-mac.sh は署名の整合を確かめてから ZIP にする", "cod
 check("launcher は本体を Application Support に印なしで写す（cp -X）", "cp -X" in launcher and "application support folder" in launcher)
 check("launcher は写しの隔離の印も外す", "xattr -d com.apple.quarantine" in launcher)
 check("launcher は動いている写しを直接上書きしない（別名→差し替え）", ".new" in launcher and "mv -f" in launcher)
+# 3) Downloads に古い .app が何個も残っていると、aitrader:// が古いほうに届いて何も起きない
+check("launcher は開かれるたびに自分を aitrader:// の受け手として登録し直す", "lsregister -f" in launcher)
+check("build-mac.sh は CFBundleVersion を毎回新しくする（古い .app より優先される）", 'info["CFBundleVersion"]' in build)
+
+# ── Mac では、手で置いた別名の Yumekku EA を片づけない（Mac 用 EA が決まるまで）──
+import ea_manager as _ea  # noqa: E402
+
+_experts = XM / "MQL5" / "Experts"
+_hand_placed = _experts / "YumekkuEA_mac.ex5"
+_hand_placed.write_bytes(b"EX5")
+_source = _experts / "YumekkuEA_Lot005_Mac.mq5"
+_source.write_text("// source", encoding="utf-8")
+_removed = _ea.cleanup_other_versions(_experts, "YumekkuEA_win.ex5")
+check("Mac では別名の Yumekku .ex5 を消さない", _hand_placed.is_file() and _removed == [], str(_removed))
+check("ソース（.mq5）は Mac でも消さない", _source.is_file())
 workflow = (ROOT / ".github" / "workflows" / "build-mac.yml").read_text(encoding="utf-8")
 connector = (ROOT / "src" / "data" / "connector.ts").read_text(encoding="utf-8")
 check("build-mac.sh は websockets を同梱する", "--hidden-import websockets" in build)

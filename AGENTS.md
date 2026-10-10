@@ -207,6 +207,14 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
     中の本体はその場で強制終了される（しかも Downloads から開いた .app は読み取り専用の仮の
     場所で動くので印を外せない）。`~/Library/Application Support/MT5Automatic/bin/` に
     `cp -X`（拡張属性なし）で写し、そちらを起こす。自動起動の LaunchAgent もその写しを指す。
+    ③ **`aitrader://` の受け手は、開かれた .app に寄せる。** Downloads に「MT5 Automatic 2.app」
+    「3.app」…と古い `.app` が残ると、LaunchServices がどれに届けるか分からず、古い版に届くと
+    中の本体が止められて何も起きない（実機で 8 個登録されていた）。launcher が開かれるたびに
+    `lsregister -f` で自分を登録し直し、`--assemble` は `CFBundleVersion` を毎回新しくする。
+  - **Mac では別名の Yumekku EA を片づけない**（`connect_mac._patch` が `cleanup_other_versions` を
+    無効にする）。いま同梱しているのは Windows 向けの `.ex5` で、Mac 用 EA はこれから決まる。
+    手で置いた Mac 用の EA を「前の版」として消してしまった実機の事故から。Mac 用 EA を同梱する
+    ようになったら外す。ソース（`.mq5`）はどちらの OS でも消さない（`cleanup_other_versions` は `.ex5` だけ）。
     Mac の Python は HTTPS の証明書を持たないので certifi を同梱し `SSL_CERT_FILE` で使う
     （無いと中継にもサイトにもつながらない）。
   - 試験：`bridge/tests/mt5_files_test.py`（EA のふりをして往復）、`bridge/tests/connect_mac_test.py`
