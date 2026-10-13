@@ -1200,3 +1200,678 @@ end;
 $$;
 
 grant execute on function public.member_platform_set(uuid, text) to anon, authenticated;
+
+-- ════════════════════════════════════════════════════════════
+-- ドリームランド渡航手続き: お客様の MT5 口座の申込
+--
+-- ロビー（dreamland/index.html）のサービスカウンターで、お客様が
+-- MT5 の口座番号・サーバー・パスワードを記入して送ったものを預かる。
+-- 送り先はサイトの /api/dreamland（api/_lib/dreamland.ts）。
+-- ロビーは Supabase を直接叩かない（鍵を配らない）。
+--
+--   ・パスワードは一斉制御の登録簿（fleet_accounts）と同じ鍵で暗号化して保存し、
+--     管理者の操作（dreamland_reveal）でしか取り出せない
+--   ・同じ口座（口座番号＋サーバー）をもう一度送ったら上書きし、回数を数える
+--     （「会員登録を何度もやる人は会員権を取り消す」の判断材料。消しはしない）
+--   ・プランは first（ファーストクラス）/ crystal（プレミアムファースト・クリスタル）
+--   ・申込には受付番号（DL- + 6桁）を振って、お客様の画面に出す
+-- ════════════════════════════════════════════════════════════
+create table if not exists public.dreamland_applications (
+  id uuid primary key default gen_random_uuid(),
+  application_no text not null unique,
+  account bigint not null,
+  server text not null,
+  password_enc bytea not null,
+  plan text not null check (plan in ('first', 'crystal')),
+  name text not null default '',
+  email text not null default '',
+  platform text check (platform in ('windows', 'mac')),
+  consent_at timestamptz not null default now(),
+  submissions int not null default 1,
+  note text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (account, server)
+);
+
+revoke all on table public.dreamland_applications from public, anon, authenticated;
+alter table public.dreamland_applications enable row level security;
+
+create or replace function public._dreamland_row_json(r public.dreamland_applications)
+returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_object(
+    'id', r.id,
+    'application_no', r.application_no,
+    'account', r.account,
+    'server', r.server,
+    'plan', r.plan,
+    'name', r.name,
+    'email', r.email,
+    'platform', r.platform,
+    'consent_at', r.consent_at,
+    'submissions', r.submissions,
+    'note', r.note,
+    'created_at', r.created_at,
+    'updated_at', r.updated_at
+  );
+$$;
+
+-- お客様の申込を預かる（サイトの /api/dreamland から呼ぶ。同じ口座なら上書き）
+create or replace function public.dreamland_apply(
+  p_account bigint,
+  p_server text,
+  p_password text,
+  p_plan text,
+  p_name text default '',
+  p_email text default '',
+  p_platform text default null,
+  p_consent boolean default false
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_server text := trim(coalesce(p_server, ''));
+  v_name text := left(trim(coalesce(p_name, '')), 80);
+  v_email text := left(lower(trim(coalesce(p_email, ''))), 200);
+  v_platform text := nullif(trim(coalesce(p_platform, '')), '');
+  v_no text;
+  v_row public.dreamland_applications;
+begin
+  if not coalesce(p_consent, false) then
+    raise exception 'NO_CONSENT';
+  end if;
+  if p_account is null or p_account <= 0 then
+    raise exception 'BAD_ACCOUNT';
+  end if;
+  if v_server = '' or length(v_server) > 80 then
+    raise exception 'BAD_SERVER';
+  end if;
+  if coalesce(p_password, '') = '' or length(p_password) > 200 then
+    raise exception 'BAD_PASSWORD';
+  end if;
+  if p_plan is null or p_plan not in ('first', 'crystal') then
+    raise exception 'BAD_PLAN';
+  end if;
+  if v_platform is not null and v_platform not in ('windows', 'mac') then
+    v_platform := null;
+  end if;
+
+  -- 受付番号。被ったら振り直す
+  loop
+    v_no := 'DL-' || lpad((floor(random() * 1000000))::int::text, 6, '0');
+    exit when not exists (select 1 from public.dreamland_applications where application_no = v_no);
+  end loop;
+
+  insert into public.dreamland_applications (application_no, account, server, password_enc, plan, name, email, platform)
+  values (
+    v_no,
+    p_account,
+    v_server,
+    extensions.pgp_sym_encrypt(p_password, public._fleet_key()),
+    p_plan,
+    v_name,
+    v_email,
+    v_platform
+  )
+  on conflict (account, server) do update
+    set password_enc = excluded.password_enc,
+        plan = excluded.plan,
+        name = case when excluded.name = '' then public.dreamland_applications.name else excluded.name end,
+        email = case when excluded.email = '' then public.dreamland_applications.email else excluded.email end,
+        platform = coalesce(excluded.platform, public.dreamland_applications.platform),
+        consent_at = now(),
+        submissions = public.dreamland_applications.submissions + 1,
+        updated_at = now()
+  returning * into v_row;
+
+  return public._dreamland_row_json(v_row);
+end;
+$$;
+
+-- 管理者: 申込の一覧（パスワードは返さない）
+create or replace function public.dreamland_list(p_token uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  return coalesce((
+    select jsonb_agg(public._dreamland_row_json(r) order by r.updated_at desc)
+    from public.dreamland_applications r
+  ), '[]'::jsonb);
+end;
+$$;
+
+-- 管理者: 預かったパスワードを取り出す（EA を納品するときに MT5 へ入る用）
+create or replace function public.dreamland_reveal(p_token uuid, p_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_row public.dreamland_applications;
+begin
+  perform public._require_admin(p_token);
+  select * into v_row from public.dreamland_applications where id = p_id;
+  if v_row.id is null then
+    raise exception 'NOT_FOUND';
+  end if;
+  return jsonb_build_object(
+    'account', v_row.account,
+    'server', v_row.server,
+    'password', extensions.pgp_sym_decrypt(v_row.password_enc, public._fleet_key())
+  );
+end;
+$$;
+
+-- 管理者: 覚え書き（納品した日など）
+create or replace function public.dreamland_set_note(p_token uuid, p_id uuid, p_note text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  update public.dreamland_applications
+     set note = left(coalesce(p_note, ''), 500), updated_at = now()
+   where id = p_id;
+  if not found then
+    raise exception 'NOT_FOUND';
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- 管理者: 申込を消す
+create or replace function public.dreamland_delete(p_token uuid, p_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  delete from public.dreamland_applications where id = p_id;
+  if not found then
+    raise exception 'NOT_FOUND';
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+revoke all on function public._dreamland_row_json(public.dreamland_applications) from public, anon, authenticated;
+
+grant execute on function public.dreamland_apply(bigint, text, text, text, text, text, text, boolean) to anon, authenticated;
+grant execute on function public.dreamland_list(uuid) to anon, authenticated;
+grant execute on function public.dreamland_reveal(uuid, uuid) to anon, authenticated;
+grant execute on function public.dreamland_set_note(uuid, uuid, text) to anon, authenticated;
+grant execute on function public.dreamland_delete(uuid, uuid) to anon, authenticated;
+
+-- ════════════════════════════════════════════════════════════
+-- 会員登録を「MT5 の口座番号 ＋ お名前 ＋ パスワード」にする（メールをやめる）
+--
+--   ・会員 ＝ MT5 の口座番号。口座が2つある人は会員を2つ作る（それぞれに自分のサイトがある）
+--   ・ログインも口座番号とパスワード
+--   ・メールの列は残す（空でよい）。メールで登録した会員はまだ居ないので、移す処理は無い
+--   ・ロビー（dreamland/）の申込と会員は、口座番号で結びつく（dreamland_list が会員名を返す）
+-- ════════════════════════════════════════════════════════════
+alter table public.members add column if not exists account bigint;
+alter table public.members add column if not exists name text not null default '';
+alter table public.members alter column email drop not null;
+create unique index if not exists members_account_idx on public.members (account);
+
+create or replace function public._member_json(p_member public.members)
+returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_object(
+    'id', p_member.id,
+    'email', p_member.email,
+    'name', p_member.name,
+    'account', p_member.account,
+    'role', p_member.role,
+    'status', p_member.status,
+    'can_trade', p_member.can_trade,
+    'last_login_at', p_member.last_login_at,
+    'created_at', p_member.created_at
+  );
+$$;
+
+-- 旧: メールで登録・ログイン。残しておくとメールでも登録できてしまうので消す
+drop function if exists public.auth_register(text, text, text);
+drop function if exists public.auth_login(text, text);
+
+create or replace function public.auth_register(p_account bigint, p_name text, p_password text, p_entry text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_name text := left(trim(coalesce(p_name, '')), 80);
+  v_role text := 'user';
+  v_member public.members;
+begin
+  if p_account is null or p_account <= 0 then
+    raise exception 'BAD_ACCOUNT';
+  end if;
+  if v_name = '' then
+    raise exception 'BAD_NAME';
+  end if;
+  if p_password is null or char_length(p_password) < 8 then
+    raise exception 'WEAK_PASSWORD';
+  end if;
+  if p_entry is null or not exists (
+    select 1 from public.app_settings
+     where id = 1
+       and entry_password_hash = crypt(p_entry, entry_password_hash)
+  ) then
+    raise exception 'BAD_ENTRY';
+  end if;
+  if exists (select 1 from public.members where account = p_account) then
+    raise exception 'ACCOUNT_TAKEN';
+  end if;
+  if not exists (select 1 from public.members) then
+    v_role := 'admin';
+  end if;
+
+  insert into public.members (account, name, password_hash, role)
+  values (p_account, v_name, crypt(p_password, gen_salt('bf')), v_role)
+  returning * into v_member;
+
+  return jsonb_build_object(
+    'token', public._issue_session(v_member.id),
+    'member', public._member_json(v_member)
+  );
+end;
+$$;
+
+create or replace function public.auth_login(p_account bigint, p_password text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_member public.members;
+begin
+  select * into v_member from public.members where account = p_account;
+  if not found or v_member.password_hash <> crypt(p_password, v_member.password_hash) then
+    raise exception 'BAD_CREDENTIALS';
+  end if;
+  if v_member.status <> 'active' then
+    raise exception 'SUSPENDED';
+  end if;
+  return jsonb_build_object(
+    'token', public._issue_session(v_member.id),
+    'member', public._member_json(v_member)
+  );
+end;
+$$;
+
+grant execute on function public.auth_register(bigint, text, text, text) to anon, authenticated;
+grant execute on function public.auth_login(bigint, text) to anon, authenticated;
+
+-- 管理者の一覧: お名前と登録した口座番号。連携でつながっている口座は connected_account
+create or replace function public.admin_list_members(p_token uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  return coalesce((
+    select jsonb_agg(row_to_json(r)::jsonb order by r.created_at desc)
+    from (
+      select
+        m.id,
+        m.email,
+        m.name,
+        m.account,
+        m.role,
+        m.status,
+        m.can_trade,
+        m.last_login_at,
+        m.created_at,
+        c.account as connected_account,
+        c.server,
+        c.running,
+        c.platform,
+        c.updated_at as connected_at
+      from public.members m
+      left join public.member_connections c on c.member_id = m.id
+    ) r
+  ), '[]'::jsonb);
+end;
+$$;
+
+-- 一斉制御の一覧: メールの代わりにお名前を出す
+create or replace function public.fleet_list(p_token uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  return coalesce((
+    select jsonb_agg((public._fleet_row_json(r, coalesce(nullif(m.name, ''), m.email)) || jsonb_build_object('platform', c.platform)) order by r.created_at)
+    from public.fleet_accounts r
+    join public.members m on m.id = r.member_id
+    left join public.member_connections c on c.member_id = r.member_id
+  ), '[]'::jsonb);
+end;
+$$;
+
+-- 見込み客の記録: メールが無ければお名前と口座番号で残す（leads.email は空にできない）
+create or replace function public.member_save_lead(p_token uuid, p_email text, p_source text default 'algo-connect')
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_member public.members;
+begin
+  v_member := public._session_member(p_token);
+  insert into public.leads (email, source, member_id)
+  values (
+    coalesce(nullif(trim(p_email), ''), v_member.email, v_member.name || ' / ' || coalesce(v_member.account::text, '')),
+    coalesce(p_source, 'algo-connect'),
+    v_member.id
+  );
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- ロビーの申込に、口座番号が同じ会員を添える
+create or replace function public.dreamland_list(p_token uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  return coalesce((
+    select jsonb_agg(
+      (public._dreamland_row_json(r) || jsonb_build_object('member_id', m.id, 'member_name', m.name))
+      order by r.updated_at desc
+    )
+    from public.dreamland_applications r
+    left join public.members m on m.account = r.account
+  ), '[]'::jsonb);
+end;
+$$;
+
+-- ════════════════════════════════════════════════════════════
+-- プランごとの合言葉（ロビーの「接続ツールの設置」で打ち込むもの）
+--
+--   ・合言葉はプランごとに1つ。first（ファーストクラス）/ crystal（ロイヤルファーストクラス）
+--   ・ロビーで合言葉を打つと、そのプランの案内に振り分けられる（違うプランへは行けない）
+--   ・会員登録（auth_register）の「入場パスワード」も、この合言葉で受ける。
+--     合ったプランが members.plan に入る（古い入場パスワード app_settings も当面は通す。plan は空）
+--   ・ロイヤルファーストクラスは MT5 の口座を2つつなぐ。会員 ＝ 口座番号なので会員が2つできる
+--     （どちらも同じ合言葉で登録する）
+--   ・合言葉そのものは保存しない（crypt のハッシュだけ）
+-- ════════════════════════════════════════════════════════════
+alter table public.members add column if not exists plan text check (plan in ('first', 'crystal'));
+
+create table if not exists public.plan_passwords (
+  plan text primary key check (plan in ('first', 'crystal')),
+  password_hash text not null,
+  updated_at timestamptz not null default now()
+);
+
+revoke all on table public.plan_passwords from public, anon, authenticated;
+
+-- これまでの入場パスワードは、そのままファーストクラスの合言葉として引き継ぐ
+insert into public.plan_passwords (plan, password_hash)
+select 'first', entry_password_hash from public.app_settings where id = 1
+on conflict (plan) do nothing;
+
+-- 会員の JSON にプランを足す
+create or replace function public._member_json(p_member public.members)
+returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_object(
+    'id', p_member.id,
+    'email', p_member.email,
+    'name', p_member.name,
+    'account', p_member.account,
+    'plan', p_member.plan,
+    'role', p_member.role,
+    'status', p_member.status,
+    'can_trade', p_member.can_trade,
+    'last_login_at', p_member.last_login_at,
+    'created_at', p_member.created_at
+  );
+$$;
+
+-- 合言葉に合うプラン。合わなければ null
+create or replace function public._plan_of_entry(p_entry text)
+returns text
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select plan from public.plan_passwords
+   where p_entry is not null
+     and password_hash = crypt(p_entry, password_hash)
+   limit 1;
+$$;
+
+-- ロビーが「この合言葉はどのプランか」を聞く（登録の前に案内を振り分けるため）
+create or replace function public.plan_check(p_entry text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+begin
+  -- 総当たりを遅らせる
+  perform pg_sleep(0.3);
+  return jsonb_build_object('plan', public._plan_of_entry(p_entry));
+end;
+$$;
+
+-- 会員登録：入場パスワードの代わりにプランの合言葉で受け、プランを会員に記録する
+create or replace function public.auth_register(p_account bigint, p_name text, p_password text, p_entry text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_name text := left(trim(coalesce(p_name, '')), 80);
+  v_role text := 'user';
+  v_plan text;
+  v_member public.members;
+begin
+  if p_account is null or p_account <= 0 then
+    raise exception 'BAD_ACCOUNT';
+  end if;
+  if v_name = '' then
+    raise exception 'BAD_NAME';
+  end if;
+  if p_password is null or char_length(p_password) < 8 then
+    raise exception 'WEAK_PASSWORD';
+  end if;
+  v_plan := public._plan_of_entry(p_entry);
+  if v_plan is null and (p_entry is null or not exists (
+    select 1 from public.app_settings
+     where id = 1
+       and entry_password_hash = crypt(p_entry, entry_password_hash)
+  )) then
+    raise exception 'BAD_ENTRY';
+  end if;
+  if exists (select 1 from public.members where account = p_account) then
+    raise exception 'ACCOUNT_TAKEN';
+  end if;
+  if not exists (select 1 from public.members) then
+    v_role := 'admin';
+  end if;
+
+  insert into public.members (account, name, password_hash, role, plan)
+  values (p_account, v_name, crypt(p_password, gen_salt('bf')), v_role, v_plan)
+  returning * into v_member;
+
+  return jsonb_build_object(
+    'token', public._issue_session(v_member.id),
+    'member', public._member_json(v_member)
+  );
+end;
+$$;
+
+-- 管理者がプランの合言葉を決める（8文字以上）
+create or replace function public.admin_set_plan_password(p_token uuid, p_plan text, p_password text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  if p_plan is null or p_plan not in ('first', 'crystal') then
+    raise exception 'BAD_PLAN';
+  end if;
+  if p_password is null or char_length(trim(p_password)) < 8 then
+    raise exception 'WEAK_PASSWORD';
+  end if;
+  insert into public.plan_passwords (plan, password_hash)
+  values (p_plan, crypt(trim(p_password), gen_salt('bf')))
+  on conflict (plan) do update
+    set password_hash = excluded.password_hash,
+        updated_at = now();
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- 管理者の一覧にプランを足す
+create or replace function public.admin_list_members(p_token uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  return coalesce((
+    select jsonb_agg(row_to_json(r)::jsonb order by r.created_at desc)
+    from (
+      select
+        m.id,
+        m.email,
+        m.name,
+        m.account,
+        m.plan,
+        m.role,
+        m.status,
+        m.can_trade,
+        m.last_login_at,
+        m.created_at,
+        c.account as connected_account,
+        c.server,
+        c.running,
+        c.platform,
+        c.updated_at as connected_at
+      from public.members m
+      left join public.member_connections c on c.member_id = m.id
+    ) r
+  ), '[]'::jsonb);
+end;
+$$;
+
+revoke all on function public._plan_of_entry(text) from public, anon, authenticated;
+grant execute on function public.plan_check(text) to anon, authenticated;
+grant execute on function public.auth_register(bigint, text, text, text) to anon, authenticated;
+grant execute on function public.admin_set_plan_password(uuid, text, text) to anon, authenticated;
+
+-- ════════════════════════════════════════════════════════════
+-- 管理サイト（運営用の別サイト）の合言葉
+--
+--   ・運営は、口座番号ではなく「管理サイトの合言葉」1つで入る（admin_login）
+--   ・入ると、運営用の会員（email = operator@dreamland.local、role = admin）のセッションになる。
+--     居なければそのとき作る。会員一覧の操作・プランの合言葉・口座申込の取り出しは、この会員で行う
+--   ・合言葉そのものは保存しない（crypt のハッシュだけ。app_settings.admin_password_hash）
+--   ・初期値は 20261014_set_admin_password.sql で入れる。管理サイトの画面からも変えられる
+-- ════════════════════════════════════════════════════════════
+alter table public.app_settings add column if not exists admin_password_hash text;
+
+create or replace function public.admin_login(p_password text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_hash text;
+  v_member public.members;
+begin
+  -- 総当たりを遅らせる
+  perform pg_sleep(0.3);
+  select admin_password_hash into v_hash from public.app_settings where id = 1;
+  if v_hash is null or p_password is null or v_hash <> crypt(p_password, v_hash) then
+    raise exception 'BAD_CREDENTIALS';
+  end if;
+
+  select * into v_member from public.members where email = 'operator@dreamland.local';
+  if not found then
+    insert into public.members (email, name, password_hash, role)
+    values ('operator@dreamland.local', '運営', crypt(encode(extensions.gen_random_bytes(24), 'hex'), gen_salt('bf')), 'admin')
+    returning * into v_member;
+  elsif v_member.role <> 'admin' or v_member.status <> 'active' then
+    update public.members set role = 'admin', status = 'active' where id = v_member.id returning * into v_member;
+  end if;
+
+  return jsonb_build_object(
+    'token', public._issue_session(v_member.id),
+    'member', public._member_json(v_member)
+  );
+end;
+$$;
+
+-- 管理者が管理サイトの合言葉を決める（8文字以上）
+create or replace function public.admin_set_admin_password(p_token uuid, p_password text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  perform public._require_admin(p_token);
+  if p_password is null or char_length(trim(p_password)) < 8 then
+    raise exception 'WEAK_PASSWORD';
+  end if;
+  update public.app_settings
+     set admin_password_hash = crypt(trim(p_password), gen_salt('bf')),
+         updated_at = now()
+   where id = 1;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+grant execute on function public.admin_login(text) to anon, authenticated;
+grant execute on function public.admin_set_admin_password(uuid, text) to anon, authenticated;

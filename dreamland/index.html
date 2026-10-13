@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>ドリームランド｜渡航手続きのご案内</title>
+<meta name="description" content="ドリームランドの口座開設・設置・サポートまでをまとめた公式案内ページです。">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="ドリームランド｜渡航手続きのご案内">
+<meta property="og:description" content="ドリームランドの口座開設・設置・サポートまでをまとめた公式案内ページです。">
+<meta property="og:image" content="assets/lobby-sm.webp">
+<meta property="og:locale" content="ja_JP">
+<meta name="theme-color" content="#d1e4ee">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23789ea7'/%3E%3Cpath d='M32 12l4.4 13.6L50 30l-13.6 4.4L32 48l-4.4-13.6L14 30l13.6-4.4z' fill='%23fff6dc'/%3E%3C/svg%3E">
+<link rel="preload" as="image" href="assets/lobby.webp" imagesrcset="assets/lobby-sm.webp 960w, assets/lobby.webp 1920w" imagesizes="100vw">
+<style>
+/* ドリームランド本体と同じ色・書体・部品で組む */
+:root{
+  --ink:#30384f; --muted:#68718a; --soft:#787787; --plaque:#665e5b;
+  --gold:#cbbb98; --gold-deep:#aa9461; --cream:#fffaf0; --cream-2:#fffdf2;
+  --lav:#7665a9; --lav-2:#8271b5; --lav-soft:#eeeaf6; --lav-text:#594986;
+  --teal:#69b4bc; --teal-a:#76b8be; --teal-b:#578d9a; --slate:#789ea7;
+  --line:#e4e5ee;
+  --serif-en:Georgia,"Times New Roman",serif;
+  --serif:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;
+  --sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","YuGothic",Meiryo,"Noto Sans JP",sans-serif;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --vh:100dvh;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:var(--sans);font-size:16px;line-height:1.85;color:var(--ink);background:#dbe5f2;overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--teal);outline-offset:3px;border-radius:12px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* ── 全体：参考サイトの dream-app ── */
+.app{position:relative;height:var(--vh);min-height:620px;overflow:hidden;
+  background:linear-gradient(165deg,#d1e4ee 0%,#dae2f4 40%,#eee6f6 75%,#fbf4e8 100%)}
+
+/* ── ロビーの絵 ── */
+.world{position:absolute;inset:0;transform-origin:50% 50%;transition:transform .75s cubic-bezier(.22,.61,.36,1);will-change:transform}
+.app.is-focus .world{transform:scale(1.14)}
+.scene{position:absolute;inset:0}
+.scene__img{position:absolute;inset:0}
+.scene__img img{width:100%;height:100%;object-fit:cover;object-position:50% 62%}
+.scene__veil{position:absolute;inset:0;pointer-events:none;background:
+  linear-gradient(180deg,rgba(209,228,238,.55) 0%,rgba(209,228,238,0) 18%),
+  linear-gradient(0deg,rgba(251,244,232,.55) 0%,rgba(251,244,232,0) 22%)}
+.sparkles{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.sparkles i{position:absolute;width:6px;height:6px;border-radius:50%;background:#fff6dc;box-shadow:0 0 10px 2px rgba(255,245,194,.9);
+  left:var(--x);top:var(--y);opacity:0;animation:tw var(--t) ease-in-out infinite var(--d)}
+@keyframes tw{0%,100%{opacity:0;transform:scale(.5) translateY(0)}50%{opacity:.9;transform:scale(1) translateY(-14px)}}
+
+/* 係員（絵の中に立つ） */
+.staff{position:absolute;transform:translate(-50%,-100%);pointer-events:none;
+  filter:drop-shadow(0 10px 14px rgba(72,80,120,.28));animation:bob 5s ease-in-out infinite}
+.staff img{display:block;width:100%;height:auto}
+.staff--yui{left:12.2%;top:69%;width:6.4%;animation-delay:-1.4s}
+.staff--minato{left:50%;top:60.5%;width:5.2%}
+.staff--sora{left:87%;top:67.5%;width:5.2%;animation-delay:-2.7s}
+.staff--haru{left:31%;top:77%;width:5%;animation-delay:-3.6s}
+@media (max-width:760px){.staff--yui{left:14%;top:70%;width:13%}.staff--minato{left:50%;top:61%;width:11%}.staff--sora{left:86%;top:69%;width:11%}.staff--haru{left:34%;top:76%;width:10%}}
+@keyframes bob{0%,100%{transform:translate(-50%,-100%)}50%{transform:translate(-50%,calc(-100% - 5px))}}
+
+/* ── ヘッダー：参考サイトの brand / main-nav ── */
+.top{position:absolute;left:0;right:0;top:0;z-index:5;display:flex;align-items:center;gap:18px;padding:22px 34px}
+.brand{display:flex;align-items:center;gap:13px;text-decoration:none;color:var(--cream);text-shadow:0 2px 12px rgba(72,101,119,.35);flex-shrink:0}
+.brand__icon{position:relative;width:42px;height:45px;display:grid;place-items:center;color:#fff2d6;filter:drop-shadow(0 0 8px #c7fff8)}
+.brand__icon .star{position:absolute;top:1px;right:2px}
+.brand__name{display:block;font-family:var(--serif-en);letter-spacing:.19em;font-size:28px;line-height:1.15}
+.brand__caption{display:block;font-size:12px;letter-spacing:.19em;color:#f5f8ff;margin-top:6px;line-height:1}
+.nav{display:flex;align-items:center;gap:0;height:43px;padding:4px;border-radius:30px;margin-left:18px;
+  background:rgba(248,249,241,.84);border:1px solid rgba(255,247,236,.8);box-shadow:0 3px 18px rgba(85,109,134,.13);
+  -webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px)}
+.nav button{display:flex;align-items:center;gap:7px;height:33px;padding:0 18px;border:0;border-radius:22px;background:transparent;color:#61667c;font-size:13px;letter-spacing:.04em;white-space:nowrap}
+.nav button.is-active{color:#f9ffff;background:var(--slate);box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),0 2px 5px rgba(71,101,120,.2)}
+.nav button:hover:not(.is-active){color:var(--lav-text)}
+.top__end{margin-left:auto;display:flex;align-items:center;gap:10px}
+.ready{display:flex;align-items:center;gap:10px;height:43px;padding:0 18px 0 14px;border-radius:30px;border:1px solid rgba(255,247,236,.8);
+  background:rgba(248,249,241,.84);color:#61667c;font-size:13px;letter-spacing:.04em;white-space:nowrap;
+  -webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px);box-shadow:0 3px 18px rgba(85,109,134,.13);transition:transform .2s}
+.ready:hover{transform:translateY(-1px)}
+.ready b{color:var(--lav-text);font-weight:600}
+.dots{display:flex;gap:4px}
+.dots i{width:8px;height:8px;border-radius:50%;background:#dcdde9;transition:background .3s,box-shadow .3s}
+.dots i.on{background:var(--teal);box-shadow:0 0 6px rgba(105,180,188,.8)}
+@media (max-width:760px){
+  .top{padding:14px 16px;gap:9px}
+  .brand__icon{width:32px;height:34px}
+  .brand__name{font-size:21px;letter-spacing:.15em}
+  .brand__caption{font-size:11px;letter-spacing:.06em}
+  .nav{display:none}
+  .ready{padding:0 12px;font-size:12px;height:40px}
+  .ready .lbl{display:none}
+}
+
+/* ── 見出しの札：参考サイトの district-title ── */
+.title{position:absolute;z-index:4;left:48px;top:104px;max-width:450px;pointer-events:none;
+  background:linear-gradient(90deg,rgba(250,255,255,.87),rgba(250,255,255,.5));border-radius:4px 26px 26px 4px;padding:20px 28px;
+  box-shadow:0 6px 45px rgba(99,130,147,.07)}
+.title__kicker{color:#5a6980;letter-spacing:.12em;font-size:12px;margin-bottom:8px;text-shadow:0 1px 7px #fff}
+.title h1{margin:0;font-family:var(--serif);font-weight:600;font-size:clamp(20px,1.8vw,24px);letter-spacing:.05em;line-height:1.5;white-space:nowrap}
+.title p{margin:8px 0 0;font-size:13px;line-height:1.75;color:var(--muted)}
+.title p b{color:var(--lav-text);font-weight:600}
+@media (max-width:760px){.title{left:14px;right:14px;top:72px;max-width:none;padding:12px 16px;border-radius:4px 18px 18px 4px}.title__kicker{display:none}.title p{display:none}.title h1{font-size:17px}}
+
+/* 絵はがき風の印：参考サイトの world-postcard */
+.postcard{position:absolute;z-index:3;right:42px;top:120px;transform:rotate(8deg);color:#456a8a;text-align:center;opacity:.75;pointer-events:none;
+  font-family:var(--serif-en);letter-spacing:.2em;font-size:11px;line-height:1.5}
+.postcard__stamp{width:92px;height:92px;border-radius:50%;border:2px dashed #7c9bb4;display:grid;place-items:center;margin:0 auto 6px;padding:8px}
+.postcard__stamp span{display:block;font-size:10px;letter-spacing:.14em;line-height:1.4}
+.postcard__stamp b{display:block;font-size:14px;letter-spacing:.1em;font-weight:400}
+@media (max-width:1000px){.postcard{display:none}}
+
+/* ── 押せる場所：参考サイトの island-pin ── */
+.pin{position:absolute;z-index:4;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;
+  padding:0;border:0;background:transparent;white-space:nowrap;filter:drop-shadow(0 3px 7px rgba(74,67,69,.24));transition:opacity .4s;-webkit-tap-highlight-color:transparent}
+.pin:focus-visible{outline:none}
+.pin__symbol{display:grid;place-items:center;width:36px;height:36px;margin-bottom:8px;border-radius:50%;
+  color:var(--gold-deep);background:rgba(255,244,219,.66);border:1px solid #fffcdb;box-shadow:0 0 16px rgba(255,245,194,.3);
+  font-family:var(--serif-en);font-size:16px;transition:all .35s}
+.pin__text{display:block;text-align:center;color:var(--plaque);min-width:132px;padding:10px 30px;
+  background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold);border-radius:4px;
+  box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27),0 3px rgba(212,197,174,.44);
+  font-family:var(--serif);font-size:15px;letter-spacing:.14em;line-height:1.4;transition:box-shadow .2s,transform .2s}
+.pin__text small{display:block;font-family:var(--serif-en);font-size:10px;letter-spacing:.26em;color:var(--gold-deep);margin-bottom:1px}
+.pin__hint{display:block;margin-top:8px;padding:4px 11px;border-radius:20px;background:rgba(255,250,240,.83);color:#827465;font-size:12px;opacity:0;transition:opacity .3s}
+.pin:hover .pin__text,.pin:focus-visible .pin__text,.pin.is-here .pin__text{background:linear-gradient(145deg,#fff,#fffaf0);box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(192,165,110,.33),0 4px 15px rgba(165,136,89,.32);transform:translateY(-2px)}
+.pin:hover .pin__symbol,.pin:focus-visible .pin__symbol,.pin.is-here .pin__symbol{color:#fff;background:var(--teal);transform:translateY(-4px);
+  box-shadow:0 0 0 5px rgba(250,255,238,.46),0 0 0 10px rgba(112,226,222,.17),0 0 35px 12px rgba(160,255,251,.73)}
+.pin:hover .pin__hint,.pin:focus-visible .pin__hint,.pin.is-here .pin__hint{opacity:1}
+.pin--goal .pin__symbol{color:#fff;background:linear-gradient(120deg,var(--teal-a),var(--teal-b));border-color:#faf8df;box-shadow:0 0 18px rgba(118,184,190,.6)}
+.pin--info{left:16%;top:40%}
+.pin--tool{left:35%;top:44%}
+.pin--service{left:80%;top:44%}
+.pin--gate{left:50%;top:25%}
+.pin.is-mine .pin__hint{opacity:1;color:var(--teal-b);background:rgba(230,243,238,.95)}
+@media (max-width:760px){
+  .pin__symbol{width:28px;height:28px;font-size:13px;margin-bottom:4px}
+  .pin__text{min-width:0;padding:7px 9px;font-size:11.5px;letter-spacing:.04em;border-radius:3px}
+  .pin__text small{font-size:9px;letter-spacing:.18em}
+  .pin__hint{display:none}
+  .pin--info{left:17%;top:41%}
+  .pin--tool{left:32%;top:55%}
+  .pin--service{left:83%;top:41%}
+  .pin--gate{top:25%}
+}
+.travel{position:absolute;z-index:7;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:12px;padding:12px 26px 12px 20px;border-radius:30px;
+  background:rgba(255,253,245,.9);border:1px solid #fff8dc;box-shadow:inset 0 0 0 3px rgba(255,255,255,.5),0 14px 45px rgba(80,97,120,.25);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);font-family:var(--serif);font-size:17px;letter-spacing:.12em;color:var(--ink);pointer-events:none;animation:travel .75s var(--ease) both}
+.travel[hidden]{display:none}
+.travel__arrow{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--teal);color:#fff;font-family:var(--serif-en);font-size:18px;animation:nudge .6s ease-in-out infinite alternate}
+@keyframes travel{0%{opacity:0;transform:translate(-50%,-50%) scale(.92)}25%,75%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.04)}}
+@keyframes nudge{to{transform:translateX(4px)}}
+.instruction{position:absolute;z-index:3;left:50%;bottom:calc(var(--dock-h,150px) + 14px);transform:translateX(-50%);white-space:nowrap;
+  display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:30px;background:rgba(248,246,255,.45);color:#716b88;font-size:12px;pointer-events:none;
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.instruction i{width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.3}}
+
+/* ── 下の案内：参考サイトの district-dock / district-card ── */
+.dock{position:absolute;z-index:5;left:50%;bottom:22px;transform:translateX(-50%);width:min(1120px,100% - 48px);padding:17px;border-radius:24px;
+  background:rgba(255,255,255,.44);border:1px solid rgba(255,255,255,.85);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  box-shadow:0 10px 40px rgba(139,122,154,.07)}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.card{display:grid;grid-template-columns:52px minmax(0,1fr) 12px;align-items:center;gap:9px;min-height:88px;padding:8px 10px 8px 8px;text-align:left;
+  background:rgba(255,255,255,.7);border:1px solid #fff;border-radius:15px;transition:transform .2s,box-shadow .2s}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(133,116,172,.18)}
+.card__no{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;color:var(--gold-deep);background:rgba(255,244,219,.9);border:1px solid #fffcdb;box-shadow:0 0 16px rgba(255,245,194,.6);font-family:var(--serif-en);font-size:20px}
+.card--goal .card__no{color:#fff;background:linear-gradient(120deg,var(--teal-a),var(--teal-b));border-color:#faf8df}
+.card__name{display:block;font-size:14px;font-weight:600;letter-spacing:.05em;line-height:1.4}
+.card__spec{display:block;font-size:12px;color:var(--soft);line-height:1.5;margin-top:4px}
+.card__who{display:block;font-size:12px;color:var(--teal-b);margin-top:4px}
+.card__arrow{color:var(--gold-deep);font-size:14px}
+@media (max-width:760px){
+  .dock{bottom:12px;width:calc(100% - 24px);padding:10px;border-radius:19px}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .card{display:grid;grid-template-columns:34px minmax(0,1fr);text-align:left;gap:8px;min-height:60px;padding:6px 8px;border-radius:11px}
+  .card__no{width:34px;height:34px;font-size:14px}
+  .card__name{font-size:11.5px;letter-spacing:0}
+  .card__spec,.card__arrow{display:none}
+  .card__who{margin-top:0;font-size:11px}
+}
+
+/* ── 会話：参考サイトの resident-panel ── */
+.veil{position:absolute;inset:0;z-index:8;background:rgba(48,56,79,.12);opacity:0;transition:opacity .3s}
+.veil.show{opacity:1}
+.panel{position:absolute;z-index:9;left:50%;top:50%;transform:translate(-50%,-50%);width:min(880px,100% - 64px);max-height:min(86svh,780px);overflow:auto;overscroll-behavior:contain;
+  display:grid;grid-template-columns:240px minmax(0,1fr);column-gap:28px;align-content:start;padding:24px 30px 26px 26px;
+  background:linear-gradient(150deg,rgba(255,253,248,.93),rgba(245,241,246,.93));border:1px solid #fcf9df;border-radius:22px;
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  box-shadow:inset 0 0 0 4px rgba(255,248,234,.79),0 18px 60px rgba(72,85,116,.25);animation:panel-in .6s both}
+.panel[hidden]{display:none}
+@keyframes panel-in{from{opacity:0;transform:translate(-50%,-46%) scale(.96)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+.panel__label{grid-column:1/-1;margin-right:44px}
+.panel__heading,.panel__role,.quote,.typing,.docs,.choices{grid-column:2}
+.panel__label{display:flex;align-items:center;gap:8px;letter-spacing:.12em;font-size:12px;color:var(--teal-b)}
+.panel__label::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--teal)}
+.panel__close{position:absolute;right:16px;top:14px;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.75);color:var(--muted);font-size:18px;line-height:1}
+.panel__close:hover{color:var(--ink);background:#fff}
+.portrait{position:relative;grid-area:2/1/9;display:flex;align-items:center;justify-content:center;height:clamp(260px,48vh,400px);margin:6px 0 0;border-radius:24px;
+  background:radial-gradient(ellipse,var(--light,#e6f1f3),transparent 69%)}
+.portrait img{height:100%;max-width:100%;object-fit:contain;animation:bob2 5s ease-in-out infinite;filter:drop-shadow(0 8px 12px rgba(72,80,120,.18))}
+@keyframes bob2{50%{transform:translateY(-6px)}}
+.panel__heading{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+.panel__name{font-family:var(--serif);font-size:26px;letter-spacing:.14em;line-height:1.3}
+.panel__name small{display:block;font-family:var(--serif-en);font-size:11px;letter-spacing:.26em;color:var(--gold-deep)}
+.panel__role{color:var(--teal-b);margin:7px 0 14px;font-size:13px}
+.quote{margin:0 0 14px;padding:16px 18px;border-radius:15px;background:var(--light,#e6f1f3);color:#656077;font-family:var(--serif);font-size:16.5px;line-height:1.95;white-space:pre-wrap;overflow-wrap:anywhere;min-height:5.4em}
+.typing{display:block;min-height:18px;margin:-8px 0 8px 9px;font-size:12px;color:#8b7d9d}
+.choices{display:flex;flex-direction:column;gap:7px}
+.choice{display:flex;align-items:center;gap:10px;min-height:50px;padding:10px 16px;border-radius:12px;text-align:left;
+  background:#fff;color:var(--ink);border:1px solid #d8d3e8;font-size:15px;line-height:1.4;transition:border-color .15s,background .15s,transform .15s;animation:rise .3s var(--ease) both}
+.choice::before{content:"";width:0;height:0;border-left:6px solid var(--gold);border-top:4px solid transparent;border-bottom:4px solid transparent;opacity:.5}
+.choice:hover{border-color:var(--lav-2);background:#faf8ff;transform:translateX(2px)}
+.choice--go{background:var(--lav);color:#fff;border-color:transparent;justify-content:center}
+.choice--go::before{display:none}
+.choice--go:hover{background:var(--lav);filter:brightness(1.08)}
+.choice .pick{margin-left:auto;font-size:11px;color:#fff;background:var(--teal-b);border-radius:20px;padding:1px 9px;white-space:nowrap}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* 会話の中の資料 */
+.docs{display:grid;gap:7px;margin-bottom:14px}
+.docs:empty{display:none}
+.doc{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;min-height:58px;padding:9px 12px;
+  background:#fff;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--ink);box-shadow:0 4px 20px rgba(59,82,114,.03);transition:border-color .2s,transform .2s}
+a.doc:not([aria-disabled="true"]):hover{border-color:var(--gold);transform:translateY(-1px)}
+.doc__ico{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--lav-soft);color:var(--lav);font-family:var(--serif-en);font-size:11px;letter-spacing:.04em}
+.doc b{display:block;font-weight:600;font-size:14px;line-height:1.4}
+.doc span.d{display:block;font-size:12px;color:var(--soft);line-height:1.5}
+.doc__go{font-size:12px;color:var(--lav);white-space:nowrap}
+.doc--line .doc__ico{background:#e6f8ee;color:#06a74a}
+.doc--btn{width:100%;font:inherit;cursor:pointer}
+.doc--btn:hover{border-color:var(--gold);transform:translateY(-1px)}
+.docs-inner{display:grid;gap:8px}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:7px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:12px;font-size:13.5px;line-height:1.7}
+.steps li::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:24px;height:24px;border-radius:50%;color:var(--gold-deep);background:rgba(255,244,219,.9);border:1px solid #f1e4bf;font-family:var(--serif-en);font-size:12px}
+.steps b{font-weight:600}
+.note{margin:0;font-size:12px;color:var(--soft)}
+.checks{display:grid;gap:7px}
+.check{position:relative;display:flex;align-items:center;gap:12px;min-height:54px;padding:9px 12px;background:#fff;border:1px solid var(--line);border-radius:12px;cursor:pointer;font-size:13.5px;line-height:1.45;transition:border-color .2s,background .2s}
+.check input{position:absolute;opacity:0;pointer-events:none}
+.check__box{flex:0 0 auto;width:26px;height:26px;border-radius:50%;border:1px solid var(--gold);background:var(--cream);display:grid;place-items:center;transition:background .2s,border-color .2s}
+.check__box::after{content:"";width:6px;height:12px;border-right:2.5px solid #fff;border-bottom:2.5px solid #fff;transform:translateY(-1px) rotate(45deg) scale(0);transition:transform .2s var(--ease)}
+.check input:checked + .check__box{background:var(--teal);border-color:var(--teal)}
+.check input:checked + .check__box::after{transform:translateY(-1px) rotate(45deg) scale(1)}
+.check:has(input:checked){border-color:rgba(105,180,188,.6);background:#f6fbfb}
+.check:has(input:focus-visible){outline:3px solid var(--teal);outline-offset:2px}
+.check small{display:block;color:var(--soft);font-size:11.5px}
+.pass{position:relative;display:grid;grid-template-columns:1fr 84px;border-radius:14px;overflow:hidden;background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold);
+  box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27),0 6px 20px rgba(165,136,89,.18);animation:print .7s var(--ease) both}
+@keyframes print{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+.pass__main{padding:14px 16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px}
+.pass__title{grid-column:1/-1;font-family:var(--serif-en);letter-spacing:.24em;color:var(--gold-deep);font-size:12px}
+.pass__main span{display:block;font-family:var(--serif-en);letter-spacing:.18em;font-size:10px;color:var(--muted)}
+.pass__main b{display:block;font-family:var(--serif);font-weight:600;font-size:14px;line-height:1.3;white-space:nowrap}
+.pass__stub{border-left:1.5px dashed var(--gold);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px;background:rgba(255,255,255,.5)}
+.pass__stub b{font-family:var(--serif-en);font-size:26px;line-height:1;font-weight:400}
+.pass__stub span{font-family:var(--serif-en);font-size:10px;letter-spacing:.2em;color:var(--muted)}
+.barcode{width:56px;height:24px;background:repeating-linear-gradient(90deg,var(--ink) 0 2px,transparent 2px 4px,var(--ink) 4px 5px,transparent 5px 8px,var(--ink) 8px 11px,transparent 11px 13px);background-size:13px 100%;opacity:.8}
+/* 出発ボタン：参考サイトの「ドリームランドへ降りる」 */
+.enter{display:flex;align-items:center;justify-content:center;gap:28px;width:100%;min-height:57px;margin-top:12px;padding:0 24px;
+  color:#fcfff7;text-shadow:0 1px 3px #486472;letter-spacing:.16em;font-family:var(--serif);font-size:16px;
+  background:linear-gradient(120deg,var(--teal-a),var(--teal-b));border:2px solid #faf8df;border-radius:34px;
+  box-shadow:0 0 0 4px rgba(216,232,222,.45),inset 0 0 0 2px rgba(202,233,220,.49),inset 0 2px 9px rgba(229,255,227,.61),0 7px 20px rgba(92,113,129,.3);
+  transition:transform .2s,filter .2s}
+.enter:hover{filter:brightness(1.08);transform:translateY(-3px)}
+a[aria-disabled="true"]{cursor:default}
+@media (max-width:1000px){.panel{grid-template-columns:190px minmax(0,1fr);column-gap:20px}.portrait{height:clamp(220px,40vh,320px)}}
+@media (max-width:760px){
+  .panel{inset:auto 10px 10px;top:auto;transform:none;width:auto;max-height:min(74svh,640px);padding:14px 14px 14px;border-radius:20px;
+    display:grid;grid-template-columns:84px 1fr;column-gap:12px;align-content:start;animation:sheet-in .45s both}
+  .panel[hidden]{display:none}
+  @keyframes sheet-in{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+  .panel__label{grid-column:1/-1;margin-right:44px}
+  .portrait{grid-area:2/1/4;height:104px;margin:4px 0 0;border-radius:16px}
+  .panel__heading{grid-column:2;margin-top:10px}
+  .panel__name{font-size:19px}
+  .panel__role{grid-column:2;margin:2px 0 10px;font-size:12px}
+  .quote{grid-column:1/-1;margin-bottom:8px;padding:12px 14px;font-size:15px;line-height:1.85;min-height:0}
+  .typing{grid-column:1/-1;margin:-4px 0 4px 6px}
+  .docs,.choices{grid-column:1/-1}
+  .choice{min-height:44px;font-size:14px;padding:9px 14px}
+}
+
+/* ── 記入欄（口座の登録・合言葉・口座をつなぐ）── */
+.form{display:grid;gap:9px;margin-bottom:14px}
+.field{display:grid;gap:4px}
+.field > span{font-size:12.5px;color:var(--muted);letter-spacing:.04em}
+.field input{height:46px;padding:0 13px;border:1px solid #d8d3e8;border-radius:12px;background:#fff;font:inherit;font-size:16px;color:var(--ink);transition:border-color .2s,box-shadow .2s}
+.field input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(105,180,188,.25)}
+.field input:invalid:not(:placeholder-shown){border-color:#d28a8a}
+.field--pw{position:relative}
+.field--pw input{padding-right:64px}
+.field--pw .eye{position:absolute;right:6px;top:27px;height:38px;padding:0 10px;border:0;border-radius:9px;background:var(--lav-soft);color:var(--lav-text);font-size:12.5px;font-weight:600;cursor:pointer}
+.field small{font-size:11.5px;color:var(--soft)}
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.plan{position:relative;display:grid;gap:3px;padding:11px 12px;border-radius:12px;cursor:pointer;border:1px solid var(--gold);
+  background:linear-gradient(145deg,#fffff9,#f3ede2);color:var(--plaque);transition:transform .15s,box-shadow .15s}
+.plan input{position:absolute;opacity:0;pointer-events:none}
+.plan b{font-family:var(--serif);font-size:14px;letter-spacing:.06em;line-height:1.3}
+.plan small{font-family:var(--serif-en);font-size:10px;letter-spacing:.2em;color:var(--gold-deep)}
+.plan .d{font-size:11.5px;color:var(--soft);line-height:1.5}
+.plan--crystal{color:#fff3d6;border-color:#e3cf94;background:linear-gradient(145deg,#3a3166,#201b40);overflow:hidden}
+.plan--crystal small{color:#e8d8a8}
+.plan--crystal .d{color:#cfc6e6}
+.plan--crystal::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.18) 48%,transparent 60%);background-size:260% 100%;animation:shine 5s linear infinite}
+.plan:has(input:checked){transform:translateY(-2px);box-shadow:0 0 0 3px rgba(105,180,188,.5),0 8px 20px rgba(99,130,147,.2)}
+.plan--crystal:has(input:checked){box-shadow:0 0 0 3px rgba(227,207,148,.7),0 8px 24px rgba(214,190,120,.4)}
+.plan:has(input:focus-visible){outline:3px solid var(--teal);outline-offset:2px}
+@keyframes shine{from{background-position:120% 0}to{background-position:-140% 0}}
+.notice{margin:0;padding:12px 14px 12px 30px;border-radius:12px;background:#fff7ec;border:1px solid #efd9b4;font-size:13px;line-height:1.7;color:#6a5640}
+.notice li{margin:3px 0}
+.notice b{color:#a4532f}
+.notice__title{display:block;margin:-2px 0 4px -16px;font-weight:600;color:#8a4a2a;font-size:13px}
+.notice--big{padding:16px 18px 16px 36px;font-size:15px;line-height:1.85;background:#fff4e2;border-color:#e4c48f}
+.notice--big .notice__title{font-size:16px;margin-bottom:8px}
+.notice--big b{font-size:1.04em}
+.err{margin:0;font-size:13px;color:#b74c4c;min-height:1em}
+/* 接続の進みぐあい（接続ツールが返した結果だけを出す） */
+.prog{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:6px}
+.prog li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:13.5px;line-height:1.5;color:var(--ink)}
+.prog li::before{content:"";flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:2px solid var(--teal);box-sizing:border-box}
+.prog li.is-wait::before{border-right-color:transparent;animation:spin 1s linear infinite}
+.prog li.is-ok::before{background:var(--teal);border-color:var(--teal);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7'/%3E%3C/svg%3E");background-size:12px;background-position:center;background-repeat:no-repeat}
+.prog li.is-ng{border-color:#e4b9b9;background:#fff7f7}
+.prog li.is-ng::before{border-color:#d28a8a;background:#d28a8a}
+.prog li span{flex:1 1 auto}
+.prog--members li{justify-content:space-between}
+.mini{height:34px;padding:0 12px;border-radius:9px;border:1px solid #d8d3e8;background:#fff;color:var(--lav-text);font-size:12.5px;white-space:nowrap}
+.mini:hover{border-color:var(--lav-2);background:#faf8ff}
+@keyframes spin{to{transform:rotate(360deg)}}
+.steps--live li.is-active{border-color:var(--teal);box-shadow:0 0 0 3px rgba(105,180,188,.22)}
+.steps--live li.is-active::before{background:var(--teal);color:#fff;border-color:var(--teal)}
+.steps--live li.is-done{opacity:.6}
+.steps--live li.is-done::before{content:"✓";background:var(--teal);color:#fff;border-color:var(--teal)}
+a.enter{text-decoration:none}
+.receipt{display:grid;gap:6px;padding:14px 16px;border-radius:14px;background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold);
+  box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27);animation:print .7s var(--ease) both}
+.receipt span{display:block;font-family:var(--serif-en);font-size:10px;letter-spacing:.2em;color:var(--muted)}
+.receipt b{display:block;font-family:var(--serif-en);font-size:22px;letter-spacing:.08em;font-weight:400;color:var(--ink)}
+.receipt .d{font-size:12.5px;color:var(--soft);font-family:var(--sans)}
+.receipt__plan{text-align:left;padding-top:6px;border-top:1px dashed var(--gold);font-family:var(--serif);font-size:13px;color:var(--lav-text);letter-spacing:.06em}
+.receipt__plan small{font-family:var(--serif-en);font-size:11px;letter-spacing:.2em;color:var(--muted)}
+.enter[disabled]{filter:grayscale(.4);opacity:.7;transform:none;cursor:default}
+.enter--crystal{color:#fff6dc;background:linear-gradient(120deg,#4a3f7a,#2b2550);border-color:#e3cf94;text-shadow:0 1px 3px #1a1530;
+  box-shadow:0 0 0 4px rgba(227,207,148,.3),inset 0 0 0 2px rgba(227,207,148,.35),inset 0 2px 9px rgba(255,255,255,.15),0 7px 20px rgba(43,37,80,.45)}
+@media (max-width:760px){.form{grid-column:1/-1}.plans{grid-template-columns:1fr}}
+
+/* 搭乗口の選択：ミナトに声をかけてから、ご契約の搭乗口を選ぶ */
+.gates{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.gatecard{position:relative;display:grid;gap:4px;padding:14px 12px 12px;border-radius:14px;text-align:left;cursor:pointer;border:1px solid var(--gold);font:inherit;
+  background:linear-gradient(145deg,#fffff9,#f3ede2);color:var(--plaque);box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27),0 3px rgba(212,197,174,.44);transition:transform .2s,box-shadow .2s;overflow:hidden}
+.gatecard:hover:not([disabled]){transform:translateY(-3px);box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(192,165,110,.33),0 8px 20px rgba(165,136,89,.32)}
+.gatecard__no{font-family:var(--serif-en);font-size:11px;letter-spacing:.26em;color:var(--gold-deep)}
+.gatecard__no b{display:block;font-size:34px;line-height:1;font-weight:400;color:var(--ink);letter-spacing:.04em;margin-top:2px}
+.gatecard__name{font-family:var(--serif);font-size:14px;letter-spacing:.06em;line-height:1.35;color:var(--ink)}
+.gatecard__flight{font-family:var(--serif-en);font-size:11px;letter-spacing:.18em;color:var(--muted)}
+.gatecard__status{justify-self:start;margin-top:4px;padding:3px 10px;border-radius:20px;background:rgba(105,180,188,.14);color:var(--teal-b);font-size:11px;letter-spacing:.14em;font-family:var(--serif-en)}
+.gatecard--crystal{color:#fff3d6;border-color:#e3cf94;background:linear-gradient(145deg,#3a3166,#201b40);box-shadow:inset 0 0 0 3px rgba(255,255,255,.06),inset 0 0 0 4px rgba(227,207,148,.4),0 3px rgba(43,37,80,.4)}
+.gatecard--crystal .gatecard__no,.gatecard--crystal .gatecard__flight{color:#e8d8a8}
+.gatecard--crystal .gatecard__no b,.gatecard--crystal .gatecard__name{color:#fff6dc}
+.gatecard--crystal .gatecard__status{background:rgba(232,216,168,.18);color:#e8d8a8}
+.gatecard--crystal::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.16) 48%,transparent 60%);background-size:260% 100%;animation:shine 6s linear infinite}
+.gatecard.is-mine{box-shadow:0 0 0 3px rgba(105,180,188,.55),0 8px 24px rgba(99,130,147,.25)}
+.gatecard.is-mine .gatecard__status{background:var(--teal);color:#fff}
+.gatecard--crystal.is-mine{box-shadow:0 0 0 3px rgba(227,207,148,.8),0 8px 24px rgba(214,190,120,.4)}
+.gatecard--crystal.is-mine .gatecard__status{background:#e8d8a8;color:#2b2550}
+.gatecard[disabled]{cursor:default;opacity:.55;filter:grayscale(.35)}
+.gatecard[disabled] .gatecard__status{background:rgba(120,119,135,.15);color:var(--soft)}
+@media (max-width:760px){.gates{grid-column:1/-1;grid-template-columns:1fr 1fr}}
+
+/* 搭乗券：プランで装いを変える */
+.pass__class{grid-column:1/-1;margin-top:4px;font-family:var(--serif);font-size:12.5px;color:var(--lav-text);letter-spacing:.06em;line-height:1.5}
+.pass__valid{grid-column:1/-1;font-size:11px;color:var(--soft);line-height:1.5;font-family:var(--sans)}
+.pass--crystal{color:#fff3d6;background:linear-gradient(145deg,#3a3166,#201b40);border-color:#e3cf94;
+  box-shadow:inset 0 0 0 3px rgba(255,255,255,.06),inset 0 0 0 4px rgba(227,207,148,.4),0 6px 24px rgba(43,37,80,.45),0 0 30px rgba(214,190,120,.3)}
+.pass--crystal::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.16) 48%,transparent 60%);background-size:260% 100%;animation:shine 6s linear infinite}
+.pass--crystal .pass__title{color:#e8d8a8}
+.pass--crystal .pass__main span,.pass--crystal .pass__stub span{color:#cfc6e6}
+.pass--crystal .pass__main b,.pass--crystal .pass__stub b{color:#fff6dc}
+.pass--crystal .pass__class{color:#e8d8a8}
+.pass--crystal .pass__valid{color:#cfc6e6}
+.pass--crystal .pass__stub{border-left-color:rgba(227,207,148,.6);background:rgba(255,255,255,.06)}
+.pass--crystal .barcode{background-image:repeating-linear-gradient(90deg,#fff6dc 0 2px,transparent 2px 4px,#fff6dc 4px 5px,transparent 5px 8px,#fff6dc 8px 11px,transparent 11px 13px)}
+
+/* ── 出発の演出：搭乗口の光に包まれて、雲の上のドリームランドへ ── */
+.fly{position:fixed;inset:0;z-index:60;overflow:hidden;display:grid;place-items:center;text-align:center;color:#fffaf0;background:#dbe5f2;animation:fadein .6s ease both}
+.fly[hidden]{display:none}
+@keyframes fadein{from{opacity:0}}
+.fly__sky{position:absolute;inset:0}
+.fly__sky img{width:100%;height:100%;object-fit:cover;object-position:50% 60%;animation:fly-sky 4.2s cubic-bezier(.3,.1,.2,1) both}
+@keyframes fly-sky{from{transform:scale(1);filter:brightness(.92) saturate(.95)}to{transform:scale(1.12);filter:brightness(1.12) saturate(1.05)}}
+.fly__sky::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(120,158,167,.28),rgba(238,230,246,.1) 50%,rgba(255,250,240,.35))}
+.fly__glow{position:absolute;left:50%;top:50%;width:70vmax;height:70vmax;border-radius:50%;transform:translate(-50%,-50%) scale(.2);
+  background:radial-gradient(circle,rgba(255,250,235,.95) 0%,rgba(255,236,190,.7) 28%,rgba(244,219,155,.25) 52%,rgba(244,219,155,0) 70%);
+  animation:fly-glow 3.6s cubic-bezier(.2,.6,.2,1) both;mix-blend-mode:screen}
+@keyframes fly-glow{0%{transform:translate(-50%,-50%) scale(.2);opacity:0}30%{opacity:1}100%{transform:translate(-50%,-50%) scale(2.4);opacity:1}}
+.fly__ring{position:absolute;left:50%;top:50%;width:46vmin;height:46vmin;border-radius:50%;border:1.5px solid rgba(232,216,168,.9);
+  box-shadow:0 0 30px rgba(244,219,155,.6),inset 0 0 30px rgba(244,219,155,.35);transform:translate(-50%,-50%) scale(.3);opacity:0;animation:fly-ring 2.6s cubic-bezier(.2,.6,.2,1) .2s both}
+.fly__ring--2{animation-delay:.9s;border-color:rgba(255,255,255,.8)}
+@keyframes fly-ring{0%{transform:translate(-50%,-50%) scale(.3);opacity:0}25%{opacity:.9}100%{transform:translate(-50%,-50%) scale(3.2);opacity:0}}
+.fly__sparks{position:absolute;inset:0;pointer-events:none}
+.fly__sparks i{position:absolute;left:var(--x);bottom:-4vh;width:5px;height:5px;border-radius:50%;background:#fff6dc;box-shadow:0 0 12px 3px rgba(255,245,194,.9);opacity:0;animation:fly-spark var(--t) ease-out var(--d) both}
+@keyframes fly-spark{0%{transform:translateY(0) scale(.6);opacity:0}20%{opacity:1}100%{transform:translateY(-110vh) scale(1.2);opacity:0}}
+.fly__text{position:relative;z-index:2;padding:0 20px;animation:fly-text 1.6s cubic-bezier(.2,.6,.2,1) .35s both}
+@keyframes fly-text{from{opacity:0;transform:translateY(14px);letter-spacing:.1em}to{opacity:1;transform:none}}
+.fly__text small{display:block;font-family:var(--serif-en);letter-spacing:.34em;font-size:clamp(11px,1.3vw,14px);color:#fff6dc;text-shadow:0 1px 10px rgba(72,101,119,.5);margin-bottom:14px}
+.fly__title{display:block;font-family:var(--serif);font-weight:600;font-size:clamp(28px,4.2vw,48px);letter-spacing:.22em;line-height:1.4;color:#fffdf6;text-shadow:0 2px 24px rgba(72,101,119,.45),0 0 40px rgba(255,236,190,.6)}
+.fly__sub{display:block;margin-top:12px;font-family:var(--serif);font-size:clamp(14px,1.5vw,17px);letter-spacing:.2em;color:#fff6dc;text-shadow:0 1px 10px rgba(72,101,119,.5)}
+.fly__line{display:block;width:120px;height:1px;margin:22px auto 0;background:linear-gradient(90deg,transparent,#e8d8a8,transparent)}
+.fly__text a{display:inline-block;margin-top:18px;font-family:var(--sans);font-size:13px;letter-spacing:.06em;color:rgba(255,250,240,.85)}
+.fly__white{position:absolute;inset:0;z-index:3;background:#fffdf6;opacity:0;animation:fly-white 1s ease-in 2.6s both;pointer-events:none}
+@keyframes fly-white{to{opacity:1}}
+.fly--crystal .fly__ring{border-color:rgba(232,216,168,1)}
+.fly--crystal .fly__sky::after{background:linear-gradient(180deg,rgba(58,49,102,.45),rgba(43,37,80,.25) 50%,rgba(255,250,240,.3))}
+.fly--crystal .fly__glow{background:radial-gradient(circle,rgba(255,250,235,.95) 0%,rgba(232,216,168,.7) 28%,rgba(122,105,180,.25) 52%,rgba(122,105,180,0) 70%)}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .fly__sparks,.sparkles{display:none}
+  .fly__glow{transform:translate(-50%,-50%) scale(1.6);opacity:1}
+  .fly__white{opacity:0}
+}
+</style>
+</head>
+<body>
+<main class="app" id="app">
+  <div class="world" id="world">
+  <div class="scene" aria-hidden="true">
+    <picture class="scene__img">
+      <source srcset="assets/lobby-sm.webp" media="(max-width: 760px)">
+      <img src="assets/lobby.webp" width="1920" height="1080" alt="" fetchpriority="high" decoding="async">
+    </picture>
+    <div class="scene__veil"></div>
+    <div class="sparkles">
+      <i style="--x:8%;--y:30%;--t:5s;--d:-1s"></i><i style="--x:22%;--y:22%;--t:6s;--d:-3s"></i><i style="--x:37%;--y:14%;--t:7s;--d:-2s"></i>
+      <i style="--x:58%;--y:18%;--t:5.5s;--d:-4s"></i><i style="--x:70%;--y:26%;--t:6.5s;--d:-1.5s"></i><i style="--x:88%;--y:20%;--t:5s;--d:-2.5s"></i>
+      <i style="--x:46%;--y:48%;--t:7s;--d:-5s"></i><i style="--x:30%;--y:44%;--t:6s;--d:-.5s"></i><i style="--x:66%;--y:46%;--t:5.5s;--d:-3.5s"></i>
+    </div>
+    <div class="staff staff--yui"><img src="assets/staff-yui.webp" width="459" height="1012" alt="" decoding="async"></div>
+    <div class="staff staff--minato"><img src="assets/staff-minato.webp" width="372" height="1028" alt="" decoding="async"></div>
+    <div class="staff staff--sora"><img src="assets/staff-sora.webp" width="342" height="1022" alt="" decoding="async"></div>
+    <div class="staff staff--haru"><img src="assets/staff-haru.webp" width="335" height="1041" alt="" decoding="async"></div>
+  </div>
+
+  <header class="top">
+    <a class="brand" href="./" aria-label="ドリームランド 渡航手続きロビー">
+      <span class="brand__icon" aria-hidden="true">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.5A7 7 0 0 1 12.5 3.1 9 9 0 0 0 12 3z"/></svg>
+        <svg class="star" width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>
+      </span>
+      <span><span class="brand__name">DREAMLAND</span><span class="brand__caption">ドリームランド移住計画</span></span>
+    </a>
+    <nav class="nav" aria-label="ロビーの場所">
+      <button type="button" class="is-active" data-spot="info">インフォメーション</button>
+      <button type="button" data-spot="service">サービスカウンター</button>
+      <button type="button" data-spot="tool">パスポートカウンター</button>
+      <button type="button" data-spot="gate">搭乗ゲート</button>
+    </nav>
+    <div class="top__end">
+      <button class="ready" type="button" id="ready" aria-label="搭乗準備の状況をひらく"><span class="lbl">搭乗準備</span><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b id="ready-count">0/4</b></button>
+    </div>
+  </header>
+
+  <div class="title">
+    <div class="title__kicker">DEPARTURE LOBBY</div>
+    <h1>ドリームランドへの渡航手続き</h1>
+    <p>ロビーの中の、行きたい場所を押してください。<b>1 → 2 → 4</b> の順に進めば、ご契約のプランの搭乗口からドリームランドへ出発できます（3 はパスポートの受け取りと説明）。</p>
+  </div>
+
+  <div class="postcard" aria-hidden="true">
+    <div class="postcard__stamp"><span>DREAMLAND<br>INTL</span><b>DL-001</b><span>DEPARTURES</span></div>
+    ON TIME
+  </div>
+
+  <button class="pin pin--info" type="button" data-spot="info" aria-label="1 インフォメーション：はじめての方はここから">
+    <span class="pin__symbol">1</span><span class="pin__text"><small>INFORMATION</small>インフォメーション</span><span class="pin__hint">案内係 ユイ</span>
+  </button>
+  <button class="pin pin--service" type="button" data-spot="service" aria-label="2 サービスカウンター：口座開設の案内・MT5 口座の登録・パスポートの発行">
+    <span class="pin__symbol">2</span><span class="pin__text"><small>SERVICE COUNTER</small>サービスカウンター</span><span class="pin__hint">受付 ソラ</span>
+  </button>
+  <button class="pin pin--tool" type="button" data-spot="tool" aria-label="3 パスポートカウンター：ドリームランド・パスポート（接続ツール）の受け取りと、手順の説明">
+    <span class="pin__symbol">3</span><span class="pin__text"><small>PASSPORT COUNTER</small>パスポートカウンター</span><span class="pin__hint">パスポート係 ハル</span>
+  </button>
+  <button class="pin pin--gate pin--goal" type="button" data-spot="gate" aria-label="4 搭乗ゲート：搭乗口を選んで、搭乗券を受け取り、ドリームランドへ出発">
+    <span class="pin__symbol">4</span><span class="pin__text"><small>BOARDING GATES</small>搭乗ゲート</span><span class="pin__hint" id="gate-hint">搭乗係 ミナト</span>
+  </button>
+  </div>
+
+  <div class="instruction" id="instruction" aria-hidden="true"><i></i>行きたい場所を押してください</div>
+  <div class="travel" id="travel" aria-live="polite" hidden><span class="travel__arrow" aria-hidden="true">›</span><span id="travel-text"></span></div>
+
+  <nav class="dock" id="dock" aria-label="手続きの場所">
+    <div class="cards">
+      <button class="card" type="button" data-spot="info"><span class="card__no">1</span><span><span class="card__name">インフォメーション</span><span class="card__spec">はじめての方はここから</span><span class="card__who">案内係 ユイ</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
+      <button class="card" type="button" data-spot="service"><span class="card__no">2</span><span><span class="card__name">サービスカウンター</span><span class="card__spec">口座の登録・パスポートの発行</span><span class="card__who">受付 ソラ</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
+      <button class="card" type="button" data-spot="tool"><span class="card__no">3</span><span><span class="card__name">パスポートカウンター</span><span class="card__spec">パスポートの受け取り・手順の説明</span><span class="card__who">パスポート係 ハル</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
+      <button class="card card--goal" type="button" data-spot="gate"><span class="card__no">4</span><span><span class="card__name">搭乗ゲート</span><span class="card__spec">搭乗口を選んで、搭乗券を受け取る</span><span class="card__who">搭乗係 ミナト</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
+    </div>
+  </nav>
+
+  <div class="veil" id="veil" hidden></div>
+  <section class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="p-name" tabindex="-1" hidden>
+    <span class="panel__label" id="p-label"></span>
+    <button class="panel__close" type="button" id="close" aria-label="閉じる">×</button>
+    <div class="portrait" id="p-portrait"><img id="p-img" src="" alt="" width="372" height="1028"></div>
+    <div class="panel__heading"><span class="panel__name" id="p-name"></span></div>
+    <span class="panel__role" id="p-role"></span>
+    <p class="quote" id="say" aria-live="polite"></p>
+    <span class="typing" id="typing" aria-hidden="true"></span>
+    <div class="docs" id="docs"></div>
+    <div class="choices" id="choices"></div>
+  </section>
+</main>
+
+<div class="fly fly--first" id="fly" hidden>
+  <div class="fly__sky" aria-hidden="true"><img src="assets/clouds.webp" alt="" loading="lazy" decoding="async"></div>
+  <div class="fly__glow" aria-hidden="true"></div>
+  <div class="fly__ring" aria-hidden="true"></div>
+  <div class="fly__ring fly__ring--2" aria-hidden="true"></div>
+  <div class="fly__sparks" aria-hidden="true">
+    <i style="--x:6%;--t:3.4s;--d:.2s"></i><i style="--x:17%;--t:3.9s;--d:.8s"></i><i style="--x:28%;--t:3.2s;--d:.4s"></i><i style="--x:39%;--t:4.1s;--d:1.1s"></i>
+    <i style="--x:50%;--t:3.5s;--d:.1s"></i><i style="--x:61%;--t:3.8s;--d:.9s"></i><i style="--x:72%;--t:3.3s;--d:.5s"></i><i style="--x:83%;--t:4s;--d:1.3s"></i>
+    <i style="--x:93%;--t:3.6s;--d:.3s"></i><i style="--x:45%;--t:4.3s;--d:1.6s"></i><i style="--x:56%;--t:3.7s;--d:1.9s"></i><i style="--x:23%;--t:4.2s;--d:1.5s"></i>
+  </div>
+  <p class="fly__text"><small id="fly-flight">DL-001 · FIRST CLASS</small><span class="fly__title">ドリームランドへ</span><span class="fly__sub" id="fly-sub">まもなく出発いたします</span><span class="fly__line" aria-hidden="true"></span><br><a id="fly-link">移動しないときはこちら</a></p>
+  <div class="fly__white" aria-hidden="true"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   リンクはここ1か所で管理する。
+   "#TODO" で始まる値は、見た目はそのまま、押しても何も起きない。
+   ═══════════════════════════════════════════════ */
+const SITE  = "https://kinyu-kenkyujo-dec-opt.vercel.app";   // 本体のサイト（申込・会員・接続の合図の送り先、パスポートの置き場）
+const RELAY = "wss://kinyu-relay.onrender.com/app";          // 中継（パスポートの様子はここから届く）
+const LINKS = {
+  accountManual: "manual/",                // 口座開設マニュアル（ロビーと同じ世界観で作ったウェブ版。dreamland/manual/）
+  winPdf:        "#TODO_WIN_PDF",          // Windows PDFマニュアル
+  winVideo:      "#TODO_WIN_VIDEO",        // Windows 動画マニュアル
+  winFile:       SITE + "/download/MT5Automatic.exe",      // Windows用ファイル
+  macPdf:        "#TODO_MAC_PDF",          // Mac PDFマニュアル
+  macVideo:      "#TODO_MAC_VIDEO",        // Mac 動画マニュアル
+  macFile:       SITE + "/download/MT5Automatic-mac.zip",  // Mac用ファイル
+  support:       "https://lin.ee/V0ikrqq",  // サポートLINE
+  register:      SITE + "/api/dreamland",  // 口座の登録を送る先（サイトのサーバー関数）
+  lobby:         SITE + "/api/lobby",      // 合言葉の確認・会員登録・接続の合図（サイトのサーバー関数）
+  dreamlandFirst:   "https://dreamland-yumeck-kondo.kondo910742.chatgpt.site/",  // ファーストクラスの行き先
+  dreamlandCrystal: "https://dreamland-yumeck-kondo.kondo910742.chatgpt.site/",  // ロイヤルファーストクラスの行き先
+};
+
+/* ═══════════════════════════════════════════════
+   プラン（搭乗口はプランごとに1つ）。名前・行き先・つなぐ口座の数はここだけ直せばよい。
+   どのプランかは、サービスカウンターで打つ「合言葉」で決まる（合言葉は本体サイトの管理者画面で決める）。
+   ═══════════════════════════════════════════════ */
+const PLANS = {
+  first:   { key: "first",   name: "ファーストクラス",       en: "FIRST CLASS",       gate: "1", flight: "DL-001", seat: "1A", link: "dreamlandFirst",   desc: "標準プラン",  links: 1 },
+  crystal: { key: "crystal", name: "ロイヤルファーストクラス", en: "ROYAL FIRST CLASS", gate: "2", flight: "DL-002", seat: "1A", link: "dreamlandCrystal", desc: "上位プラン",  links: 2 },
+};
+/* 搭乗券の有効期間。半年プランの方は半年（期限の前にもう一度、AI の紐付けの手続きが要る） */
+const VALID_NOTE = "有効期間は原則1年。半年プランの方は半年で、期限の前にもう一度 AI の紐付け手続きが必要です。";
+
+/* パスポートを呼び出してから、名乗り出るのを待つ時間（EA の準備と MT5 の初期化を挟むので長め） */
+const CONNECTOR_WAIT_MS = 30000;
+/* 初回はダウンロードした exe を「開くだけ」なので、ツールは部屋を知らないまま既定の部屋に来る */
+const DEFAULT_ROOM = "vps-01";
+const DEFAULT_ROOM_POLL_MS = 3000;
+const DEFAULT_ROOM_FRESH_MS = 10 * 60000;
+
+/* ═══════════════════════════════════════════════
+   係員と台詞。文言はここだけ直せばよい。
+   choices の行き先：ノード名 / "@info" "@service" "@gate"（別のカウンターへ）
+                     "@service:register"（移ってから、そのノードへ） / "close"
+                     "door:first" "door:crystal"（その搭乗口へ） / "next"（手続きの続きへ）
+                     "entry!"（合言葉を入れ直す） / "later"（2つ目はあとで） / "reconnect:0"（その口座をつなぎ直す）
+   3つめに "go" を付けると、目立つ色のボタンになる。
+   say と choices は、文字列のかわりに「そのとき決める関数」でもよい。
+   ═══════════════════════════════════════════════ */
+/* この端末で進んでいる手続き。下の処理の中で読み書きし、台詞（SCRIPT）からも見える */
+let app = null;        // 受け付けた申込（受付番号・プラン・口座の下2桁・サーバー・お名前）。パスワードは覚えない
+let plan = null;       // 合言葉で決まったプラン（first / crystal）
+let members = [];      // つないだ（つなぐ）口座ごとの会員。{ id, token, account, name, plan, done, server }
+let second = null;     // ロイヤルの2つ目を「あとで」にしたら "later"
+let gatePlan = null;   // いま立っている搭乗口のプラン
+let checks = {};       // 搭乗準備のチェック
+const planKey = () => plan || (app && app.plan) || gatePlan || null;
+const currentPlan = () => planKey() || "first";
+const PLAN = () => PLANS[currentPlan()];
+const doneMembers = () => members.filter((m) => m.done);
+const needSecond = () => currentPlan() === "crystal" && doneMembers().length < 2 && members.length < 2;
+const tail2 = (a) => (a == null ? "" : "…" + String(a).slice(-2));
+
+const STAFF = {
+  info:    { name: "ユイ",   en: "YUI",    role: "インフォメーション 案内係", img: "assets/staff-yui.webp",    light: "#efe9f7" },
+  service: { name: "ソラ",   en: "SORA",   role: "サービスカウンター 受付",   img: "assets/staff-sora.webp",   light: "#e8edf6" },
+  tool:    { name: "ハル",   en: "HARU",   role: "パスポートカウンター パスポート係",     img: "assets/staff-haru.webp",   light: "#e6f3ee" },
+  gate:    { name: "ミナト", en: "MINATO", role: "搭乗ゲート 搭乗係",         img: "assets/staff-minato.webp", light: "#e4f1f1" },
+};
+
+const CHECKS = [
+  { id: "account", title: "MT5 の口座を登録した", note: "2 のサービスカウンターで記入。口座がまだなら、口座開設マニュアルから" },
+  { id: "tool",    title: "ドリームランド・パスポート（接続ツール）を入れて、MT5 とつないだ", note: "2 のサービスカウンターの「パスポートの発行」で。つながると自動で付きます" },
+  { id: "ea",      title: "ゴールドのチャートに EA を載せた", note: "XAUUSD（または GOLD）のチャート。パスポートが見ていて、自動で付きます" },
+  { id: "algo",    title: "MT5 の「アルゴ取引」ボタンを緑にした", note: "「自動売買」と書かれている版もあります" },
+];
+
+const SCRIPT = {
+  info: {
+    start: { say: () => members.length
+        ? `おかえりなさい。${PLAN().name}で、${doneMembers().length ? `口座 ${doneMembers().map((m) => tail2(m.account)).join("・")} の接続が済んでいます` : "接続の途中ですね"}。\n続きからご案内します。`
+        : app
+        ? `おかえりなさい。受付番号 ${app.no} で、${PLANS[app.plan].name}のお手続き中ですね。\n続きからご案内します。`
+        : "ようこそ、ドリームランドへの玄関口へ。\n案内係のユイです。移住の手続きは、このロビーでぜんぶ済ませられます。\nはじめての方は、流れからご案内しますね。",
+      choices: () => (app || members.length)
+        ? [["手続きの続きへ", "next", "go"], ["流れをもう一度", "flow"], ["パスワードはどう扱うの？", "pw"], ["困ったときは？", "help"], ["だいじょうぶです", "close"]]
+        : [["流れを教えて", "flow", "go"], ["移住に必要なものは？", "need"], ["パスワードはどう扱うの？", "pw"], ["搭乗券の有効期間は？", "period"], ["困ったときは？", "help"], ["だいじょうぶです", "close"]] },
+    flow: { say: "手続きは3つです。順番に進めば、ドリームランドへ出発できます。\n1　サービスカウンターで、口座をひらく（まだの方）→ MT5 の口座を登録する\n2　同じカウンターで「パスポートの発行」。ご契約時の合言葉を打つと、プランに合わせて案内します。パスポートが MT5 とドリームランドをつなぎます\n3　搭乗ゲートで準備を確かめて、搭乗券を受け取り、ご契約のプランの搭乗口から出発",
+      choices: [["サービスカウンターへ", "@service", "go"], ["搭乗口が2つあるのは？", "gates"], ["ほかの質問", "start"]] },
+    gates: { say: () => `搭乗口は、ご契約のプランごとに分かれています。\n搭乗口 1 が「${PLANS.first.name}」、搭乗口 2 が「${PLANS.crystal.name}」です。${PLANS.crystal.name}は MT5 の口座を2つつなぎます。合言葉で振り分けるので、違うプランの搭乗口には行けません。`,
+      choices: [["サービスカウンターへ", "@service", "go"], ["ほかの質問", "start"]] },
+    need: { say: "ご用意いただくのは、この4つです。", docs: "need",
+      choices: [["口座がまだない", "@service:account", "go"], ["口座はある（登録へ）", "@service:register"], ["ほかの質問", "start"]] },
+    pw: { say: "口座の登録でお預かりする MT5 のパスワードは、運用システム（EA）を納品するためだけに使います。暗号化して保管し、納品のほかには使いません。\nパスポートは、すでにログインしている MT5 に横からつながる仕組みなので、ツールに MT5 のパスワードを入力する場面はありません。\n「合言葉」はご契約のプランを確かめるためのもので、サイトに入るパスワードはご自身で決めていただきます。",
+      choices: [["安心しました", "start"]] },
+    period: { say: VALID_NOTE + "\n期限が近づいたら、サポート LINE からご案内します。",
+      choices: [["ほかの質問", "start"]] },
+    help: { say: "途中で止まってしまったら、サポート LINE へどうぞ。どの手順で止まっているか、画面の写真を添えて送っていただくと、続きからご案内できます。", docs: "support",
+      choices: [["ほかの質問", "start"]] },
+  },
+  service: {
+    start: { say: () => members.length
+        ? `サービスカウンターのソラです。\n${PLAN().name}で、${doneMembers().length ? `口座 ${doneMembers().map((m) => tail2(m.account)).join("・")} の接続が済んでいます。` : `口座 ${tail2(members[0].account)} の接続が途中です。`}${needSecond() ? "\n2つ目の口座のパスポートは、いつでもここで発行できます。" : ""}`
+        : app
+        ? `サービスカウンターのソラです。\n受付番号 ${app.no} で、MT5 口座（下2桁 ${tail2(app.accountFull || app.account)}）の登録を承っています。次は、パスポートの発行です。`
+        : "サービスカウンターのソラです。\n口座開設のご案内、MT5 口座の登録、パスポートの発行を承ります。口座はもうお持ちですか？",
+      choices: () => members.length
+        ? [["接続の状態を見る・つなぎ直す", "members", "go"], ...(needSecond() ? [["2つ目の口座をつなぐ", "terms"]] : []), ["設置マニュアル（PDF・動画）", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
+        : app
+        ? [["パスポートの発行（MT5 とつなぐ）", "connect", "go"], ["登録し直す（プランの変更など）", "register"], ["設置マニュアル（PDF・動画）", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
+        : [["まだ持っていない（口座開設の案内）", "account"], ["持っている（MT5 口座を登録する）", "register", "go"], ["パスポートの発行（MT5 とつなぐ）", "connect"], ["設置マニュアル（PDF・動画）", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]] },
+    account: { say: "口座をまだお持ちでない方は、こちらのマニュアルどおりに進めてください。本人確認書類（運転免許証など）を手元に置いておくとスムーズです。\n口座ができたら、こちらで MT5 の口座を登録します。", docs: "account",
+      choices: [["口座ができた（登録する）", "register", "go"], ["ほかのもの", "start"]] },
+    register: { say: () => `MT5 の口座番号・サーバー・パスワードと${planKey() ? "お名前" : "、ご契約のプラン・お名前"}を記入してください。\n送る前に、下の注意事項をお読みのうえ、2つの確認にチェックをお願いします。`, docs: "register",
+      choices: [["口座開設の案内にもどる", "account"], ["ほかのもの", "start"]] },
+    registered: { say: () => `承りました。受付番号は ${app.no} です。\n${PLANS[app.plan].name}でお手続きを進めます。つづけて、パスポートの発行に進みましょう。`, docs: "receipt",
+      choices: [["パスポートの発行へ", "connect", "go"], ["ほかのもの", "start"]] },
+    busy: { say: "申しわけありません、いま窓口が立て込んでいて受け付けられませんでした。少し時間をおいてもう一度お試しいただくか、サポート LINE で係員が承ります。", docs: "support",
+      choices: [["もう一度記入する", "register", "go"], ["ほかのもの", "start"]] },
+    os: { say: "設置マニュアルは Windows と Mac で分かれています。お使いのパソコンはどちらですか？", choices: "os:win,mac" },
+    win: { say: "Windows 用の設置マニュアルです。パスポートの発行そのものは、「パスポートの発行」から進められます。", docs: "winManual",
+      choices: [["パスポートの発行へ", "connect", "go"], ["ほかのもの", "start"]] },
+    mac: { say: "Mac 用の設置マニュアルです。パスポートの発行そのものは、「パスポートの発行」から進められます。", docs: "macManual",
+      choices: [["パスポートの発行へ", "connect", "go"], ["ほかのもの", "start"]] },
+    support: { say: "困ったときは、サポート LINE で係員が続きをご案内します。どの手順で止まっているか、画面の写真を添えて送ってください。", docs: "support",
+      choices: [["ほかのもの", "start"]] },
+
+    /* ── パスポートの発行（合言葉 → 口座をつなぐ → パスポートを呼ぶ → MT5 で載せる → 完了） ── */
+    connect: { say: "パスポートの発行ですね。\nご契約時にお渡しした「合言葉」を入力してください。合言葉でご契約のプランを確かめて、そのプランの案内に進みます。", docs: "entry",
+      choices: [["合言葉がわからない（サポート LINE）", "support"], ["ほかのもの", "start"]] },
+    who: { say: () => `${PLAN().name}のお客様ですね。\n` + (currentPlan() === "crystal"
+        ? "ロイヤルファーストクラスは、MT5 の口座を2つつなぎます。まず1つ目の口座からご案内します。2つ目は、続けてでも、あとからでも設置できます。"
+        : "MT5 の口座を1つつなぎます。このまま進めましょう。"),
+      choices: () => [[members.length ? "次の口座をつないでパスポートを発行する" : "口座をつないでパスポートを発行する", "terms", "go"], ["合言葉を入れ直す", "entry!"], ["ほかのもの", "start"]] },
+    pc: { say: () => `${planKey() ? PLAN().name + "のお客様ですね。" : ""}パスポートの発行は、MT5 が入っている**パソコン**で行います。\nいま開いているのはスマートフォン（またはタブレット）なので、下のボタンでこのページのリンクをご自身に送り、パソコンのブラウザで開いて続きを進めてください。合言葉はパソコンでもう一度お聞きします。`.replace(/\*\*/g, ""), docs: "pc",
+      choices: [["口座の登録や案内は、このまま見る", "start"], ["ロビーにもどる", "close"]] },
+    terms: { say: "お手続きの前に、必ず下の注意事項をお読みください。\n2つの確認にチェックを入れると、次へ進めます。", docs: "terms",
+      choices: [["ほかのもの", "start"]] },
+    signup: { say: () => `${members.length + 1}つ目の口座をつなぎます。\nMT5 の口座番号とお名前、それからドリームランドのサイトに入るためのパスワード（8文字以上。お好きなもの）を決めてください。`, docs: "signup",
+      choices: [["登録済みの口座でログインする", "login"], ["ほかのもの", "start"]] },
+    login: { say: "すでに登録した口座ですね。口座番号と、サイトに入るパスワードを入力してください。", docs: "login",
+      choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
+    launch: { say: "パスポートを呼び出しています。お使いのパソコンにパスポートが入っていれば、このまま数秒でつながります。\nブラウザに「MT5 Automatic を開きますか？」と出たら「開く」を押してください。", docs: "progress",
+      choices: [["まだ入れていない（ダウンロードへ）", "download"], ["ほかのもの", "start"]] },
+    download: { say: "このパソコンには、まだパスポートが入っていないようです。下のボタンからダウンロードして、一度だけ開いてください（ファイルの名前は MT5 Automatic です）。\nツールが起動すると、この画面が自動で先に進みます。", docs: "download",
+      choices: [["もう一度呼び出す（入れてある）", "launch"], ["ほかのもの", "start"]] },
+    connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
+    mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
+      choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
+    done: { say: () => needSecond()
+        ? `1つ目の口座（${tail2(members[members.length - 1].account)}）のパスポートが発行できました。\n2つ目の口座は、今から続けて発行しますか？ あとからでも、このカウンターの「2つ目の口座をつなぐ」でいつでも発行できます。`
+        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : ""}\n次は搭乗ゲートで、搭乗券を受け取ってください。`,
+      choices: () => needSecond()
+        ? [["2つ目を今から発行する", "terms", "go"], ["あとで発行する", "later"]]
+        : [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
+    later: { say: () => `承知しました。2つ目の口座は、いつでもこのカウンターの「2つ目の口座をつなぐ」から発行できます。\nまずは1つ目の口座で、搭乗ゲートへどうぞ（搭乗口 ${PLAN().gate}）。`,
+      choices: () => [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
+    failed: { say: "パスポートからの応答がありません。ツールと MT5 が起動しているか確かめて、もう一度お試しください。", docs: "progress",
+      choices: [["もう一度つなぐ", "launch", "go"], ["ダウンロードからやり直す", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
+    expired: { say: "前回のサイトへのログインが切れています。口座番号と、サイトに入るパスワードでもう一度入ってください。", docs: "login",
+      choices: [["ほかのもの", "start"]] },
+    members: { say: () => `${PLAN().name}の、つないでいる口座です。${needSecond() ? "2つ目の口座は、まだ発行していません。" : ""}`, docs: "members",
+      choices: () => [...(needSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), [`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""], ["ほかのもの", "start"]] },
+  },
+  tool: {
+    start: { say: "パスポートカウンターのハルです。\nドリームランド・パスポートは、お手元の MT5 に渡航の許可を与える接続ツールです（パソコン上の名前は MT5 Automatic）。設置そのものは、サービスカウンターのソラが合言葉を確かめてから進めます。こちらでは、ツールの受け取りと手順のご説明をしています。",
+      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["パスポートのファイルだけ受け取る", "os"], ["発行の手順を知りたい", "ea"], ["どんな仕組み？", "how"], ["ありがとう", "close"]] },
+    os: { say: "お使いのパソコンはどちらですか？（パスポートは Windows が基本です。Mac の方は Mac 用をお渡しします）", choices: "os:win,mac" },
+    win: { say: "Windows 用のパスポートです。\nダウンロードして、一度ひらいてください。お使いの MT5 を見つけて、ドリームランドの運用システム（EA）を置くところまで自動で進みます。", docs: "winTool",
+      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["ほかのこと", "start"]] },
+    mac: { say: "Mac 用のパスポートです。\n初めてひらくときに「開けません」と出たら「完了」を押し、システム設定 →「プライバシーとセキュリティ」の「このまま開く」で通せます（初回だけ）。", docs: "macTool",
+      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["ほかのこと", "start"]] },
+    ea: { say: "パスポートを入れたら、MT5 の画面でこの順に操作してください。一度きりで、次からは要りません。\n設置をサービスカウンターで進めると、この手順が済んだかどうかをパスポートが見ていて、自動で先に進みます。", docs: "ea",
+      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["ほかのこと", "start"]] },
+    how: { say: "パスポートは、すでにログインしている MT5 に横からつながる仕組みです。ツールに MT5 のパスワードを入力する場面はありません。\nつながったあとは、ドリームランドから運用システムの稼働・停止ができるようになります。",
+      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["ほかのこと", "start"]] },
+  },
+  gate: {
+    start: { say: () => planKey()
+        ? `搭乗係のミナトです。\nドリームランド行きのご案内です。${PLAN().name}のお客様の搭乗口は ${PLAN().gate} 番です。搭乗口を押してお進みください。`
+        : "搭乗係のミナトです。\nドリームランド行きのご案内です。搭乗口はご契約のプランごとに分かれています。ご契約の搭乗口を押してお進みください。", docs: "gates",
+      choices: [["ロビーにもどる", "close"]] },
+    door: { say: () => `ここは搭乗口 ${PLANS[gatePlan].gate}、${PLANS[gatePlan].name}の搭乗口です。\n出発の前に、準備ができているか一緒に確かめましょう。済んだものにチェックを入れてください。`, docs: "checks",
+      choices: [["搭乗券を受け取る", "board", "go"], ["準備にもどる", "close"]] },
+    wrong: { say: () => `お持ちの搭乗券は${PLANS[planKey()].name}です。こちらは${PLANS[gatePlan].name}の搭乗口なので、搭乗口 ${PLANS[planKey()].gate} へご案内します。`,
+      choices: () => [[`搭乗口 ${PLANS[planKey()].gate}（${PLANS[planKey()].name}）へ`, "door:" + planKey(), "go"], ["ロビーにもどる", "close"]] },
+    notyet: { say: "まだチェックが付いていない手続きがあります。先にそちらを済ませてからにしますか？",
+      choices: () => [[checks.account ? "サービスカウンターでパスポートを発行する" : "サービスカウンターで口座を登録する", checks.account ? "@service:connect" : "@service:register", "go"], ["チェックを見直す", gatePlan ? "door" : "start"], ["確認は済んでいるので、このまま進む", "board!"]] },
+    plan: { say: "ご契約のプランは、サービスカウンターの「パスポートの発行」で合言葉を打つと決まります。先にそちらを済ませてください。",
+      choices: [["サービスカウンターへ", "@service:connect", "go"], ["準備にもどる", "close"]] },
+    pass: { say: () => `お待たせしました、こちらが${PLAN().name}の搭乗券です。${needSecond() ? "\n2つ目の口座のパスポートは、あとからサービスカウンターで発行できます。" : ""}\nいってらっしゃいませ。ドリームランドで、お待ちしています。`, docs: "pass",
+      choices: [["もうすこしロビーにいる", "close"]] },
+  },
+};
+
+(() => {
+  "use strict";
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const val = (x) => (typeof x === "function" ? x() : x);
+
+  /* スマホのアドレスバーぶんを除いた高さ */
+  const setVh = () => document.documentElement.style.setProperty("--vh", window.innerHeight + "px");
+  setVh();
+  window.addEventListener("resize", setVh);
+  const dock = $("dock");
+  const setDock = () => document.documentElement.style.setProperty("--dock-h", dock.offsetHeight + 22 + "px");
+  setDock();
+  window.addEventListener("resize", setDock);
+
+  /* ── リンクの適用（#TODO は押しても何も起きない） ── */
+  const isTodo = (url) => !url || url.startsWith("#TODO");
+  const applyLinks = (root) => root.querySelectorAll("[data-link]").forEach((a) => {
+    const url = LINKS[a.dataset.link];
+    if (isTodo(url)) {
+      a.removeAttribute("href");
+      a.setAttribute("aria-disabled", "true");
+      a.setAttribute("role", "link");
+      a.tabIndex = 0;
+      a.addEventListener("click", (e) => e.preventDefault());
+      return;
+    }
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+  });
+
+  /* ── お使いのパソコン（軽く推定。選ぶのはお客様） ── */
+  const os = (() => {
+    try {
+      const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.userAgent || "";
+      if (/Windows/i.test(p)) return "win";
+      if (/Mac/i.test(p) && !/iPhone|iPad/i.test(navigator.userAgent)) return "mac";
+    } catch (_) {}
+    return null;
+  })();
+  const platformName = () => (os === "mac" ? "mac" : "windows");
+  /* スマホ・タブレット（MT5 もパスポートも入らない）。iPad は Mac を名乗るので指で触れるかで見分ける */
+  const isPhone = (() => {
+    try {
+      const ua = navigator.userAgent || "";
+      if (/iPhone|iPad|iPod|Android|Mobile/i.test(ua)) return true;
+      if (/Mac/i.test(ua) && navigator.maxTouchPoints > 1) return true;
+    } catch (_) {}
+    return false;
+  })();
+
+  /* ── この端末に覚えるもの ── */
+  const load = (key) => { try { return JSON.parse(localStorage.getItem(key)); } catch (_) { return null; } };
+  const store = (key, v) => { try { if (v) localStorage.setItem(key, JSON.stringify(v)); else localStorage.removeItem(key); } catch (_) {} };
+  checks = load("dreamland.checks") || {};
+  const saveChecks = () => store("dreamland.checks", checks);
+  /* 受け付けた申込（受付番号・プラン・口座の下2桁・サーバー・お名前）。パスワードは覚えない */
+  app = load("dreamland.application");
+  if (app && !PLANS[app.plan]) app = null;
+  const saveApp = () => store("dreamland.application", app);
+  /* 合言葉で決まったプラン。合言葉そのものはタブを閉じるまでだけ覚える（登録に要るため） */
+  plan = (() => { const p = load("dreamland.plan"); return PLANS[p] ? p : null; })();
+  const savePlan = () => store("dreamland.plan", plan);
+  const entryPw = { get: () => { try { return sessionStorage.getItem("dreamland.entry") || ""; } catch (_) { return ""; } },
+                    set: (v) => { try { if (v) sessionStorage.setItem("dreamland.entry", v); else sessionStorage.removeItem("dreamland.entry"); } catch (_) {} } };
+  /* つないだ口座ごとの会員（サイトのセッションを含む。サイトのパスワードは覚えない） */
+  members = (load("dreamland.members") || []).filter((m) => m && m.id && m.token);
+  const saveMembers = () => store("dreamland.members", members.length ? members : null);
+  second = load("dreamland.second");
+  const saveSecond = () => store("dreamland.second", second);
+
+  const doneCount = () => CHECKS.filter((c) => checks[c.id]).length;
+  const renderReady = () => {
+    const n = doneCount();
+    $("ready-count").textContent = `${n}/${CHECKS.length}`;
+    document.querySelectorAll(".dots i").forEach((dot, i) => dot.classList.toggle("on", i < n));
+  };
+  const pins = [...document.querySelectorAll(".pin")];
+  const renderGates = () => {
+    const pin = pins.find((p) => p.dataset.spot === "gate");
+    if (!pin) return;
+    pin.classList.toggle("is-mine", !!planKey());
+    $("gate-hint").textContent = planKey() ? `あなたの搭乗口：${PLAN().gate} 番` : "搭乗係 ミナト";
+  };
+  renderReady();
+  renderGates();
+
+  /* 手続きの続き（まだ済んでいない、いちばん手前の窓口） */
+  const nextStep = () => {
+    if (!app && !checks.account && !members.length) return "@service";
+    if (!plan) return "@service:connect";
+    if (!members.length) return "@service:who";
+    if (!doneMembers().length) return "@service:members";
+    if (needSecond() && second !== "later") return "@service:done";
+    return "door:" + currentPlan();
+  };
+
+  /* ── 会話の中の資料 ── */
+  const doc = (ico, title, desc, link, go, cls = "") =>
+    `<a class="doc ${cls}" data-link="${link}"><span class="doc__ico" aria-hidden="true">${ico}</span><span><b>${esc(title)}</b><span class="d">${esc(desc)}</span></span><span class="doc__go">${esc(go)} ›</span></a>`;
+  const planCard = (p, checked) =>
+    `<label class="plan plan--${p.key}"><input type="radio" name="plan" value="${p.key}" ${checked ? "checked" : ""} required><small>${esc(p.en)}</small><b>${esc(p.name)}</b><span class="d">${esc(p.desc)}　搭乗口 ${p.gate}</span></label>`;
+  const pwField = (name, label, hint, auto = "new-password") =>
+    `<label class="field field--pw"><span>${esc(label)}</span><input name="${name}" type="password" autocomplete="${auto}" required><button type="button" class="eye" data-eye>表示</button>${hint ? `<small>${esc(hint)}</small>` : ""}</label>`;
+  const lastMember = () => members[members.length - 1] || null;
+  /* お申し込み前の注意事項。口座の登録でも、パスポートの発行（口座をつなぐ）でも、必ず読んでチェックしてから先へ進む */
+  const NOTICE = `<ol class="notice notice--big"><span class="notice__title">お申し込みの前に、必ずお読みください</span>
+          <li>会員登録は<b>おひとり一回</b>です。何度も会員登録をされた方は、<b>会員権を取り消す</b>ことがあります。</li>
+          <li>ここに記入して送った時点で、<b>お申し込みを承認した</b>ものとして受け付けます。</li>
+          <li>お預かりしたパスワードは、運用システム（EA）の納品のためだけに使い、暗号化して保管します。</li>
+        </ol>
+        <div class="checks">
+          <label class="check"><input type="checkbox" name="agree" required><span class="check__box" aria-hidden="true"></span><span>上の注意事項を読み、承認します</span></label>
+          <label class="check"><input type="checkbox" name="fair" required><span class="check__box" aria-hidden="true"></span><span>不正な使い方（複数登録・他の方への譲渡など）はしません</span></label>
+        </div>`;
+  const DOCS = {
+    need: () => `<ol class="steps">
+        <li><span><b>MT5 の口座</b>　まだなら、サービスカウンターで口座開設マニュアルを</span></li>
+        <li><span><b>Windows のパソコン</b>（Mac でも可）　MT5 が動いているもの</span></li>
+        <li><span><b>ご契約時の合言葉</b>　サービスカウンターの「パスポートの発行」で打ちます</span></li>
+        <li><span><b>ゴールド（XAUUSD）のチャート</b>　ここに EA を載せます</span></li>
+      </ol>`,
+    account: () => doc("PDF", "口座開設マニュアル", "申し込みから入金まで、画面のとおりに", "accountManual", "ひらく"),
+    register: () => {
+      const fixed = planKey();
+      return `<form class="form" id="reg" novalidate autocomplete="off">
+        <label class="field"><span>MT5 の口座番号（ログイン ID）</span><input name="account" inputmode="numeric" pattern="[0-9]*" placeholder="例：12345678" required value="${esc(app && app.accountFull ? app.accountFull : "")}"></label>
+        <label class="field"><span>サーバー</span><input name="server" placeholder="例：XMTrading-MT5 3" required value="${esc(app ? app.server : "")}"><small>MT5 のログイン画面に出ている名前をそのまま</small></label>
+        ${pwField("password", "MT5 のパスワード", "", "off")}
+        <div class="field"><span>ご契約のプラン${fixed ? "（合言葉で確認済み）" : ""}</span><div class="plans">${fixed ? planCard(PLANS[fixed], true) : planCard(PLANS.first, false) + planCard(PLANS.crystal, false)}</div></div>
+        <label class="field"><span>お名前</span><input name="name" autocomplete="name" required value="${esc(app ? app.name || "" : "")}"></label>
+        ${NOTICE}
+        <p class="err" id="reg-err" aria-live="polite"></p>
+        <button class="enter" type="submit" data-submit>登録して送る <span aria-hidden="true">›</span></button>
+      </form>`;
+    },
+    receipt: () => `<div class="receipt" role="img" aria-label="受付番号 ${esc(app.no)}、${esc(PLANS[app.plan].name)}">
+        <div><span>APPLICATION NO.</span><b>${esc(app.no)}</b><span class="d">口座 ${esc(tail2(app.accountFull || app.account))}　${esc(app.server)}</span></div>
+        <div class="receipt__plan">${esc(PLANS[app.plan].name)}<br><small>搭乗口 ${esc(PLANS[app.plan].gate)}</small></div>
+      </div>`,
+    winManual: () => doc("PDF", "Windows 設置マニュアル", "画面の写真つき。印刷もできます", "winPdf", "ひらく")
+      + doc("▶", "Windows 動画マニュアル", "止めながら一緒に進められます", "winVideo", "見る"),
+    macManual: () => doc("PDF", "Mac 設置マニュアル", "画面の写真つき。印刷もできます", "macPdf", "ひらく")
+      + doc("▶", "Mac 動画マニュアル", "止めながら一緒に進められます", "macVideo", "見る"),
+    winTool: () => doc("↓", "パスポート（Windows 用）", "MT5 Automatic。ダウンロードして一度ひらく", "winFile", "受け取る")
+      + doc("PDF", "Windows 設置マニュアル", "手順を見ながら進めたい方はこちら", "winPdf", "ひらく"),
+    macTool: () => doc("↓", "パスポート（Mac 用）", "Apple シリコン・Intel どちらも同じファイル", "macFile", "受け取る")
+      + doc("PDF", "Mac 設置マニュアル", "手順を見ながら進めたい方はこちら", "macPdf", "ひらく"),
+    ea: () => `<ol class="steps">
+        <li><span>MT5 を起こして、口座に<b>ログイン</b>しておく</span></li>
+        <li><span>左の「ナビゲーター」にある <b>${os === "mac" ? "YumekkuEA_mac" : "YumekkuEA_win"}</b> を、<b>ゴールド（XAUUSD）のチャート</b>へドラッグ</span></li>
+        <li><span>出てきた画面で<b>「アルゴ取引を許可」</b>にチェックを入れて OK</span></li>
+        <li><span>MT5 の上のほうにある<b>「アルゴ取引」ボタン</b>を押して、緑にする</span></li>
+      </ol><p class="note">Windows の方は YumekkuEA_win、Mac の方は YumekkuEA_mac です。</p>`,
+    support: () => doc("LINE", "サポート LINE", "係員が、止まったところから続きをご案内します", "support", "ひらく", "doc--line"),
+    gates: () => `<div class="gates">` + Object.values(PLANS).map((p) => {
+      const mine = planKey() === p.key, locked = !!planKey() && !mine;
+      return `<button type="button" class="gatecard gatecard--${p.key} ${mine ? "is-mine" : ""}" data-door="${p.key}" ${locked ? "disabled" : ""} aria-label="搭乗口 ${p.gate} ${esc(p.name)}${mine ? "（あなたの搭乗口）" : locked ? "（別のプランの搭乗口）" : ""}">
+        <span class="gatecard__no">GATE<b>${esc(p.gate)}</b></span><span class="gatecard__name">${esc(p.name)}</span><span class="gatecard__flight">${esc(p.flight)} · ${esc(p.en)}</span>
+        <span class="gatecard__status">${mine ? "YOUR GATE" : locked ? "OTHER PLAN" : "BOARDING"}</span></button>`;
+    }).join("") + `</div>` + (!planKey() ? `<p class="note">ご契約のプランは、サービスカウンターの「パスポートの発行」で合言葉を打つと決まります。</p>` : ""),
+    checks: () => `<div class="checks">${CHECKS.map((c) => `
+        <label class="check"><input type="checkbox" data-check="${c.id}" ${checks[c.id] ? "checked" : ""}><span class="check__box" aria-hidden="true"></span>
+        <span>${esc(c.title)}<small>${esc(c.note)}</small></span></label>`).join("")}</div>`,
+    pass: () => {
+      const p = PLAN();
+      return `<div class="pass pass--${p.key}" role="img" aria-label="搭乗券。${esc(p.name)}、行き先 ドリームランド、便名 ${esc(p.flight)}、搭乗口 ${esc(p.gate)}">
+        <div class="pass__main"><span class="pass__title">BOARDING PASS · ${esc(p.en)}</span>
+          <div><span>FROM</span><b>ロビー</b></div><div><span>TO</span><b>ドリームランド</b></div>
+          <div><span>FLIGHT</span><b>${esc(p.flight)}</b></div><div><span>GATE</span><b>${esc(p.gate)}</b></div>
+          <span class="pass__class">${esc(p.name)}${app ? `　／　受付番号 ${esc(app.no)}` : ""}${doneMembers().length ? `　／　口座 ${esc(doneMembers().map((m) => tail2(m.account)).join("・"))}` : ""}</span>
+          <span class="pass__valid">${esc(VALID_NOTE)}</span></div>
+        <div class="pass__stub" aria-hidden="true"><span>SEAT</span><b>${esc(p.seat)}</b><span class="barcode"></span></div>
+      </div>
+      <button class="enter ${p.key === "crystal" ? "enter--crystal" : ""}" type="button" data-fly="${p.key}">${esc(p.name)}で出発 <span aria-hidden="true">›</span></button>`;
+    },
+
+    /* ── パスポートの発行 ── */
+    pc: () => `<div class="docs-inner">
+        <button type="button" class="enter" data-share>このページのリンクを自分に送る <span aria-hidden="true">›</span></button>
+        <button type="button" class="doc doc--btn" data-copy><span class="doc__ico" aria-hidden="true">URL</span><span><b>リンクをコピーする</b><span class="d" id="copy-note">パソコンのブラウザに貼り付けて開いてください</span></span><span class="doc__go">コピー ›</span></button>
+        <ol class="steps">
+          <li><span>パソコンでこのページを開く</span></li>
+          <li><span>サービスカウンターの「パスポートの発行」から、合言葉を入れて進む</span></li>
+          <li><span>パスポート（接続ツール）を受け取って、MT5 とつなぐ</span></li>
+        </ol></div>`,
+    terms: () => `<form class="form" id="terms" novalidate>
+        ${NOTICE}
+        <button class="enter" type="submit" data-submit disabled>確認しました（口座をつなぐへ） <span aria-hidden="true">›</span></button>
+      </form>`,
+    entry: () => `<form class="form" id="entry" novalidate autocomplete="off">
+        ${pwField("entry", "合言葉", "ご契約時にお渡ししたものです", "off")}
+        <p class="err" id="entry-err" aria-live="polite"></p>
+        <button class="enter" type="submit" data-submit>合言葉を確かめる <span aria-hidden="true">›</span></button>
+      </form>`,
+    signup: () => {
+      const prefill = !members.length && app ? app : null;
+      return `<form class="form" id="signup" novalidate autocomplete="off">
+        <label class="field"><span>MT5 の口座番号（ログイン ID）</span><input name="account" inputmode="numeric" pattern="[0-9]*" placeholder="例：12345678" required value="${esc(prefill && prefill.accountFull ? prefill.accountFull : "")}"></label>
+        <label class="field"><span>お名前</span><input name="name" autocomplete="name" required value="${esc(prefill ? prefill.name || "" : (lastMember() ? lastMember().name || "" : ""))}"></label>
+        ${pwField("password", "サイトに入るパスワード（8文字以上）", "ご自身で決めてください。MT5 のパスワードとは別のものです")}
+        <p class="err" id="signup-err" aria-live="polite"></p>
+        <button class="enter" type="submit" data-submit>この口座をつなぐ <span aria-hidden="true">›</span></button>
+      </form>`;
+    },
+    login: () => `<form class="form" id="login" novalidate autocomplete="off">
+        <label class="field"><span>MT5 の口座番号（ログイン ID）</span><input name="account" inputmode="numeric" pattern="[0-9]*" required value="${esc(flow.retryAccount || "")}"></label>
+        ${pwField("password", "サイトに入るパスワード", "", "current-password")}
+        <p class="err" id="login-err" aria-live="polite"></p>
+        <button class="enter" type="submit" data-submit>ログインしてつなぐ <span aria-hidden="true">›</span></button>
+      </form>`,
+    progress: () => `<ul class="prog" id="prog">${flow.lines.length
+        ? flow.lines.map((l) => `<li class="${l.ok === true ? "is-ok" : l.ok === false ? "is-ng" : "is-wait"}">${esc(l.text)}</li>`).join("")
+        : `<li class="is-wait">${esc(flow.note || "パスポートを呼び出しています")}</li>`}</ul>`,
+    download: () => {
+      const link = os === "mac" ? "macFile" : "winFile";
+      const steps = os === "mac" ? [
+          ["ダウンロードした ZIP を開く", "ダウンロード欄の「MT5 Automatic.zip」をクリック（Safari は自動で展開されます）。「MT5 Automatic」が出ます"],
+          ["「MT5 Automatic」をダブルクリック →「完了」", "「開けません」と出たら「完了」を押します。「ゴミ箱に入れる」は押さないでください"],
+          ["システム設定 →「このまま開く」", "「プライバシーとセキュリティ」を下へスクロール →「このまま開く」→ Mac のパスワード。これは初回だけです"],
+          ["MT5 はログインしたままに", "いつも通り口座に入っていれば、そのままで大丈夫です"],
+          ["あとは待つだけ", "ツールが起動すると、この画面が自動で先へ進みます"],
+        ] : [
+          ["ブラウザの警告が出たら「保存」", "「一般的にダウンロードされていません」と出たら、ダウンロード欄の「…」→「保存」（Edge は「保持」→「詳細表示」→「それでも保持」）"],
+          ["ダウンロードしたファイルを開く", "「MT5 Automatic」をダブルクリック。「Windows によって PC が保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません"],
+          ["MT5 はログインしたままに", "いつも通り口座に入っていれば、そのままで大丈夫です"],
+          ["あとは待つだけ", "ツールが起動すると、この画面が自動で先へ進みます"],
+        ];
+      return `<a class="enter" data-link="${link}" data-download>パスポートをダウンロード（${os === "mac" ? "Mac" : "Windows"} 用） <span aria-hidden="true">↓</span></a>
+        <ol class="steps">${steps.map(([t, d]) => `<li><span><b>${esc(t)}</b><br>${esc(d)}</span></li>`).join("")}</ol>
+        <ul class="prog" id="prog"><li class="is-wait">${esc(flow.note || "ツールが起動するのを待っています")}</li></ul>`;
+    },
+    mt5steps: () => {
+      const idx = flow.mt5Index;
+      const steps = [
+        ["システムをチャートに載せる", `ナビゲーター →「エキスパートアドバイザ」→ ${os === "mac" ? "YumekkuEA_mac" : "YumekkuEA_win"} をゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK`],
+        ["「アルゴ取引」ボタンを ON にする", "MT5 上部のボタンが緑になれば OK（「自動売買」と表示される版もあります）"],
+      ];
+      return `<ol class="steps steps--live">${steps.map(([t, d], i) => `<li class="${i < idx ? "is-done" : i === idx ? "is-active" : ""}"><span><b>${esc(t)}</b><br>${esc(d)}</span></li>`).join("")}</ol>
+        ${flow.problem ? `<p class="err">${esc(flow.problem)}</p>` : ""}
+        <ul class="prog"><li class="is-wait">MT5 の画面を見ています… 終わると自動で進みます</li></ul>`;
+    },
+    members: () => `<ul class="prog prog--members">${members.map((m, i) => `
+        <li class="${m.done ? "is-ok" : "is-ng"}"><span>口座 ${esc(tail2(m.account))}${m.name ? `（${esc(m.name)}）` : ""}　${m.done ? "接続済み" : "未接続"}</span>
+          <button type="button" class="mini" data-reconnect="${i}">${m.done ? "つなぎ直す" : "続きから"}</button></li>`).join("")}</ul>`,
+  };
+
+  /* ── サイトの窓口に頼む（/api/lobby） ── */
+  const api = async (body) => {
+    if (isTodo(LINKS.lobby)) return { status: 503, data: { error: "NOT_CONFIGURED" } };
+    try {
+      const res = await fetch(LINKS.lobby, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json().catch(() => ({}));
+      return { status: res.status, data };
+    } catch (_) {
+      return { status: 0, data: { error: "OFFLINE" } };
+    }
+  };
+  const ERRORS = {
+    BAD_ACCOUNT: "口座番号は数字だけで入力してください。",
+    BAD_SERVER: "サーバー名を入力してください（MT5 のログイン画面に出ている名前）。",
+    BAD_PASSWORD: "パスワードを入力してください。",
+    BAD_PLAN: "ご契約のプランを選んでください。",
+    NO_CONSENT: "注意事項への承認と、不正な使い方をしないことの確認に、チェックを入れてください。",
+    BUSY: "短い時間に何度も送られています。少し時間をおいてから、もう一度お試しください。",
+    BAD_ENTRY: "合言葉が違います。ご契約時にお渡ししたものを、もう一度確かめてください。",
+    BAD_NAME: "お名前を入力してください。",
+    WEAK_PASSWORD: "サイトに入るパスワードは8文字以上にしてください。",
+    ACCOUNT_TAKEN: "この口座番号はすでに登録されています。「登録済みの口座でログインする」からお進みください。",
+    BAD_CREDENTIALS: "口座番号またはパスワードが違います。",
+    SUSPENDED: "この口座はいま利用を止めています。サポート LINE へお問い合わせください。",
+    SESSION_EXPIRED: "前回のログインが切れています。もう一度ログインしてください。",
+    OFFLINE: "サイトに届きませんでした。通信を確かめて、もう一度お試しください。",
+    NOT_CONFIGURED: "いま窓口が立て込んでいます。少し時間をおいてお試しください。",
+  };
+  const errText = (code) => ERRORS[code] || ERRORS.NOT_CONFIGURED;
+  const normDigits = (s) => String(s || "").trim().replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xFEE0));
+  const setBusy = (form, on, label) => {
+    const btn = form.querySelector("[data-submit]");
+    if (!btn) return;
+    btn.disabled = on;
+    if (on) btn.textContent = label; else btn.innerHTML = btn.dataset.label;
+  };
+
+  /* ── 口座の登録を送る（EA の納品のため。サイトの /api/dreamland） ── */
+  const mask = (s) => (s.length <= 2 ? "**" : "*".repeat(s.length - 2) + s.slice(-2));
+  const submitRegister = async (form) => {
+    const f = new FormData(form);
+    const err = $("reg-err");
+    const account = normDigits(f.get("account"));
+    const server = String(f.get("server") || "").trim();
+    const password = String(f.get("password") || "");
+    const chosen = String(f.get("plan") || "") || planKey() || "";
+    const name = String(f.get("name") || "").trim();
+    err.textContent = "";
+    if (!/^[0-9]{1,13}$/.test(account)) return (err.textContent = ERRORS.BAD_ACCOUNT);
+    if (!server) return (err.textContent = ERRORS.BAD_SERVER);
+    if (!password) return (err.textContent = ERRORS.BAD_PASSWORD);
+    if (!PLANS[chosen]) return (err.textContent = ERRORS.BAD_PLAN);
+    if (!name) return (err.textContent = ERRORS.BAD_NAME);
+    if (!f.get("agree") || !f.get("fair")) return (err.textContent = ERRORS.NO_CONSENT);
+    if (isTodo(LINKS.register)) return show("service", "busy");
+
+    setBusy(form, true, "送っています…");
+    try {
+      const res = await fetch(LINKS.register, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ account, server, password, plan: chosen, name, platform: os === "win" ? "windows" : os === "mac" ? "mac" : null, consent: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const code = data && data.error;
+        if (ERRORS[code]) { err.textContent = ERRORS[code]; setBusy(form, false); return; }
+        return show("service", "busy");
+      }
+      app = { no: data.application_no, plan: PLANS[data.plan] ? data.plan : chosen, account: mask(account), accountFull: account, server, name, at: Date.now() };
+      saveApp();
+      checks.account = true;
+      saveChecks();
+      renderReady();
+      renderGates();
+      show("service", "registered");
+    } catch (_) {
+      show("service", "busy");
+    }
+  };
+
+  /* ── 合言葉 → プラン ── */
+  const submitEntry = async (form) => {
+    const err = $("entry-err");
+    const entry = String(new FormData(form).get("entry") || "").trim();
+    err.textContent = "";
+    if (!entry) return (err.textContent = "合言葉を入力してください。");
+    setBusy(form, true, "確かめています…");
+    const { status, data } = await api({ action: "plan", entry });
+    if (status !== 200 || !PLANS[data.plan]) { err.textContent = errText(data.error); setBusy(form, false); return; }
+    plan = data.plan;
+    savePlan();
+    entryPw.set(entry);
+    renderGates();
+    show("service", "who");
+  };
+
+  /* ── 口座をつなぐ：会員登録（またはログイン）→ パスポートを呼ぶ ── */
+  const adoptMember = (session, m) => {
+    if (m.plan && PLANS[m.plan] && m.plan !== plan) { plan = m.plan; savePlan(); renderGates(); }
+    const existing = members.findIndex((x) => x.id === m.id);
+    const row = { id: m.id, token: session, account: m.account, name: m.name || "", plan: m.plan || plan, done: existing >= 0 ? members[existing].done : false, server: existing >= 0 ? members[existing].server : "" };
+    if (existing >= 0) members[existing] = row; else members.push(row);
+    saveMembers();
+    checks.account = true;
+    saveChecks();
+    renderReady();
+    return members.indexOf(row);
+  };
+  const submitSignup = async (form) => {
+    const f = new FormData(form);
+    const err = $("signup-err");
+    const account = normDigits(f.get("account"));
+    const name = String(f.get("name") || "").trim();
+    const password = String(f.get("password") || "");
+    err.textContent = "";
+    if (!/^[0-9]{1,13}$/.test(account)) return (err.textContent = ERRORS.BAD_ACCOUNT);
+    if (!name) return (err.textContent = ERRORS.BAD_NAME);
+    if (password.length < 8) return (err.textContent = ERRORS.WEAK_PASSWORD);
+    if (members.some((m) => String(m.account) === account)) return (err.textContent = "この口座はもうつないでいます。「接続の状態を見る」からつなぎ直せます。");
+    const entry = entryPw.get();
+    if (!entry) { plan = null; savePlan(); return show("service", "connect"); }
+    setBusy(form, true, "登録しています…");
+    const { status, data } = await api({ action: "register", account, name, password, entry });
+    if (status !== 200) {
+      if (data.error === "ACCOUNT_TAKEN") { flow.retryAccount = account; err.textContent = ERRORS.ACCOUNT_TAKEN; setBusy(form, false); return; }
+      if (data.error === "BAD_ENTRY") { plan = null; savePlan(); entryPw.set(""); return show("service", "connect"); }
+      err.textContent = errText(data.error); setBusy(form, false); return;
+    }
+    startConnect(adoptMember(data.session, data.member));
+  };
+  const submitLogin = async (form) => {
+    const f = new FormData(form);
+    const err = $("login-err");
+    const account = normDigits(f.get("account"));
+    const password = String(f.get("password") || "");
+    err.textContent = "";
+    if (!/^[0-9]{1,13}$/.test(account)) return (err.textContent = ERRORS.BAD_ACCOUNT);
+    if (!password) return (err.textContent = ERRORS.BAD_PASSWORD);
+    setBusy(form, true, "確かめています…");
+    const { status, data } = await api({ action: "login", account, password });
+    if (status !== 200) { err.textContent = errText(data.error); setBusy(form, false); return; }
+    if (data.member.plan && plan && data.member.plan !== plan) {
+      err.textContent = `この口座は${PLANS[data.member.plan].name}で登録されています。合言葉のプラン（${PLAN().name}）と違うので、サポート LINE へお問い合わせください。`;
+      setBusy(form, false);
+      return;
+    }
+    startConnect(adoptMember(data.session, data.member));
+  };
+
+  /* ── パスポート（ブリッジ）の様子を中継から受け取る ── */
+  const Bridge = {
+    ws: null, live: false, status: null, waiting: new Map(), seq: 0, room: null, onChange: null, retry: null, closed: true,
+    open(room, session) {
+      this.close();
+      this.closed = false;
+      this.room = room;
+      const url = `${RELAY}${RELAY.includes("?") ? "&" : "?"}room=${encodeURIComponent(room)}&session=${encodeURIComponent(session)}`;
+      const connect = () => {
+        if (this.closed) return;
+        let ws;
+        try { ws = new WebSocket(url); } catch (_) { this.retry = setTimeout(connect, 5000); return; }
+        this.ws = ws;
+        ws.onmessage = (ev) => {
+          let p; try { p = JSON.parse(ev.data); } catch (_) { return; }
+          if (p.type === "welcome") {
+            const mine = (p.bridges || []).find((b) => String(b.bridgeId) === room);
+            this.setLive(!!mine, mine || null);
+            return;
+          }
+          if (p.bridgeId && String(p.bridgeId) !== room) return;
+          if (p.type === "bridge_online" || p.type === "bridge_status") return this.setLive(true, p.status || null);
+          if (p.type === "bridge_offline") return this.setLive(false, null);
+          if (p.type === "ack") {
+            const cb = p.id && this.waiting.get(p.id);
+            if (cb) { this.waiting.delete(p.id); cb(p); }
+            if (p.ok && this.status) { this.status = { ...this.status, ...p }; if (this.onChange) this.onChange(); }
+          }
+        };
+        ws.onclose = () => { if (this.ws !== ws) return; this.ws = null; this.setLive(false, null); if (!this.closed) this.retry = setTimeout(connect, 5000); };
+        ws.onerror = () => {};
+      };
+      connect();
+    },
+    setLive(live, status) {
+      const was = this.live;
+      this.live = live;
+      this.status = status;
+      if (this.onChange) this.onChange(live !== was);
+    },
+    send(command, extra = {}) {
+      return new Promise((resolve) => {
+        const ws = this.ws;
+        if (!ws || ws.readyState !== WebSocket.OPEN || !this.live) return resolve({ ok: false, error: "not live" });
+        const id = `lobby-${++this.seq}`;
+        this.waiting.set(id, resolve);
+        ws.send(JSON.stringify({ id, command, bridgeId: this.room, ...extra }));
+        setTimeout(() => { if (this.waiting.has(id)) { this.waiting.delete(id); resolve({ ok: false, error: "timeout" }); } }, 12000);
+      });
+    },
+    close() {
+      this.closed = true;
+      if (this.retry) clearTimeout(this.retry);
+      if (this.ws) { const ws = this.ws; this.ws = null; try { ws.close(); } catch (_) {} }
+      this.live = false; this.status = null; this.waiting.clear();
+    },
+  };
+
+  /* MT5 側の手順がどこまで済んだか（ブリッジが返した状態だけを見る）。全部済んでいれば null */
+  const mt5StepIndex = (s) => {
+    if (!s || s.ea_alive !== true) return 0;
+    if (s.ea_symbol_ok === false) return 0;
+    if (s.terminal_trade_allowed === false || s.ea_state === "自動売買ボタンがオフ") return 1;
+    return null;
+  };
+
+  /* ── 設置の流れ（サービスカウンターの中だけで進む） ── */
+  let consented = false;   // このページを開いているあいだに、注意事項を読んでチェックしたか
+  const flow = { idx: -1, phase: null, lines: [], note: "", mt5Index: 0, problem: "", timers: [], retryAccount: "", relaunched: false, startedAt: 0 };
+  const FLOW_NODES = new Set(["launch", "download", "connecting", "mt5", "failed"]);
+  const clearFlowTimers = () => { flow.timers.forEach(clearTimeout); flow.timers = []; };
+  const later = (fn, ms) => { const id = setTimeout(fn, ms); flow.timers.push(id); return id; };
+  const member = () => members[flow.idx] || null;
+  const setPhase = (phase, node = phase) => { flow.phase = phase; show("service", node); };
+
+  const issueAndLaunch = async () => {
+    const m = member();
+    if (!m) return false;
+    const { status, data } = await api({ action: "connect_token", session: m.token });
+    if (status === 401) { flow.retryAccount = String(m.account || ""); setPhase("expired"); return false; }
+    if (status !== 200) return false;
+    const params = new URLSearchParams({ from: SITE, token: data.token });
+    try { window.location.href = `aitrader://connect?${params.toString()}`; } catch (_) {}
+    return true;
+  };
+
+  function startConnect(idx) {
+    const m = members[idx];
+    if (!m) return;
+    clearFlowTimers();
+    flow.idx = idx; flow.lines = []; flow.note = ""; flow.mt5Index = 0; flow.problem = ""; flow.relaunched = false; flow.startedAt = Date.now();
+    api({ action: "platform", session: m.token, platform: platformName() });
+    Bridge.onChange = onBridgeChange;
+    Bridge.open(m.id, m.token);
+    setPhase("launch");
+    issueAndLaunch();
+    later(() => { if (flow.phase === "launch" && !Bridge.live) setPhase("download"); }, CONNECTOR_WAIT_MS);
+  }
+
+  /* ダウンロードしたツールを「開くだけ」の初回は、部屋を知らないまま既定の部屋に来る。来たら合図を付けて呼び直す */
+  const watchDefaultRoom = () => {
+    if (flow.phase !== "download" || flow.relaunched) return;
+    const http = RELAY.replace(/^wss:/, "https:").replace(/^ws:/, "http:").replace(/\/app(\?.*)?$/, "");
+    fetch(`${http}/health?room=${encodeURIComponent(DEFAULT_ROOM)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!body || !body.room || !body.room.bridge || flow.phase !== "download" || flow.relaunched) return;
+        if (typeof body.room.since === "number" && body.room.since < flow.startedAt - DEFAULT_ROOM_FRESH_MS) return;
+        flow.relaunched = true;
+        flow.note = "パスポートが起動しました。ブラウザに「MT5 Automatic を開きますか？」と出たら「開く」を押してください";
+        const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
+        issueAndLaunch();
+      })
+      .catch(() => {})
+      .finally(() => { if (flow.phase === "download") later(watchDefaultRoom, DEFAULT_ROOM_POLL_MS); });
+  };
+
+  function onBridgeChange(liveChanged) {
+    if (flow.idx < 0) return;
+    if (Bridge.live && (flow.phase === "launch" || flow.phase === "download" || flow.phase === "failed")) return checkStatus();
+    if (flow.phase === "mt5" && Bridge.live) return watchMt5();
+    if (!Bridge.live && liveChanged && flow.phase === "mt5") { flow.note = "パスポートとの通信が切れました。ツールが動いているか確かめてください"; }
+  }
+
+  async function checkStatus() {
+    setPhase("connecting");
+    const ack = await Bridge.send("get_status");
+    if (flow.phase !== "connecting") return;
+    const account = ack.account != null && String(ack.account) !== "" ? String(ack.account) : "";
+    const name = ack.terminal_name ? `（${ack.terminal_name}）` : "";
+    flow.lines = [
+      { text: ack.mt5_ready ? `MT5 に接続しました${name}` : "MT5 に接続できませんでした", ok: !!ack.mt5_ready },
+      { text: account ? `口座 ${account}${ack.server ? ` ／ ${ack.server}` : ""}` : "口座情報を読み取れませんでした", ok: !!account },
+      { text: ack.ea_installed ? "運用システム（EA）を確認しました" : "運用システム（EA）がまだ置かれていません。パスポートを起動し直してください", ok: !!ack.ea_installed },
+    ];
+    if (!ack.ok || !ack.mt5_ready || !account) return setPhase("failed");
+    const m = member();
+    const mine = m && m.account != null && String(m.account) === account;
+    if (m && !mine) {
+      flow.lines.push({ text: `つながっている MT5 の口座（…${account.slice(-2)}）が、登録した口座（${tail2(m.account)}）と違います。その口座でログインしている MT5 を選んでください`, ok: false });
+      return setPhase("failed");
+    }
+    if (m) { m.server = String(ack.server || ""); saveMembers(); }
+    checks.tool = true; saveChecks(); renderReady();
+    const idx = mt5StepIndex(ack);
+    if (idx == null) return finishConnect();
+    flow.mt5Index = idx;
+    setPhase("mt5");
+  }
+
+  function watchMt5() {
+    const s = Bridge.status;
+    const idx = mt5StepIndex(s);
+    flow.problem = s && s.ea_problem ? String(s.ea_problem) : "";
+    if (idx == null) return finishConnect();
+    if (idx !== flow.mt5Index || flow.problem) { flow.mt5Index = idx; const d = $("docs"); if (d && flow.phase === "mt5") { d.innerHTML = DOCS.mt5steps(); } }
+  }
+
+  function finishConnect() {
+    const m = member();
+    if (m) { m.done = true; saveMembers(); }
+    checks.tool = true; checks.ea = true; checks.algo = true; saveChecks(); renderReady();
+    clearFlowTimers();
+    flow.phase = "done";
+    show("service", "done");
+  }
+
+  /* ── 会話 ── */
+  const panel = $("panel"), veil = $("veil"), say = $("say"), docs = $("docs"), choicesEl = $("choices"), typingEl = $("typing");
+  const navBtns = [...document.querySelectorAll(".nav button")];
+  let who = null, timer = null, finishTyping = null, returnFocus = null;
+
+  const markHere = (key, planHint) => {
+    pins.forEach((p) => p.classList.toggle("is-here", p.dataset.spot === key && (!p.dataset.plan || p.dataset.plan === planHint)));
+    navBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.spot === key));
+    $("instruction").style.opacity = key ? "0" : "";
+  };
+
+  const typeText = (text) => new Promise((resolve) => {
+    clearInterval(timer);
+    finishTyping = () => { clearInterval(timer); timer = null; finishTyping = null; say.textContent = text; typingEl.textContent = ""; resolve(); };
+    if (reduced) return finishTyping();
+    say.textContent = "";
+    typingEl.textContent = "…";
+    let i = 0;
+    timer = setInterval(() => { i += 2; say.textContent = text.slice(0, i); if (i >= text.length) finishTyping(); }, 26);
+  });
+
+  /* choices が "os:win,mac" なら、Windows / Mac の2択（行き先はその2つのノード） */
+  const choiceList = (node) => {
+    const c = val(node.choices);
+    if (typeof c === "string" && c.startsWith("os:")) {
+      const [w, m] = c.slice(3).split(",");
+      return [["Windows", w, os === "win" ? "pick" : ""], ["Mac", m, os === "mac" ? "pick" : ""], ["ほかのもの", "start"]];
+    }
+    return c || [];
+  };
+
+  /* 搭乗の判定：チェックが揃っていなければ notyet、プランが決まっていなければ plan、揃っていれば pass */
+  const boardNode = (force) => {
+    if (!force && doneCount() !== CHECKS.length) return "notyet";
+    if (!planKey()) return "plan";
+    return "pass";
+  };
+
+  const wireForm = (form, onSubmit) => {
+    form.addEventListener("submit", (e) => { e.preventDefault(); onSubmit(form); });
+    const btn = form.querySelector("[data-submit]"); if (btn) btn.dataset.label = btn.innerHTML;
+    form.querySelectorAll("[data-eye]").forEach((eye) => {
+      const pw = eye.parentElement.querySelector('input[type="password"], input[type="text"]');
+      eye.addEventListener("click", () => { const open = pw.type === "password"; pw.type = open ? "text" : "password"; eye.textContent = open ? "隠す" : "表示"; });
+    });
+  };
+
+  const show = async (staffKey, nodeKey) => {
+    if (nodeKey === "board") nodeKey = boardNode(false);
+    if (nodeKey === "board!") nodeKey = boardNode(true);
+    if (nodeKey === "connect" && planKey() && plan) nodeKey = "who";   // 合言葉が済んでいれば、プランの案内から
+    if (staffKey === "service" && (nodeKey === "signup" || nodeKey === "login") && !consented) nodeKey = "terms";   // 注意事項は必ず通る
+    if (staffKey === "service" && isPhone && (nodeKey === "terms" || nodeKey === "signup" || nodeKey === "login" || nodeKey === "launch" || nodeKey === "download")) nodeKey = "pc";   // スマホでは発行できない
+    if (nodeKey.startsWith("door:")) {
+      gatePlan = nodeKey.slice(5);
+      markHere("gate", gatePlan);
+      nodeKey = planKey() && planKey() !== gatePlan ? "wrong" : "door";
+    }
+    if (!(staffKey === "service" && FLOW_NODES.has(nodeKey))) { if (flow.phase && FLOW_NODES.has(flow.phase)) clearFlowTimers(); if (!FLOW_NODES.has(nodeKey)) flow.phase = nodeKey === "done" ? "done" : null; }
+    const s = STAFF[staffKey], node = SCRIPT[staffKey][nodeKey];
+    if (!node) return;
+    if (who !== staffKey) {
+      who = staffKey;
+      $("p-label").textContent = s.role.split(" ")[0];
+      $("p-name").innerHTML = `<small>${esc(s.en)}</small>${esc(s.name)}`;
+      $("p-role").textContent = s.role;
+      $("p-img").src = s.img;
+      panel.style.setProperty("--light", s.light);
+    }
+    docs.innerHTML = "";
+    choicesEl.innerHTML = "";
+    const token = (show.seq = (show.seq || 0) + 1);
+    await typeText(val(node.say));
+    if (token !== show.seq) return;   // 文字送りの途中で別の台詞に移った
+    if (node.docs) {
+      docs.innerHTML = DOCS[node.docs]();
+      applyLinks(docs);
+      docs.querySelectorAll("[data-check]").forEach((box) => box.addEventListener("change", () => {
+        checks[box.dataset.check] = box.checked;
+        saveChecks();
+        renderReady();
+      }));
+      const flyBtn = docs.querySelector("[data-fly]");
+      if (flyBtn) flyBtn.addEventListener("click", () => fly(flyBtn.dataset.fly));
+      const reg = docs.querySelector("form#reg");     if (reg) wireForm(reg, submitRegister);
+      const ent = docs.querySelector("form#entry");   if (ent) wireForm(ent, submitEntry);
+      const sgn = docs.querySelector("form#signup");  if (sgn) wireForm(sgn, submitSignup);
+      const lgn = docs.querySelector("form#login");   if (lgn) wireForm(lgn, submitLogin);
+      const shareBtn = docs.querySelector("[data-share]"), copyBtn = docs.querySelector("[data-copy]");
+      const pageUrl = () => location.origin + location.pathname + "#connect";
+      if (shareBtn) shareBtn.addEventListener("click", async () => {
+        try { if (navigator.share) { await navigator.share({ title: "ドリームランド 渡航手続き", text: "パソコンで開いて、パスポートの発行を進めてください", url: pageUrl() }); return; } } catch (_) {}
+        copyBtn && copyBtn.click();
+      });
+      if (copyBtn) copyBtn.addEventListener("click", async () => {
+        const note = $("copy-note");
+        try { await navigator.clipboard.writeText(pageUrl()); note.textContent = "コピーしました。パソコンのブラウザに貼り付けて開いてください"; }
+        catch (_) { note.textContent = pageUrl(); }
+      });
+      const trm = docs.querySelector("form#terms");
+      if (trm) {
+        const btn = trm.querySelector("[data-submit]"), boxes = [...trm.querySelectorAll('input[type="checkbox"]')];
+        boxes.forEach((b) => b.addEventListener("change", () => { btn.disabled = !boxes.every((x) => x.checked); }));
+        trm.addEventListener("submit", (e) => { e.preventDefault(); if (!boxes.every((x) => x.checked)) return; consented = true; show("service", "signup"); });
+        const firstBox = boxes[0]; if (firstBox) firstBox.focus({ preventScroll: true });
+      }
+      docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect))));
+      docs.querySelectorAll("[data-door]").forEach((b) => b.addEventListener("click", () => show("gate", "door:" + b.dataset.door)));
+      const dl = docs.querySelector("[data-download]");
+      if (dl) { dl.removeAttribute("target"); dl.setAttribute("download", ""); dl.addEventListener("click", () => { flow.note = "ダウンロードが始まりました。ファイルを開いて、上の手順どおりに進めてください。起動すると自動で先へ進みます"; const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`; }); }
+      if (nodeKey === "download" && staffKey === "service") { flow.phase = "download"; later(watchDefaultRoom, DEFAULT_ROOM_POLL_MS); }
+    }
+    choiceList(node).forEach(([label, to, flag], i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "choice" + (flag === "go" ? " choice--go" : "");
+      b.style.animationDelay = (i * 40) + "ms";
+      b.innerHTML = esc(label) + (flag === "pick" ? '<span class="pick">あなたのパソコン</span>' : "");
+      b.addEventListener("click", () => act(staffKey, to));
+      choicesEl.appendChild(b);
+    });
+    const first = docs.querySelector("form input") || docs.querySelector("[data-fly]") || choicesEl.querySelector(".choice");
+    if (first) first.focus({ preventScroll: true });
+  };
+
+  const PLACE = { info: "インフォメーション", service: "サービスカウンター", tool: "パスポートカウンター", gate: "搭乗ゲート" };
+  const appEl = $("app"), world = $("world"), travel = $("travel");
+  const focusSpot = (spot) => {
+    const pin = pins.find((p) => p.dataset.spot === spot);
+    if (!pin) return;
+    const r = pin.getBoundingClientRect(), a = appEl.getBoundingClientRect();
+    const x = ((r.left + r.width / 2 - a.left) / a.width) * 100, y = ((r.top + r.height / 2 - a.top) / a.height) * 100;
+    world.style.transformOrigin = `${x.toFixed(1)}% ${y.toFixed(1)}%`;
+    appEl.classList.add("is-focus");
+  };
+  const unfocus = () => appEl.classList.remove("is-focus");
+  let travelTimer = null;
+  /* 窓口へ移動してから話しかける。別の窓口にいたときは、いったん引いてから寄る */
+  const goTo = (spot, nodeKey = "start") => {
+    if (!STAFF[spot]) return;
+    clearTimeout(travelTimer);
+    clearInterval(timer);
+    if (!panel.hidden) { panel.hidden = true; veil.classList.remove("show"); veil.hidden = true; }
+    who = null;
+    markHere(spot, nodeKey.startsWith("door:") ? nodeKey.slice(5) : null);
+    if (reduced) { focusSpot(spot); return open(spot, nodeKey); }
+    unfocus();
+    $("travel-text").textContent = PLACE[spot] + "へ";
+    travel.hidden = true; void travel.offsetWidth; travel.hidden = false;   // アニメーションを最初から
+    setTimeout(() => focusSpot(spot), 60);
+    travelTimer = setTimeout(() => { travel.hidden = true; open(spot, nodeKey); }, 760);
+  };
+
+  const open = (staffKey, nodeKey = "start") => {
+    if (!returnFocus) returnFocus = document.activeElement;
+    if (staffKey !== "gate") gatePlan = null;
+    markHere(staffKey, nodeKey.startsWith("door:") ? nodeKey.slice(5) : null);
+    veil.hidden = false;
+    panel.hidden = false;
+    requestAnimationFrame(() => veil.classList.add("show"));
+    panel.scrollTop = 0;
+    panel.focus({ preventScroll: true });
+    show(staffKey, nodeKey);
+  };
+
+  const close = () => {
+    clearInterval(timer);
+    panel.hidden = true;
+    veil.classList.remove("show");
+    veil.hidden = true;
+    who = null;
+    gatePlan = null;
+    markHere(null);
+    unfocus();
+    if (returnFocus && returnFocus.focus) returnFocus.focus({ preventScroll: true });
+    returnFocus = null;
+  };
+
+  const act = (staffKey, to) => {
+    if (to === "close") return close();
+    if (to === "next") to = nextStep();
+    if (to === "entry!") { plan = null; savePlan(); entryPw.set(""); renderGates(); return show("service", "connect"); }
+    if (to === "later") { second = "later"; saveSecond(); return show("service", "later"); }
+    if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i) : show("service", "connect"); }
+    if (to === "download" && staffKey === "service") { if (flow.idx < 0 && members.length) flow.idx = members.length - 1; return show("service", "download"); }
+    if (to.startsWith("reconnect:")) return startConnect(Number(to.slice(10)));
+    if (to.startsWith("@")) {
+      const [target, node] = to.slice(1).split(":");
+      return goTo(target, node || "start");   // 別の窓口へ移動してから話す
+    }
+    if (to.startsWith("door:") && staffKey !== "gate") return goTo("gate", to);
+    show(staffKey, to);
+  };
+
+  /* 文字送り中に押したら、全文を出す */
+  panel.addEventListener("click", (e) => { if (finishTyping && !e.target.closest("a,button,label,input,form")) finishTyping(); });
+  $("close").addEventListener("click", close);
+  veil.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => {
+    if (panel.hidden) return;
+    if (e.key === "Escape") return close();
+    if ((e.key === "Enter" || e.key === " ") && finishTyping && document.activeElement === panel) { e.preventDefault(); finishTyping(); }
+    if (e.key === "Tab") {
+      const f = [...panel.querySelectorAll("button, a[href], a[tabindex], input")].filter((el) => el.offsetParent !== null && !el.disabled && el.type !== "radio" && el.type !== "checkbox");
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+
+  document.querySelectorAll("[data-spot]").forEach((el) => el.addEventListener("click", () => {
+    returnFocus = el;
+    goTo(el.dataset.spot, "start");
+  }));
+  $("ready").addEventListener("click", (e) => { returnFocus = e.currentTarget; goTo("gate"); });
+
+  /* 前回つないだ口座があれば、セッションが生きているか確かめておく（切れていればログインをお願いする） */
+  members.forEach((m) => { api({ action: "me", session: m.token }).then(({ status, data }) => {
+    if (status === 200 && data.member) { m.name = data.member.name || m.name; m.account = data.member.account ?? m.account; if (data.member.plan) m.plan = data.member.plan; saveMembers(); }
+    if (status === 401) { m.expired = true; }
+  }); });
+
+  /* ロビーに入ったら、まずインフォメーションのユイが声をかける。
+     URL の末尾が #service / #connect / #tool / #gate / #first / #crystal なら、そこから始める（LINE で直接送る用） */
+  const startAt = location.hash.slice(1);
+  const first = PLANS[startAt] ? ["gate", "door:" + startAt] : startAt === "connect" ? ["service", "connect"] : STAFF[startAt] ? [startAt, "start"] : ["info", "start"];
+  setTimeout(() => goTo(first[0], first[1]), reduced ? 0 : 500);
+
+  /* ── 出発 ── */
+  function fly(planKeyArg) {
+    const p = PLANS[planKeyArg] || PLAN();
+    close();
+    const url = LINKS[p.link];
+    const flyEl = $("fly"), link = $("fly-link");
+    $("fly-flight").textContent = `${p.flight} · ${p.en} · NOW BOARDING`;
+    $("fly-sub").textContent = `${p.name}のお客様、まもなく出発いたします`;
+    flyEl.classList.toggle("fly--crystal", p.key === "crystal");
+    flyEl.classList.toggle("fly--first", p.key !== "crystal");
+    if (isTodo(url)) link.removeAttribute("href"); else link.href = url;
+    flyEl.hidden = false;
+    if (!isTodo(url)) setTimeout(() => { window.location.href = url; }, reduced ? 600 : 3500);
+    else setTimeout(() => { flyEl.hidden = true; }, 3800);
+  }
+})();
+</script>
+</body>
+</html>

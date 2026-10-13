@@ -8,6 +8,7 @@
 //  - アルゴは管制室のモニターに映る数字（MT5 の実データ）を頭上の吹き出しで報告する
 //  - 経済指標・要人発言などの AI 通知は研究員の頭上に随時ポップアップする
 // ---------------------------------------------------------------
+import { memberLabel } from '../data/auth'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DialogueWindow } from '../components/DialogueWindow'
@@ -67,6 +68,9 @@ const CHAR_POS: Record<string, { x: number; bottom: number; s: number }> = {
 const SYSTEM_POS: Record<string, { x: number; bottom: number; s: number }> = {
   gantz: { x: 50, bottom: 30, s: 5.4 },
 }
+
+/** AI の研究員（リン・ジン・ミオ）は廃止。案内役のユイと、稼働／停止のアルゴ、設定のガンツだけ残す */
+const HIDDEN_STAFF = new Set(['rin', 'jin', 'mio'])
 
 const JIN_SHOCK_LINE = 'おや…？ 妙な動きだ。指標か、それとも──ちょっと金利を見てくる。'
 
@@ -489,9 +493,7 @@ export function Lab() {
       timer = setTimeout(() => {
         if (!alive) return
         // ジンは本物のカレンダーから「次の指標」を挟む
-        const pool: NewsItem[] = econNextRef.current
-          ? [...NEWS_POOL, { charId: 'jin', tone: 'warn', label: '指標', text: `📅 ${econNextRef.current}` }]
-          : NEWS_POOL
+        const pool: NewsItem[] = NEWS_POOL.filter((n) => !HIDDEN_STAFF.has(n.charId))
         const item = pool[idx % pool.length]
         idx++
         setNews(item)
@@ -671,7 +673,7 @@ export function Lab() {
               ◀ 研究所
             </HudButton>
           )}
-          <span className="hidden max-w-[12rem] truncate text-[13px] text-slate-400 xl:inline">{member?.email}</span>
+          <span className="hidden max-w-[12rem] truncate text-[13px] text-slate-400 xl:inline">{memberLabel(member)}</span>
           {member?.role === 'admin' && (
             <Link
               to="/admin"
@@ -929,15 +931,19 @@ export function Lab() {
               ))}
 
               {/* ===== 分析デスク：リンとジン ===== */}
-              <Chara character={CHARACTERS.rin} {...CHAR_POS.rin} onSelect={select} dimmed={tutorial} bubble={bubbleFor('rin')} />
-              <Chara
-                character={CHARACTERS.jin}
-                {...CHAR_POS.jin}
-                onSelect={select}
-                dimmed={tutorial}
-                surprised={shocked}
-                bubble={bubbleFor('jin')}
-              />
+              {!HIDDEN_STAFF.has('rin') && (
+                <Chara character={CHARACTERS.rin} {...CHAR_POS.rin} onSelect={select} dimmed={tutorial} bubble={bubbleFor('rin')} />
+              )}
+              {!HIDDEN_STAFF.has('jin') && (
+                <Chara
+                  character={CHARACTERS.jin}
+                  {...CHAR_POS.jin}
+                  onSelect={select}
+                  dimmed={tutorial}
+                  surprised={shocked}
+                  bubble={bubbleFor('jin')}
+                />
+              )}
               <Desk style={{ left: '4%', bottom: '17%', width: '34%', zIndex: 12, ...dimStyle(0.5) }}>
                 <div className="flex w-full items-end justify-between px-8">
                   <DeskScreen label="CHART" color={CHARACTERS.rin.color}>
@@ -994,7 +1000,9 @@ export function Lab() {
               <ConsoleDesk state={state} style={{ left: '52.5%', width: '21%', bottom: '17%', zIndex: 16, ...dimStyle(0.5) }} />
 
               {/* ===== 情報センター：ミオ ===== */}
-              <Chara character={CHARACTERS.mio} {...CHAR_POS.mio} onSelect={select} dimmed={tutorial} bubble={bubbleFor('mio')} />
+              {!HIDDEN_STAFF.has('mio') && (
+                <Chara character={CHARACTERS.mio} {...CHAR_POS.mio} onSelect={select} dimmed={tutorial} bubble={bubbleFor('mio')} />
+              )}
 
               {/* ===== エントランス ===== */}
               <Chara character={CHARACTERS.yui} {...CHAR_POS.yui} z={35} onSelect={select} exclaim bubble={bubbleFor('yui')} />

@@ -625,7 +625,7 @@ export function DialogueWindow({
       // 初期設定は「つなぐ」まで。稼働に入れるのは、お客様がアルゴの管理画面で
       // 「自動売買をはじめる」を押したときだけ（ブリッジは自分から稼働にはしない）。
       const running = typeof ack.value === 'number' ? Number(ack.value) !== 0 : false
-      const created = newConnection(member?.email ?? '', account, String(ack.server ?? ''), {
+      const created = newConnection(member?.name ?? '', account, String(ack.server ?? ''), {
         settings: settingsFromGate(ack.gate),
         running,
       })

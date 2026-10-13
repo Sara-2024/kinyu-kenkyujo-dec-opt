@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>口座開設マニュアル｜ドリームランド渡航手続き</title>
+<meta name="description" content="HFM リアル口座（Premium / MT5 / JPY / 1:1000）の開設手順。ドリームランド渡航手続きの口座開設マニュアルです。">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#d1e4ee">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23789ea7'/%3E%3Cpath d='M32 12l4.4 13.6L50 30l-13.6 4.4L32 48l-4.4-13.6L14 30l13.6-4.4z' fill='%23fff6dc'/%3E%3C/svg%3E">
+<style>
+:root{--ink:#30384f;--muted:#68718a;--soft:#787787;--plaque:#665e5b;--gold:#cbbb98;--gold-deep:#aa9461;--cream:#fffaf0;--cream-2:#fffdf2;--lav:#7665a9;--lav-text:#594986;--lav-soft:#eeeaf6;--teal:#69b4bc;--teal-a:#76b8be;--teal-b:#578d9a;--slate:#789ea7;--line:#e4e5ee;
+--serif-en:Georgia,"Times New Roman",serif;--serif:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;--sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","YuGothic",Meiryo,"Noto Sans JP",sans-serif}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;font-family:var(--sans);font-size:16px;line-height:1.85;color:var(--ink);background:linear-gradient(165deg,#d1e4ee 0%,#dae2f4 30%,#eee6f6 65%,#fbf4e8 100%) fixed}
+a{color:inherit}
+.wrap{width:min(100% - 32px,1080px);margin-inline:auto}
+/* ── 表紙 ── */
+.cover{position:relative;overflow:hidden;color:#fffaf0;min-height:420px;display:grid;align-items:end;background:#8fb0c9}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 55%}
+.cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(72,101,119,.15),rgba(48,56,79,.55) 100%)}
+.cover__in{position:relative;z-index:1;padding:48px 0 44px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:end}
+.brand{font-family:var(--serif-en);letter-spacing:.24em;font-size:14px;color:#fff6dc;text-shadow:0 1px 10px rgba(72,101,119,.5)}
+.cover h1{margin:10px 0 0;font-family:var(--serif);font-weight:600;font-size:clamp(28px,4.2vw,46px);letter-spacing:.12em;line-height:1.35;text-shadow:0 2px 24px rgba(48,56,79,.45)}
+.cover h1 small{display:block;font-size:.5em;letter-spacing:.2em;margin-bottom:8px;color:#fff6dc}
+.cover p{margin:14px 0 0;max-width:46ch;color:#fffaf0;text-shadow:0 1px 10px rgba(72,101,119,.5)}
+.spec{background:rgba(255,253,245,.92);color:var(--ink);border:1px solid var(--gold);border-radius:14px;padding:16px 20px;min-width:250px;box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27),0 14px 40px rgba(48,56,79,.25)}
+.spec__title{font-family:var(--serif-en);letter-spacing:.24em;font-size:11px;color:var(--gold-deep)}
+.spec dl{margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:14px}
+.spec dt{color:var(--muted)}.spec dd{margin:0;text-align:right;font-family:var(--serif);font-size:16px;color:var(--lav-text)}
+@media (max-width:720px){.cover__in{grid-template-columns:1fr}.spec{min-width:0}}
+/* ── 全体の流れ ── */
+.intro{padding:40px 0 10px}
+.card{background:rgba(255,255,255,.72);border:1px solid #fff;border-radius:18px;padding:22px 26px;box-shadow:0 10px 40px rgba(139,122,154,.1);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.card h2{margin:0;font-family:var(--serif);font-weight:600;font-size:22px;letter-spacing:.08em}
+.card .lead{margin:6px 0 0;color:var(--muted);font-size:15px}
+.flow{list-style:none;margin:18px 0 0;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.flow a{display:block;text-decoration:none;padding:12px 10px;border-radius:12px;background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold);box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27);transition:transform .2s}
+.flow a:hover{transform:translateY(-3px)}
+.flow small{display:block;font-family:var(--serif-en);letter-spacing:.24em;font-size:10px;color:var(--gold-deep)}
+.flow b{display:block;font-family:var(--serif);font-size:15px;letter-spacing:.04em;margin-top:2px}
+.flow span{display:block;font-size:12px;color:var(--soft);line-height:1.5;margin-top:4px}
+@media (max-width:760px){.flow{grid-template-columns:1fr 1fr}}
+.tip{margin:16px 0 0;padding:12px 16px;border-radius:12px;background:#fff7ec;border:1px solid #efd9b4;font-size:14px;color:#6a5640}
+.tip b{color:#a4532f}
+.specs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.specs div{text-align:center;padding:14px 8px;border-radius:12px;background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold)}
+.specs span{display:block;font-size:12px;color:var(--muted)}
+.specs b{display:block;font-family:var(--serif-en);font-size:26px;letter-spacing:.04em;color:var(--lav-text);font-weight:400}
+@media (max-width:600px){.specs{grid-template-columns:1fr 1fr}}
+.cta{display:grid;gap:2px;text-decoration:none;margin:14px 0;padding:16px 22px;border-radius:34px;color:#fcfff7;text-shadow:0 1px 3px #486472;background:linear-gradient(120deg,var(--teal-a),var(--teal-b));border:2px solid #faf8df;box-shadow:0 0 0 4px rgba(216,232,222,.45),inset 0 0 0 2px rgba(202,233,220,.49),0 7px 20px rgba(92,113,129,.3);transition:transform .2s,filter .2s}
+.cta:hover{transform:translateY(-3px);filter:brightness(1.08)}
+.cta span{font-family:var(--serif);font-size:18px;letter-spacing:.14em}
+.cta small{font-size:11px;opacity:.85;word-break:break-all;font-family:var(--serif-en)}
+.twin{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.twin__card{padding:16px 18px;border-radius:14px;background:#fff;border:1px solid var(--line)}
+.twin__card b{display:block;font-family:var(--serif);font-size:17px;letter-spacing:.04em;margin:4px 0 6px}
+.twin__card p{margin:0;font-size:14px;color:#444a5e}
+@media (max-width:640px){.twin{grid-template-columns:1fr}}
+.needs{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.needs li{padding:14px;border-radius:14px;background:#fff;border:1px solid var(--line)}
+.needs i{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--lav-soft);color:var(--lav);font-style:normal;font-size:15px}
+.needs b{display:block;margin-top:8px;font-size:15px}.needs span{display:block;font-size:12.5px;color:var(--soft);line-height:1.6}
+@media (max-width:760px){.needs{grid-template-columns:1fr 1fr}}
+/* ── 吊り看板 ── */
+.part{padding:34px 0 6px}
+.sign{position:relative;display:flex;justify-content:center;padding-top:40px;margin-bottom:8px}
+.sign__wire{position:absolute;top:0;width:1px;height:40px;background:linear-gradient(180deg,rgba(72,101,119,0),rgba(72,101,119,.6))}
+.sign__wire:nth-child(1){left:calc(50% - 90px)}.sign__wire:nth-child(2){left:calc(50% + 90px)}
+.sign__panel{display:flex;align-items:center;gap:16px;padding:12px 26px;border-radius:6px;background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold);box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27),0 10px 30px rgba(99,130,147,.18)}
+.sign__code{font-family:var(--serif-en);letter-spacing:.3em;font-size:14px;color:var(--gold-deep);padding-right:16px;border-right:1px solid rgba(170,148,97,.4)}
+.sign__jp{font-family:var(--serif);font-size:20px;letter-spacing:.14em;color:var(--ink)}
+.part__desc{text-align:center;color:var(--muted);font-size:14px;margin:0 0 18px}
+/* ── 手順 ── */
+.step{background:rgba(255,255,255,.78);border:1px solid #fff;border-radius:18px;padding:22px 26px 24px;margin:0 0 16px;box-shadow:0 10px 40px rgba(139,122,154,.1)}
+.step__head{display:flex;gap:16px;align-items:flex-start}
+.step__no{flex:0 0 auto;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:linear-gradient(120deg,var(--teal-a),var(--teal-b));color:#fff;font-family:var(--serif-en);font-size:20px;border:2px solid #faf8df;box-shadow:0 0 0 3px rgba(216,232,222,.5)}
+.step__head h3{margin:4px 0 0;font-family:var(--serif);font-weight:600;font-size:21px;letter-spacing:.06em;line-height:1.4}
+.step__head p{margin:2px 0 0;color:var(--muted);font-size:14.5px}
+.step__body{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(240px,1fr);gap:18px;margin-top:16px;align-items:start}
+.shot{margin:0;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#f4f4f8}
+.shot img{display:block;width:100%;height:auto}
+.step__side{display:grid;gap:8px;padding:14px 16px;border-radius:14px;background:linear-gradient(145deg,#fffff9,#f7f3ea);border:1px solid var(--gold)}
+.side__label{font-family:var(--serif-en);letter-spacing:.22em;font-size:10.5px;color:var(--gold-deep)}
+.crop{display:block;width:100%;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff}
+.side__title{font-family:var(--serif);font-size:18px;letter-spacing:.04em;line-height:1.4;color:var(--lav-text)}
+.side__text{margin:0;font-size:14px;color:#444a5e}
+.note{margin-top:4px;padding:10px 12px;border-radius:10px;background:var(--lav-soft);font-size:13px;color:#4a4560}
+.note__label{display:block;font-size:11px;letter-spacing:.14em;color:var(--lav);font-weight:600}
+.note p{margin:2px 0 0}
+.note--care{background:#fff4e2;color:#6a5640}.note--care .note__label{color:#a4532f}
+.note--phone{background:#e6f3f3;color:#3f5d63}.note--phone .note__label{color:var(--teal-b)}
+.plain{margin:14px 0 0;padding:12px 16px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:14.5px}
+.checks{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.checks li{padding:10px 14px 10px 42px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:14.5px;position:relative}
+.checks li::before{content:"";position:absolute;left:12px;top:12px;width:20px;height:20px;border-radius:50%;border:1px solid var(--gold);background:var(--cream)}
+.deposit{display:grid;grid-template-columns:260px minmax(0,1fr);gap:18px;margin-top:14px;align-items:start}
+.deposit__hero{display:grid;gap:2px;padding:20px 22px;border-radius:16px;color:#fff6dc;background:linear-gradient(145deg,#3a3166,#201b40);border:1px solid #e3cf94;box-shadow:inset 0 0 0 3px rgba(255,255,255,.06),inset 0 0 0 4px rgba(227,207,148,.4)}
+.deposit__hero span{font-size:13px;letter-spacing:.14em;color:#cfc6e6}.deposit__hero .rec{margin-top:10px;color:#e8d8a8}
+.deposit__hero b{font-family:var(--serif-en);font-size:42px;line-height:1.1;font-weight:400}.deposit__hero small{font-size:16px;margin-left:4px;font-family:var(--serif)}
+.deposit__hero em{font-style:normal;font-size:11.5px;color:#cfc6e6;margin-top:8px}
+.deposit p{margin:0 0 8px;font-size:14.5px}
+.lots{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.lots th{font-weight:500;color:var(--muted);font-size:12.5px;text-align:left;padding:8px 12px;background:#f7f5fb}
+.lots td{padding:9px 12px;border-top:1px solid var(--line)}.lots td:last-child{color:var(--lav-text);font-weight:600}
+@media (max-width:720px){.step__body,.deposit{grid-template-columns:1fr}.step{padding:18px 16px 20px}}
+/* ── 最後 ── */
+.done{margin:30px 0 50px;text-align:center}
+.done .card{padding:28px 26px}
+.done ul{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left}
+.done li{padding:10px 14px 10px 44px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:14.5px;position:relative}
+.done li::before{content:"✓";position:absolute;left:12px;top:9px;width:22px;height:22px;border-radius:50%;background:var(--teal);color:#fff;font-size:13px;line-height:22px;text-align:center}
+@media (max-width:640px){.done ul{grid-template-columns:1fr}}
+.done .fin{margin:18px 0 0;font-family:var(--serif);font-size:19px;letter-spacing:.1em}
+.back{display:inline-flex;align-items:center;gap:10px;margin-top:18px;text-decoration:none;padding:12px 26px;border-radius:30px;background:rgba(248,249,241,.9);border:1px solid rgba(255,247,236,.9);color:#61667c;font-size:14px;box-shadow:0 3px 18px rgba(85,109,134,.13)}
+.foot{text-align:center;padding:0 0 40px;font-family:var(--serif-en);letter-spacing:.24em;font-size:12px;color:var(--muted)}
+/* ── 目次（追従） ── */
+.toc{position:sticky;top:0;z-index:5;padding:10px 0;background:rgba(238,243,248,.85);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.8)}
+.toc .wrap{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.toc a{flex:0 0 auto;text-decoration:none;font-size:13px;padding:7px 14px;border-radius:22px;color:#61667c;background:rgba(248,249,241,.84);border:1px solid rgba(255,247,236,.8)}
+.toc a.is-on{color:#f9ffff;background:var(--slate)}
+@media print{.toc,.back{display:none}.step{break-inside:avoid;box-shadow:none}body{background:#fff}}
+</style>
+</head>
+<body>
+<header class="cover">
+  <img src="../assets/clouds.webp" alt="" decoding="async">
+  <div class="wrap cover__in">
+    <div><span class="brand">DREAMLAND · ACCOUNT MANUAL</span>
+      <h1><small>HFM リアル口座</small>口座開設マニュアル</h1>
+      <p>画面の写真を見ながら、1ページずつ同じように進めれば口座が作れます。ドリームランド渡航手続きの、いちばん最初のステップです。</p></div>
+    <div class="spec"><span class="spec__title">今回つくる口座</span><dl><dt>口座タイプ</dt><dd>Premium</dd><dt>取引ツール</dt><dd>MT5</dd><dt>口座通貨</dt><dd>JPY（日本円）</dd><dt>レバレッジ</dt><dd>1:1000</dd></dl></div>
+  </div>
+</header>
+<nav class="toc" aria-label="目次"><div class="wrap">
+  <a href="#top">はじめに</a><a href="#part-1" data-part="1">PART 1　アカウント登録</a><a href="#part-2" data-part="2">PART 2　プロフィール入力</a><a href="#part-3" data-part="3">PART 3　本人確認</a><a href="#part-4" data-part="4">PART 4　取引口座の作成</a><a href="#part-5" data-part="5">PART 5　入金</a><a href="#done">最後に</a>
+</div></nav>
+<main class="wrap">
+<section class="intro" id="top">
+  <div class="card">
+    <h2>全体の流れ</h2><p class="lead">5つのパートに分かれています。表示されない画面は飛ばして、次へ進んでください。</p>
+    <ol class="flow"><li><a href="#part-1"><small>PART 1</small><b>アカウント登録</b><span>メールアドレスとパスワードで登録</span></a></li><li><a href="#part-2"><small>PART 2</small><b>プロフィール入力</b><span>氏名・住所などを入力</span></a></li><li><a href="#part-3"><small>PART 3</small><b>本人確認</b><span>書類と顔写真を提出</span></a></li><li><a href="#part-4"><small>PART 4</small><b>取引口座の作成</b><span>Premium / MT5 の口座を作る</span></a></li><li><a href="#part-5"><small>PART 5</small><b>入金</b><span>推奨額を確認して入金する</span></a></li></ol>
+    <p class="tip">すでにHFMのアカウントをお持ちの方は、PART 1〜3 を飛ばして <b><a href="#part-4">PART 4（取引口座の作成）</a></b> から始められます。</p>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2>今回つくる口座の設定は、この4つです</h2><p class="lead">口座を作る画面で迷ったら、ここに戻って確認してください。普段MT4を使っている方も、今回は必ずMT5で作成してください。</p>
+    <div class="specs"><div><span>口座タイプ</span><b>Premium</b></div><div><span>取引ツール</span><b>MT5</b></div><div><span>口座通貨</span><b>JPY</b></div><div><span>レバレッジ</span><b>1:1000</b></div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2>口座開設は、こちらのリンクから</h2><p class="lead">新規登録の方も、すでにHFMのアカウントをお持ちの方も同じリンクです。</p>
+    <a class="cta" href="https://www.hfm.com/sv/jp/?refid=30576722" target="_blank" rel="noopener noreferrer"><span>HFM 口座開設ページを開く</span><small>https://www.hfm.com/sv/jp/?refid=30576722</small></a>
+    <div class="twin">
+      <div class="twin__card"><span class="side__label">HFMのアカウントをお持ちでない方</span><b>開いたページで「新規登録」へ</b><p>次の PART 1 から順番に進みます。</p></div>
+      <div class="twin__card"><span class="side__label">すでにお持ちの方</span><b>開いたページで「ログイン」</b><p>登録・本人確認が済んでいれば、<a href="#part-4">PART 4</a> の口座作成へ。</p></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2>始める前に、手元に用意しておくもの</h2><p class="lead">途中で止まらないように、先にそろえておくとスムーズです。</p>
+    <ul class="needs">
+      <li><i>✉</i><b>メールアドレス</b><span>認証コードが届くので、すぐに確認できるもの</span></li>
+      <li><i>☎</i><b>携帯電話</b><span>SMS（ショートメッセージ）を受け取れるもの</span></li>
+      <li><i>ID</i><b>本人確認書類</b><span>運転免許証・マイナンバーカード・パスポートのどれか1つ</span></li>
+      <li><i>〒</i><b>住所確認書類</b><span>公共料金の明細・カードの請求明細・住民票など。発行から6か月以内のもの</span></li>
+    </ul>
+    <p class="tip">住所確認書類は、氏名・住所・発行元がはっきり読めるように、書類全体を撮影・スキャンしておきます。</p>
+  </div>
+</section>
+<div class="part" id="part-1"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">PART 1</span><span class="sign__jp">アカウント登録</span></div></div><p class="part__desc">メールアドレスとパスワードで登録</p><section class="step" id="step-01" data-part="1">
+  <header class="step__head"><span class="step__no">01</span><div><h3>居住国を選びます</h3><p>「居住国」の欄で、今住んでいる国を選びます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p06-1.webp" alt="居住国を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p06-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">Japan（日本）</b>
+      <p class="side__text">日本にお住まいの方は「Japan」を選び ます。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>実際に住んでいる国で登録してください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-02" data-part="1">
+  <header class="step__head"><span class="step__no">02</span><div><h3>メールアドレスを入力します</h3><p>普段使っているメールアドレスを入力します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p07-1.webp" alt="メールアドレスを入力しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p07-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">メールアドレスを入力</b>
+      <p class="side__text">このアドレスに認証コードが届きます。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>「Eメールまたは電話番号」と書かれてい ても、メールアドレスを入力してくださ い。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-03" data-part="1">
+  <header class="step__head"><span class="step__no">03</span><div><h3>ログイン用のパスワードを決めます</h3><p>HFMの会員ページに入るためのパスワードです。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p08-1.webp" alt="ログイン用のパスワードを決めますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p08-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">パスワードを入力</b>
+      <p class="side__text">画面に表示される文字数・文字の種類の 条件に合わせて決めます。</p>
+      <div class="note note--care"><span class="note__label">大切</span><p>このパスワードは、誰にも見られないよう に大切に保管してください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-04" data-part="1">
+  <header class="step__head"><span class="step__no">04</span><div><h3>「続行」を押します</h3><p>入力した内容をもう一度見て、問題なければ進みます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p09-1.webp" alt="「続行」を押しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p09-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">続行</b>
+      <p class="side__text">居住国・メールアドレスに間違いがない か確認します。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>エラーが出たら、赤字で示された項目を直 してください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-05" data-part="1">
+  <header class="step__head"><span class="step__no">05</span><div><h3>メールの認証コードを入力します</h3><p>登録したメールに届いた6桁のコードを入力し、「続行」を押します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p10-1.webp" alt="メールの認証コードを入力しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p10-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">コードを入力 → 続行</b>
+      <p class="side__text">メールに書かれた数字を、HFMの画面に 入力します。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>メールが届かないときは、迷惑メールフォ ルダを確認するか、画面の「コードを再送 する」を押してください。</p></div>
+    </aside>
+  </div>
+</section></div><div class="part" id="part-2"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">PART 2</span><span class="sign__jp">プロフィール入力</span></div></div><p class="part__desc">氏名・住所などを入力</p><section class="step" id="step-06" data-part="2">
+  <header class="step__head"><span class="step__no">06</span><div><h3>氏名を入力します</h3><p>本人確認書類と同じ氏名を、ローマ字で入力します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p11-1.webp" alt="氏名を入力しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p11-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">名・姓</b>
+      <p class="side__text">例）名：Taro　姓：Yamada</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>見本の名前ではなく、ご自身の氏名を入力 してください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-07" data-part="2">
+  <header class="step__head"><span class="step__no">07</span><div><h3>電話番号を入力します</h3><p>SMSを受け取れる、ご自身の電話番号を入力します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p12-1.webp" alt="電話番号を入力しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p12-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">電話番号</b>
+      <p class="side__text">日本の国番号は「+81」です。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>先頭の「0」を入れるかどうかは、入力欄 の案内に合わせてください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-08" data-part="2">
+  <header class="step__head"><span class="step__no">08</span><div><h3>生年月日を選びます</h3><p>本人確認書類と同じ生年月日を選びます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p13-1.webp" alt="生年月日を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p13-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">日・月・年</b>
+      <p class="side__text">左から「日 → 月 → 年」の順に並んでい ます。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>日と月を逆に選びやすいので注意してくだ さい。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-09" data-part="2">
+  <header class="step__head"><span class="step__no">09</span><div><h3>ウォレット通貨は「JPY」を選びます</h3><p>ウォレット（お財布）の通貨を選ぶ欄があれば、JPYにします。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p14-1.webp" alt="ウォレット通貨は「JPY」を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p14-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">JPY</b>
+      <p class="side__text">JPY＝日本円です。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>ウォレットと取引口座は別のものです。取 引口座の通貨は、あとで改めてJPYを選び ます。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-10" data-part="2">
+  <header class="step__head"><span class="step__no">10</span><div><h3>内容を確認して「続行」を押します</h3><p>規約などを読み、確認のチェックを入れてから進みます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p15-1.webp" alt="内容を確認して「続行」を押しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p15-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">続行</b>
+      <p class="side__text">氏名・電話番号・生年月日をもう一度見 直します。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>案内メールの受け取りなど任意の項目は、 ご自身で選んでください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-11" data-part="2">
+  <header class="step__head"><span class="step__no">11</span><div><h3>「登録を完了」を開きます</h3><p>会員ページの左メニューに「登録を完了」があれば押します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p16-1.webp" alt="「登録を完了」を開きますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p16-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">登録を完了</b>
+      <p class="side__text">住所などの入力画面へ進みます。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>すでに入力が終わっている場合は、表示さ れないことがあります。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-12" data-part="2">
+  <header class="step__head"><span class="step__no">12</span><div><h3>現在の住所を入力します</h3><p>住所確認書類と同じ、今住んでいる住所を入力します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p17-1.webp" alt="現在の住所を入力しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      
+      <b class="side__title">住所の欄</b>
+      <p class="side__text">住所1：町名・番地・建物名 市町村：市区町村 市町村/県：都道府県 郵便番号：郵便番号</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>各欄に薄く表示されている入力例に合わせ て入力してください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-13" data-part="2">
+  <header class="step__head"><span class="step__no">13</span><div><h3>投資家プロフィールに答えます</h3><p>資産・仕事・取引経験などを選びます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p18-1.webp" alt="投資家プロフィールに答えますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      
+      <b class="side__title">ご自身の状況を選ぶ</b>
+      <p class="side__text">純資産：資産から借入を引いた額 雇用形態：今の仕事の状況 資金源：取引に使うお金の出どころ</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>見本の選択内容ではなく、ご自身の状況を 正確に選んでください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-14" data-part="2">
+  <header class="step__head"><span class="step__no">14</span><div><h3>「続行」を押して確定します</h3><p>入力内容を確認し、画面下の「続行」を押します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p19-1.webp" alt="「続行」を押して確定しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p19-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">続行</b>
+      <p class="side__text">空欄やエラーがあれば、表示された項目 を直します。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>追加の質問が出た場合も、ご自身の状況に 沿って答えてください。</p></div>
+    </aside>
+  </div>
+</section></div><div class="part" id="part-3"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">PART 3</span><span class="sign__jp">本人確認</span></div></div><p class="part__desc">書類と顔写真を提出</p><section class="step" id="step-15" data-part="3">
+  <header class="step__head"><span class="step__no">15</span><div><h3>本人確認へ進みます</h3><p>左メニューの「アカウントを認証してください」を押します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p20-1.webp" alt="本人確認へ進みますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p20-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">アカウントを認証</b>
+      <p class="side__text">ここから書類の提出に進みます。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>すでに認証が終わっている方は、PART 4 （P.28）へ進んでください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-16" data-part="3">
+  <header class="step__head"><span class="step__no">16</span><div><h3>案内を読んでチェックを入れます</h3><p>個人データの取り扱いについての案内を読みます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p21-1.webp" alt="案内を読んでチェックを入れますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p21-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">チェックを入れる</b>
+      <p class="side__text">内容に同意したらチェックを入れ、画面 の案内どおりに進みます。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>この画面は表示された場合のみ操作しま す。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-17" data-part="3">
+  <header class="step__head"><span class="step__no">17</span><div><h3>本人確認書類の種類を選びます</h3><p>発行国が「日本」になっているか確認し、書類を選びます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p22-1.webp" alt="本人確認書類の種類を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p22-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">書類の種類</b>
+      <p class="side__text">運転免許証・IDカード（マイナンバーカ ード）・パスポートから選びます。</p>
+      <div class="note note--phone"><span class="note__label">スマホで撮影</span><p>パソコンにカメラがない場合は、画面の 「スマートフォンで続行」を押すと、スマ ホで撮影できます。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-18" data-part="3">
+  <header class="step__head"><span class="step__no">18</span><div><h3>本人確認書類を撮影します</h3><p>書類を点線の枠の中に収めて、撮影ボタンを押します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p23-1.webp" alt="本人確認書類を撮影しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p23-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">撮影ボタン</b>
+      <p class="side__text">光の反射やピンぼけがなく、文字がはっ きり読める状態で撮影します。</p>
+      <div class="note note--phone"><span class="note__label">スマホで撮影</span><p>スマホで撮影する場合も、画面に出る案内 に沿って表面・裏面を撮影します。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-19" data-part="3">
+  <header class="step__head"><span class="step__no">19</span><div><h3>顔写真を撮影します</h3><p>自撮りの画面が表示されたら、「準備完了」を押します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p24-1.webp" alt="顔写真を撮影しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p24-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">準備完了</b>
+      <p class="side__text">カメラに顔を向け、丸い枠の中に顔が収 まるようにします。</p>
+      <div class="note note--phone"><span class="note__label">スマホで撮影</span><p>顔の向きの指示が出たら、画面に合わせて ゆっくり動かしてください。スマホでも行 えます。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-20" data-part="3">
+  <header class="step__head"><span class="step__no">20</span><div><h3>住所確認書類を提出します</h3><p>「住所証明（POA）」の欄で、書類のファイルを選んでアップロードします。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p25-1.webp" alt="住所確認書類を提出しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p25-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">住所証明（POA）</b>
+      <p class="side__text">ファイルを選び、「アップロード」を押し ます。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>氏名・現住所・発行元が読める、発行から 6か月以内の書類を使ってください。</p></div>
+    </aside>
+  </div>
+</section><section class="step step--card" id="step-21" data-part="3">
+  <header class="step__head"><span class="step__no">21</span><div><h3>審査の結果を確認します</h3><p>提出した書類の状況は、HFMの会員ページやメールで確認できます。</p></div></header>
+  <div class="twin">
+    <div class="twin__card"><span class="side__label">審査が完了したら</span><b>PART 4へ進みます</b><p>会員ページやメールで、認証が完了した案内を確認できたら、取引口座の作成へ進みます。</p></div>
+    <div class="twin__card"><span class="side__label">確認中・再提出の場合</span><b>HFMの案内を待ちます</b><p>確認中は結果を待ちます。再提出の案内が来たら、指定された箇所を直してもう一度提出します。</p></div>
+  </div>
+  <p class="plain">画面の名前や順番は、アカウントの状況によって変わることがあります。</p>
+</section>
+<section class="step step--card" id="step-22" data-part="3">
+  <header class="step__head"><span class="step__no">22</span><div><h3>電話番号の認証が表示されたら</h3><p>この画面は表示された場合のみ行います。</p></div></header>
+  <div class="twin">
+    <div class="twin__card"><span class="side__label">STEP 1</span><b>SMSでコードを受け取る</b><p>登録した携帯電話に、ショートメッセージ（SMS）で認証コードが届きます。</p></div>
+    <div class="twin__card"><span class="side__label">STEP 2</span><b>HFMの画面に入力する</b><p>届いたコードをHFMの認証欄に入力し、表示されたボタンを押して確認します。</p></div>
+  </div>
+  <p class="plain">電話番号の認証は、登録中や口座作成中など、表示されたタイミングで行ってください。認証コードは誰にも教えないでください。</p>
+</section></div><div class="part" id="part-4"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">PART 4</span><span class="sign__jp">取引口座の作成</span></div></div><p class="part__desc">Premium / MT5 の口座を作る</p><section class="step" id="step-23" data-part="4">
+  <header class="step__head"><span class="step__no">23</span><div><h3>「取引口座」を開きます</h3><p>会員ページの左メニューにある「取引口座」を押します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p28-1.webp" alt="「取引口座」を開きますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p28-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">取引口座</b>
+      <p class="side__text">ここから、実際に取引する口座を作りま す。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>すでにHFMのアカウントをお持ちの方は、 ここから始めます。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-24" data-part="4">
+  <header class="step__head"><span class="step__no">24</span><div><h3>「ライブ口座を開設」を選びます</h3><p>実際のお金で取引する口座（ライブ口座）を作ります。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p29-1.webp" alt="「ライブ口座を開設」を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p29-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">ライブ口座を開設</b>
+      <p class="side__text">その下の「デモ口座を開設」は選びませ ん。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>このマニュアルでは「リアル口座」と「ラ イブ口座」は同じ意味です。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-25" data-part="4">
+  <header class="step__head"><span class="step__no">25</span><div><h3>「Premium」を選びます</h3><p>口座タイプは、必ず「Premium（プレミアム）」です。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p30-1.webp" alt="「Premium」を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p30-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">Premiumの「選ぶ」</b>
+      <p class="side__text">いちばん左の、Premiumの列にある「選 ぶ」を押します。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>Cent・Zero Spread・Proなど、ほかの口 座タイプは選ばないでください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-26" data-part="4">
+  <header class="step__head"><span class="step__no">26</span><div><h3>取引ツールは「MT5」を選びます</h3><p>普段MT4を使っている方も、今回は必ずMT5です。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p31-1.webp" alt="取引ツールは「MT5」を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p31-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">MT5（HFMMT5）</b>
+      <p class="side__text">「HFMMT5」などMT5の項目に印を付け ます。右側のMT4は選びません。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>作成前に、MT5が選ばれていることをもう 一度確認してください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-27" data-part="4">
+  <header class="step__head"><span class="step__no">27</span><div><h3>口座通貨は「JPY」を選びます</h3><p>「口座通貨」の欄で、JPYを選びます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p32-1.webp" alt="口座通貨は「JPY」を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p32-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">JPY</b>
+      <p class="side__text">日本円の口座になります。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>先ほどのウォレット通貨とは別の設定で す。こちらでもJPYを選んでください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-28" data-part="4">
+  <header class="step__head"><span class="step__no">28</span><div><h3>レバレッジは「1:1000」を選びます</h3><p>ほかの倍率が選べても、今回は1:1000にします。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p33-1.webp" alt="レバレッジは「1:1000」を選びますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p33-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">1:1000</b>
+      <p class="side__text">選んだあと、表示が「1:1000」になって いるか確認します。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>初期表示が別の倍率になっていることがあ るので、必ず確認してください。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-29" data-part="4">
+  <header class="step__head"><span class="step__no">29</span><div><h3>取引口座のパスワードを決めます</h3><p>MT5で使うパスワードを入力します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p34-1.webp" alt="取引口座のパスワードを決めますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p34-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">パスワード</b>
+      <p class="side__text">下に表示される文字数・文字の種類の条 件をすべて満たすように決めます。</p>
+      <div class="note note--care"><span class="note__label">大切</span><p>忘れないように控えておきましょう。誰に も見られないように保管してください。</p></div>
+    </aside>
+  </div>
+</section><section class="step step--card" id="step-30" data-part="4">
+  <header class="step__head"><span class="step__no">30</span><div><h3>作成前に、4つの設定を確認します</h3><p>どれか1つでも違っていたら、ここで直してから進みます。</p></div></header>
+  <div class="specs"><div><span>口座タイプ</span><b>Premium</b></div><div><span>取引ツール</span><b>MT5</b></div><div><span>口座通貨</span><b>JPY</b></div><div><span>レバレッジ</span><b>1:1000</b></div></div>
+  <ul class="checks"><li>4つの設定が、上の表とすべて同じになっている</li><li>口座ニックネームは空欄のままで大丈夫です（任意）</li><li>パートナーコードなどの欄は、特に案内がなければ変更しない</li></ul>
+</section><section class="step" id="step-31" data-part="4">
+  <header class="step__head"><span class="step__no">31</span><div><h3>「口座を開設」を押します</h3><p>設定を確認できたら、いちばん下のボタンを押します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p36-1.webp" alt="「口座を開設」を押しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p36-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">口座を開設</b>
+      <p class="side__text">これで取引口座が作成されます。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>押したあと、次のページの方法で作成され た口座を確認します。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-32" data-part="4">
+  <header class="step__head"><span class="step__no">32</span><div><h3>作成した口座を確認します</h3><p>「My取引口座」の「ライブ」側で、今回作った口座を探します。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p37-1.webp" alt="作成した口座を確認しますの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p37-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">HFMMT5 - PREMIUM</b>
+      <p class="side__text">口座名に「PREMIUM」と「MT5」が入っ ていて、レバレッジが「1:1000」の口座 です。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>見本の画面では、口座番号を黒く隠してい ます。</p></div>
+    </aside>
+  </div>
+</section><section class="step" id="step-33" data-part="4">
+  <header class="step__head"><span class="step__no">33</span><div><h3>この数字が「口座番号」です</h3><p>口座名のすぐ上に表示されている数字を控えます。</p></div></header>
+  <div class="step__body">
+    <figure class="shot"><img src="img/p38-1.webp" alt="この数字が「口座番号」ですの画面" loading="lazy" decoding="async" width="1600" height="900"></figure>
+    <aside class="step__side">
+      <span class="side__label">ここを操作</span>
+      <img class="crop" src="img/p38-2.webp" alt="" loading="lazy" decoding="async">
+      <b class="side__title">口座番号</b>
+      <p class="side__text">MT5にログインするときに使う番号で す。メモしておきましょう。</p>
+      <div class="note note--point"><span class="note__label">ポイント</span><p>見つからないときは、HFMから届く口座開 設のメールでも確認できます。</p></div>
+    </aside>
+  </div>
+</section></div><div class="part" id="part-5"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">PART 5</span><span class="sign__jp">入金</span></div></div><p class="part__desc">推奨額を確認して入金する</p><section class="step step--card" id="step-34" data-part="5">
+  <header class="step__head"><span class="step__no">34</span><div><h3>ユメックの推奨入金額</h3><p>入金の前に、運用するロット数に合わせた金額の目安を確認しましょう。</p></div></header>
+  <div class="deposit">
+    <div class="deposit__hero"><span>最低</span><b>10<small>万円</small></b><span class="rec">推奨</span><b>20〜25<small>万円</small></b><em>※ 0.01ロットあたりの金額です</em></div>
+    <div><p>10万円からでも運用はスタートできますが、相場が大きく動いた場面では余裕が少なめになります。</p><p>落ち着いて運用を続けていただくために、<b>20万円〜25万円</b>をおすすめしています。</p>
+      <table class="lots"><thead><tr><th>ロット数</th><th>最低</th><th>推奨</th></tr></thead><tbody><tr><td>0.01ロット</td><td>10万円</td><td>20〜25万円</td></tr><tr><td>0.02ロット</td><td>20万円</td><td>40〜50万円</td></tr><tr><td>0.03ロット</td><td>30万円</td><td>60〜75万円</td></tr></tbody></table></div>
+  </div>
+</section>
+<section class="step step--card" id="step-35" data-part="5">
+  <header class="step__head"><span class="step__no">35</span><div><h3>入金方法はHFM公式ページで確認します</h3><p>入金の手続きは、HFMの会員ページの「入金」から行います。</p></div></header>
+  <p class="plain">入金方法の種類や手数料、反映までの時間は、HFMの公式ホームページでご確認ください。</p>
+  <a class="cta" href="https://www.hfm.com/sv/jp/funding/deposit-options" target="_blank" rel="noopener noreferrer"><span>HFM公式｜入金方法のページを開く</span><small>https://www.hfm.com/sv/jp/funding/deposit-options</small></a>
+  <div class="twin">
+    <div class="twin__card"><span class="side__label">入金するときは</span><b>入金先の口座を確認</b><p>入金先を選ぶ画面が出たら、今回作成した Premium（MT5）口座 を選んでください。</p></div>
+    <div class="twin__card"><span class="side__label">ご注意</span><b>出金方法もあわせて確認</b><p>入金方法によって出金のルールが異なる場合があります。入金前に、公式ページで出金方法もあわせてご確認ください。</p></div>
+  </div>
+</section></div>
+<section class="done" id="done">
+  <div class="card">
+    <h2>最後に、チェックしましょう</h2>
+    <ul><li>HFMのアカウント登録と本人確認が終わった</li><li>Premium / MT5 / JPY / 1:1000 の口座を作成した</li><li>口座番号と取引口座のパスワードを控えた</li><li>推奨入金額を確認し、入金した</li></ul>
+    <p class="fin">おつかれさまでした。これでリアル口座の準備は完了です。</p>
+    <div class="twin" style="text-align:left">
+      <div class="twin__card"><span class="side__label">口座開設・本人確認・入出金など手続き全般</span><b>HFM公式サポート</b><p>HFMの公式ページから、ライブチャットやメールで問い合わせできます。<br><a href="https://www.hfm.com/sv/jp/contact-us" target="_blank" rel="noopener noreferrer">https://www.hfm.com/sv/jp/contact-us</a></p></div>
+      <div class="twin__card"><span class="side__label">それ以外のご相談</span><b>ドリームランド サポートLINE</b><p>手続き以外でわからないことは、こちらのLINEにご相談ください。<br><a href="https://lin.ee/V0ikrqq" target="_blank" rel="noopener noreferrer">https://lin.ee/V0ikrqq</a></p></div>
+    </div>
+    <a class="back" href="../#service">‹ 渡航手続きロビーにもどる（口座の登録へ）</a>
+  </div>
+</section>
+</main>
+<footer class="foot">DREAMLAND INTERNATIONAL · ACCOUNT OPENING MANUAL</footer>
+<script>
+(() => {
+  const links=[...document.querySelectorAll('.toc a[data-part]')];
+  const parts=[...document.querySelectorAll('.part')];
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(!e.isIntersecting)return;const k=e.target.id.slice(5);links.forEach(a=>a.classList.toggle('is-on',a.dataset.part===k));});},{rootMargin:'-30% 0px -60% 0px'});
+  parts.forEach(p=>io.observe(p));
+})();
+</script>
+</body>
+</html>

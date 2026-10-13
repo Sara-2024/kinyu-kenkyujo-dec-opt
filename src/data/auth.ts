@@ -5,13 +5,21 @@ export type MemberStatus = 'active' | 'suspended'
 
 export interface Member {
   id: string
-  email: string
+  /** お名前（会員登録で聞く） */
+  name: string
+  /** 登録した MT5 の口座番号。会員 ＝ 口座番号 */
+  account: number | null
+  /** 契約プラン（ロビーの合言葉で決まる）。古い会員は null */
+  plan?: 'first' | 'crystal' | null
+  /** 旧: メール。いまは使わない（空のまま） */
+  email?: string | null
   role: MemberRole
   status: MemberStatus
   can_trade: boolean
   last_login_at?: string | null
   created_at?: string
-  account?: string | null
+  /** 連携でつながっている口座（登録した口座と違うこともある） */
+  connected_account?: number | string | null
   server?: string | null
   running?: boolean | null
   connected_at?: string | null
@@ -25,6 +33,13 @@ export interface AuthSession {
 }
 
 const TOKEN_KEY = 'trelab-session-token'
+
+/** 画面に出す呼び名。「お名前（口座番号）」。古い会員はメール */
+export function memberLabel(m: Pick<Member, 'name' | 'account' | 'email'> | null | undefined): string {
+  if (!m) return ''
+  if (m.name) return m.account ? `${m.name}（${m.account}）` : m.name
+  return m.email ?? (m.account ? String(m.account) : '')
+}
 
 export function readToken(): string | null {
   try {
@@ -51,11 +66,12 @@ export function authErrorMessage(error: unknown): string {
   if (raw.includes('NOT_CONFIGURED') || raw.includes('supabase')) {
     return '研究所への接続設定がまだ完了していません。運営に連絡してください。'
   }
-  if (raw.includes('INVALID_EMAIL')) return 'メールアドレスの形を確認してください。'
+  if (raw.includes('BAD_ACCOUNT')) return '口座番号は数字で入力してください。'
+  if (raw.includes('BAD_NAME')) return 'お名前を入力してください。'
+  if (raw.includes('ACCOUNT_TAKEN')) return 'この口座番号はすでに登録されています。'
   if (raw.includes('WEAK_PASSWORD')) return 'パスワードは8文字以上にしてください。'
   if (raw.includes('BAD_ENTRY')) return '入場パスワードが違います。'
-  if (raw.includes('EMAIL_TAKEN')) return 'このメールアドレスはすでに登録されています。'
-  if (raw.includes('BAD_CREDENTIALS')) return 'メールアドレスまたはパスワードが違います。'
+  if (raw.includes('BAD_CREDENTIALS')) return '口座番号またはパスワードが違います。'
   if (raw.includes('SUSPENDED')) return 'このアカウントは停止されています。運営に連絡してください。'
   if (raw.includes('SESSION_EXPIRED')) return 'ログインの有効期限が切れました。もう一度ログインしてください。'
   if (raw.includes('FORBIDDEN')) return 'この操作を行う権限がありません。'
@@ -79,9 +95,10 @@ async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
   return data as T
 }
 
-export async function authRegister(email: string, password: string, entry: string): Promise<AuthSession> {
+export async function authRegister(account: number, name: string, password: string, entry: string): Promise<AuthSession> {
   return rpc<AuthSession>('auth_register', {
-    p_email: email,
+    p_account: account,
+    p_name: name,
     p_password: password,
     p_entry: entry,
   })
@@ -103,8 +120,13 @@ export async function authCheckEntry(entry: string): Promise<boolean | null> {
   }
 }
 
-export async function authLogin(email: string, password: string): Promise<AuthSession> {
-  return rpc<AuthSession>('auth_login', { p_email: email, p_password: password })
+/** 管理サイト：口座番号ではなく「管理サイトの合言葉」1つで入る（運営用の会員になる） */
+export async function authOperatorLogin(password: string): Promise<AuthSession> {
+  return rpc<AuthSession>('admin_login', { p_password: password })
+}
+
+export async function authLogin(account: number, password: string): Promise<AuthSession> {
+  return rpc<AuthSession>('auth_login', { p_account: account, p_password: password })
 }
 
 export async function authLogout(token: string): Promise<void> {
@@ -159,6 +181,16 @@ export async function adminSetPassword(token: string, memberId: string, password
 
 export async function adminSetEntryPassword(token: string, entry: string): Promise<void> {
   await rpc('admin_set_entry_password', { p_token: token, p_entry: entry })
+}
+
+/** 管理サイトの合言葉を決める */
+export async function adminSetOperatorPassword(token: string, password: string): Promise<void> {
+  await rpc('admin_set_admin_password', { p_token: token, p_password: password })
+}
+
+/** プランごとの合言葉（ロビーの「接続ツールの設置」で打つもの）を決める */
+export async function adminSetPlanPassword(token: string, plan: 'first' | 'crystal', password: string): Promise<void> {
+  await rpc('admin_set_plan_password', { p_token: token, p_plan: plan, p_password: password })
 }
 
 export async function memberGetConnection(token: string): Promise<unknown> {

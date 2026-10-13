@@ -280,11 +280,10 @@ server.on('upgrade', (req, socket, head) => {
     // BAN 中・削除済みの会員のブリッジは入れない（部屋が会員IDのときだけ確かめる）
     bridgesBlocked([roomId]).then((blocked) => {
       if (blocked.has(roomId)) {
-        log(`利用を止めている会員のブリッジを断りました: ${short(roomId)}`)
-        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
-        socket.destroy()
+        rejectBannedBridge(req, socket, head, roomId)
         return
       }
+      rejectedBridges.delete(roomId)
       wss.handleUpgrade(req, socket, head, (ws) => handleBridge(ws, roomId))
     })
     return
@@ -313,6 +312,34 @@ server.on('upgrade', (req, socket, head) => {
     wss.handleUpgrade(req, socket, head, (ws) => handleApp(ws, String(member.id), member))
   })
 })
+
+/**
+ * 利用を止めている会員のブリッジを断る。
+ *
+ * HTTP の 403 で門前払いすると、ブリッジは「中継に繋がらない」としか分からず、
+ * 60 秒おきに叩き直してくる（そのたびにログが 1 行増える）。
+ * そこで最初の 1 回は WebSocket を開いてから 4003（利用停止）で閉じる。
+ * 4003 を知っている版のブリッジは、これで自分から終了する。
+ *
+ * 4003 を知らない古い版は、それでも叩き直してくる。そのあいだは
+ * 会員の確認だけして（BAN を解いた瞬間に入れるように）、黙って 403 を返す。
+ * ログに残すのは部屋ごとに REJECT_QUIET_MS に 1 回だけ。
+ */
+const REJECT_QUIET_MS = 60 * 60 * 1000
+/** roomId → 最後に 4003 で断った（ログに残した）時刻 */
+const rejectedBridges = new Map()
+
+function rejectBannedBridge(req, socket, head, roomId) {
+  const last = rejectedBridges.get(roomId) ?? 0
+  if (Date.now() - last < REJECT_QUIET_MS) {
+    socket.write('HTTP/1.1 403 Forbidden\r\n\r\n')
+    socket.destroy()
+    return
+  }
+  rejectedBridges.set(roomId, Date.now())
+  log(`利用を止めている会員のブリッジを断りました: ${short(roomId)}（以後 ${REJECT_QUIET_MS / 60000} 分は記録しません）`)
+  wss.handleUpgrade(req, socket, head, (ws) => ws.close(4003, 'banned'))
+}
 
 /** これだけ pong が無ければ、そのブリッジは死んだものとして扱う（ping は 30 秒ごと） */
 const BRIDGE_DEAD_MS = 75 * 1000
@@ -598,6 +625,7 @@ setInterval(() => {
       if (!room?.bridge) continue
       log(`利用を止めている会員のブリッジを切ります: ${short(roomId)}`)
       room.pending = null
+      rejectedBridges.set(roomId, Date.now())
       room.bridge.close(4003, 'banned')
     }
   })

@@ -4,9 +4,12 @@ import {
   adminDeleteMember,
   adminListMembers,
   adminSetEntryPassword,
+  adminSetOperatorPassword,
+  adminSetPlanPassword,
   adminSetPassword,
   adminUpdateMember,
   authErrorMessage,
+  memberLabel,
   type Member,
   type MemberRole,
   type MemberStatus,
@@ -14,6 +17,8 @@ import {
 import { useAuth } from '../hooks/AuthContext'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { CHARACTERS } from '../data/characters'
+import { DreamlandApplications } from '../components/DreamlandApplications'
+import { DREAMLAND_PLAN_NAMES } from '../data/dreamland'
 
 export function Admin() {
   const { member, token, ready } = useAuth()
@@ -80,7 +85,7 @@ export function Admin() {
       await adminUpdateMember(token!, row.id, { can_trade })
     })
   const removeMember = (row: Member) => {
-    if (!window.confirm(`${row.email} を削除しますか？\n連携・一斉制御の記録も一緒に消えます。元に戻せません。`)) return
+    if (!window.confirm(`${memberLabel(row)} を削除しますか？\n連携・一斉制御の記録も一緒に消えます。元に戻せません。`)) return
     return act(row.id, async () => {
       await adminDeleteMember(token!, row.id)
     })
@@ -137,11 +142,13 @@ export function Admin() {
           <table className="w-full min-w-[860px] text-left text-[15px]">
             <thead>
               <tr className="border-b text-slate-400" style={{ borderColor: 'var(--panel-border)' }}>
-                <th className="px-3 py-3 font-bold">メール</th>
+                <th className="px-3 py-3 font-bold">お名前</th>
+                <th className="px-3 py-3 font-bold">口座番号</th>
+                <th className="px-3 py-3 font-bold">プラン</th>
                 <th className="px-3 py-3 font-bold">権限</th>
                 <th className="px-3 py-3 font-bold">状態</th>
                 <th className="px-3 py-3 font-bold">自動売買</th>
-                <th className="px-3 py-3 font-bold">MT5口座</th>
+                <th className="px-3 py-3 font-bold">MT5連携</th>
                 <th className="px-3 py-3 font-bold">OS</th>
                 <th className="px-3 py-3 font-bold">最終ログイン</th>
                 <th className="px-3 py-3 font-bold">操作</th>
@@ -151,10 +158,18 @@ export function Admin() {
               {rows.map((row) => (
                 <tr key={row.id} className="border-b" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
                   <td className="px-3 py-3">
-                    {row.email}
+                    {row.name || <span className="text-slate-500">{row.email ?? '—'}</span>}
                     {row.id === member?.id ? (
                       <span className="ml-2 text-[12px] text-slate-500">自分</span>
                     ) : null}
+                  </td>
+                  <td className="px-3 py-3 font-mono">{row.account ?? '—'}</td>
+                  <td className="px-3 py-3">
+                    {row.plan ? (
+                      <span style={{ color: row.plan === 'crystal' ? '#e8d8a8' : undefined }}>{DREAMLAND_PLAN_NAMES[row.plan]}</span>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
                   </td>
                   <td className="px-3 py-3">{row.role === 'admin' ? '管理者' : '一般'}</td>
                   <td className="px-3 py-3">
@@ -162,7 +177,7 @@ export function Admin() {
                   </td>
                   <td className="px-3 py-3">{row.can_trade ? '許可' : '不可'}</td>
                   <td className="px-3 py-3 text-slate-300">
-                    {row.account ? `${row.account} / ${row.server ?? ''}` : '—'}
+                    {row.connected_account ? `${row.connected_account} / ${row.server ?? ''}` : '—'}
                   </td>
                   <td className="px-3 py-3">{row.platform === 'mac' ? 'Mac' : row.platform === 'windows' ? 'Windows' : '—'}</td>
                   <td className="px-3 py-3 text-slate-400">
@@ -208,7 +223,7 @@ export function Admin() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={10} className="px-3 py-8 text-center text-slate-500">
                     まだアカウントがありません。
                   </td>
                 </tr>
@@ -222,7 +237,7 @@ export function Admin() {
             className="mt-5 rounded-[4px] border px-5 py-5"
             style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
           >
-            <p className="text-[16px] font-bold">パスワードを変更 — {pwTarget.email}</p>
+            <p className="text-[16px] font-bold">パスワードを変更 — {memberLabel(pwTarget)}</p>
             <p className="mt-1 text-[14px] text-slate-400">変更すると、その人は再ログインが必要になります。</p>
             <div className="mt-3 flex flex-wrap items-end gap-3">
               <label className="block">
@@ -260,6 +275,8 @@ export function Admin() {
           </div>
         )}
 
+        <DreamlandApplications token={token} />
+
         <NamesSection token={token} />
 
         <div
@@ -286,7 +303,127 @@ export function Admin() {
             </button>
           </div>
         </div>
+
+        <PlanPasswordsSection token={token} />
+
+        <OperatorPasswordSection token={token} />
       </div>
+    </div>
+  )
+}
+
+/** 管理サイト（運営用の別サイト）に入るための合言葉 */
+function OperatorPasswordSection({ token }: { token: string | null }) {
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const save = async () => {
+    if (!token) return
+    if (value.trim().length < 8) {
+      setMessage('合言葉は8文字以上にしてください。')
+      return
+    }
+    setBusy(true)
+    setMessage(null)
+    try {
+      await adminSetOperatorPassword(token, value.trim())
+      setValue('')
+      setMessage('管理サイトの合言葉を更新しました。')
+    } catch (err) {
+      setMessage(authErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="mt-5 rounded-[4px] border px-5 py-5" style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}>
+      <p className="text-[16px] font-bold">管理サイトの合言葉</p>
+      <p className="mt-1 text-[14px] text-slate-400">運営が管理サイトに入るときの合言葉です。8文字以上。知っている人は誰でも管理者として入れるので、外に出さないでください。</p>
+      {message && (
+        <p className="mt-3 text-[15px]" style={{ color: message.includes('更新しました') ? 'var(--accent)' : '#ff8484' }}>
+          {message}
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <input
+          type="password"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-11 w-64 rounded-[4px] border px-3 text-[15px]"
+          style={{ background: 'rgba(8,14,26,0.9)', borderColor: 'var(--panel-border)' }}
+        />
+        <button type="button" disabled={busy} onClick={() => void save()} className="h-11 rounded-[4px] px-5 text-[15px] font-bold text-[#081018]" style={{ background: 'var(--accent)' }}>
+          合言葉を更新
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * プランごとの合言葉。ロビー（ドリームランド渡航手続き）の「接続ツールの設置」で
+ * お客様が打ち込むもの。合った合言葉のプランに振り分けられ、会員登録でもそのプランが付く。
+ */
+function PlanPasswordsSection({ token }: { token: string | null }) {
+  const [values, setValues] = useState<Record<'first' | 'crystal', string>>({ first: '', crystal: '' })
+  const [busy, setBusy] = useState<'first' | 'crystal' | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+
+  const save = async (plan: 'first' | 'crystal') => {
+    if (!token) return
+    const pw = values[plan].trim()
+    if (pw.length < 8) {
+      setMessage('合言葉は8文字以上にしてください。')
+      return
+    }
+    setBusy(plan)
+    setMessage(null)
+    try {
+      await adminSetPlanPassword(token, plan, pw)
+      setValues((v) => ({ ...v, [plan]: '' }))
+      setMessage(`${DREAMLAND_PLAN_NAMES[plan]}の合言葉を更新しました。`)
+    } catch (err) {
+      setMessage(authErrorMessage(err))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="mt-5 rounded-[4px] border px-5 py-5" style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}>
+      <p className="text-[16px] font-bold">プランの合言葉</p>
+      <p className="mt-1 text-[14px] text-slate-400">
+        ロビーの「接続ツールの設置」でお客様が打ち込む合言葉です。打った合言葉のプランにしか案内されません（ロイヤルの方がファーストへ、
+        ファーストの方がロイヤルへ行くのを防ぎます）。8文字以上。
+      </p>
+      {message && (
+        <p className="mt-3 text-[15px]" style={{ color: message.includes('更新しました') ? 'var(--accent)' : '#ff8484' }}>
+          {message}
+        </p>
+      )}
+      {(['first', 'crystal'] as const).map((plan) => (
+        <div key={plan} className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-[14px] text-slate-300">
+            <span className="block">{DREAMLAND_PLAN_NAMES[plan]}</span>
+            <input
+              type="password"
+              value={values[plan]}
+              onChange={(e) => setValues((v) => ({ ...v, [plan]: e.target.value }))}
+              className="mt-1 h-11 w-64 rounded-[4px] border px-3 text-[15px]"
+              style={{ background: 'rgba(8,14,26,0.9)', borderColor: 'var(--panel-border)' }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy === plan}
+            onClick={() => void save(plan)}
+            className="h-11 rounded-[4px] px-5 text-[15px] font-bold text-[#081018]"
+            style={{ background: 'var(--accent)' }}
+          >
+            合言葉を更新
+          </button>
+        </div>
+      ))}
     </div>
   )
 }

@@ -425,6 +425,36 @@ const fbD2 = track(await open(cbridge(D)))
 check('BAN を解くと入れる', fbD2.readyState === WebSocket.OPEN)
 fbD2.close()
 
+// 最初から BAN 中の会員（削除済みの会員の PC に、ブリッジだけ残っているとき）。
+// 門前払い（HTTP 403）だとブリッジは「中継に繋がらない」としか分からず、60 秒おきに叩き直して
+// そのたびにログが増える。最初の 1 回は WebSocket を開いてから 4003 で閉じ、ブリッジに
+// 「利用を止められている」と伝えて自分から終了させる。
+console.log('\n── BAN（最初から止まっている会員のブリッジは、4003 を伝えて終わらせる）')
+const E = '55555555-5555-4555-8555-555555555555'
+blocked = [E]
+let firstKnock = null
+try {
+  const fbE = track(await open(cbridge(E)))
+  firstKnock = await new Promise((resolve) => {
+    fbE.on('close', (code) => resolve(code))
+    setTimeout(() => resolve(0), 2500)
+  })
+} catch (err) {
+  firstKnock = String(err.message)
+}
+check('★ 最初の 1 回は 4003（利用停止）で閉じる', firstKnock === 4003, String(firstKnock))
+denied = ''
+try {
+  await open(cbridge(E))
+} catch (err) {
+  denied = String(err.message)
+}
+check('4003 を知らない古い版が叩き直しても、黙って 403（ログに残さない）', denied.includes('403'), denied)
+blocked = []
+const fbE2 = track(await open(cbridge(E)))
+check('BAN を解いた瞬間に入れる（黙っているあいだも会員の確認はしている）', fbE2.readyState === WebSocket.OPEN)
+fbE2.close()
+
 // ブリッジの返事が、部屋つきで一斉制御の画面に届く
 fbA.send_({ type: 'ack', id: 's1', command: 'stop_trading', ok: true, value: 0 })
 const ackEv = await fleet.nextWhere((m) => m.type === 'fleet_event' && m.message?.type === 'ack')

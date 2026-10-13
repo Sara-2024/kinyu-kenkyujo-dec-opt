@@ -422,8 +422,112 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - DB は `supabase/migrations/20261002_add_fleet.sql`（`schema.sql` にも同じものが入っている。
   ずれていないことは `phase2_test.py` が見ている）。
 
+## ドリームランド渡航手続き（`dreamland/`）の決まり
+
+営業用の特設サイトとは**別の静的ページ**（`dreamland/index.html` 1枚。Vite も React も使わない）。
+お客様に渡す URL で、ロビーの係員 4 人が「口座開設 → MT5 口座の登録 → ドリームランド・パスポート（接続ツール）の発行 → 搭乗」を案内し、
+最後にドリームランド本体へ飛ばす。リンク・台詞・プラン名は `index.html` の `LINKS` / `SCRIPT` / `PLANS` だけで直す。
+
+- **入った瞬間にユイ（インフォメーション）が開く。** 受付済みの端末なら「おかえりなさい」と続きを案内する
+  （`localStorage` の `dreamland.application`。パスワードは覚えない）。
+  URL の末尾 `#service` `#connect`（接続ツールの設置）`#tool` `#gate` `#first` `#crystal` で、その窓口から始められる（LINE で直接送る用）。
+- **MT5 のパスワードは、ここでは預かる。** 「MT5のパスワードは扱わない」は接続ツールの話。ロビーのサービス
+  カウンターでは、運用システム（EA）を納品するために口座番号・サーバー・パスワード・プラン・お名前を記入してもらう
+  （メールは聞かない）。本体サイトの会員とは口座番号で結びつき、管理者画面の一覧に「会員」として出る。
+  送り先はサイトの `/api/dreamland`（`api/_lib/dreamland.ts`）→ Supabase の `dreamland_apply`。
+  一斉制御の登録簿と同じ鍵（`_fleet_key()`）で暗号化し、取り出せるのは管理者画面の
+  「ドリームランドの口座申込」（`DreamlandApplications.tsx`、`dreamland_reveal`）だけ。
+  ロビーは Supabase を直接叩かない。`supabase/migrations/20261012_dreamland_applications.sql`。
+- **同意が無ければ預からない。** 注意書き（会員登録はおひとり一回・何度も登録した人は会員権を取り消す・
+  記入して送った時点で承認）と、2 つの確認チェックが要る（画面でもサーバーでも `NO_CONSENT`）。
+  **パスポートの発行（口座をつなぐ）の前にも、同じ注意書きを必ず通す**（`service.terms`。文面は `NOTICE` の 1 か所）。
+  2 つのチェックを入れるまで「確認しました」が押せず、読まずに `signup` / `login` へ来ても `terms` に回す（ページを開いているあいだに一度）。
+  同じ口座をもう一度送ったら上書きして `submissions` を数える（消さない。管理者が見て判断する）。
+- **搭乗口はプランごとに 2 つ。** `first`＝ファーストクラス（搭乗口 1・DL-001）、
+  `crystal`＝ロイヤルファーストクラス（搭乗口 2・DL-002。紺×金の装い。MT5 の口座を **2 つ**つなぐ）。
+  行き先は `LINKS.dreamlandFirst` / `LINKS.dreamlandCrystal`。違う搭乗口に来たらミナトが正しい搭乗口へ案内する。
+- **プランは「合言葉」で決まる。** サービスカウンターの「接続ツールの設置」で、お客様がご契約時の合言葉を打つ。
+  合言葉はプランごとに 1 つ（`plan_passwords`。管理者画面の「プランの合言葉」か
+  `supabase/migrations/20261013_set_plan_passwords.sql` で決める。これまでの入場パスワードはファーストクラスに引き継がれる）。
+  ロビーは `/api/lobby`（`api/_lib/lobby.ts`）の `plan` で確かめ、合ったプランの案内にしか進めない
+  （ロイヤルの人がファーストへ、ファーストの人がロイヤルへ行けない）。決まったプランは `localStorage` の
+  `dreamland.plan`、合言葉そのものは登録に要るので `sessionStorage`（タブを閉じるまで）に置く。
+  `supabase/migrations/20261013_plan_passwords.sql`（`members.plan` もここで足す。`phase2_test.py` 8-7 が schema.sql と見比べる）。
+- **接続ツールの設置は、サービスカウンターの中で本物の連携をする。** 本体サイトの初期設定（ユイ）と同じ仕組みを
+  ロビーの JS に移したもの：合言葉 → 口座をつなぐ（`/api/lobby` の `register`。会員 ＝ 口座番号なので、
+  口座ごとに会員ができる。登録済みなら `login`）→ 合図を発行（`connect_token`）して `aitrader://connect?token=`
+  → 中継（`RELAY`）に会員の部屋で入り、ブリッジが名乗るのを待つ → 30 秒で来なければダウンロード案内
+  （OS 別の手順。既定の部屋 `vps-01` を `/health` で見張り、初回起動を検知したら合図を付けて呼び直す）
+  → `get_status` で口座を確かめる → `mt5StepIndex`（EA が載ったか・アルゴ取引が ON か）をブリッジの状態で見張る → 完了。
+  つながっている口座が登録した口座と違えば止める（別の MT5 にログインしている）。
+  つないだ会員は `dreamland.members`（セッションの合言葉を含む。サイトのパスワードは覚えない）。
+  チェック（tool / ea / algo）は、この流れで自動で付く。
+- **ロイヤルファーストクラスは 1 つ目を必ず、2 つ目は「今から／あとで」。** 1 つ目の連携が済むとソラが
+  「2 つ目を今から設置する／あとで設置する」を出す（`service.done`）。「あとで」は `dreamland.second = "later"`。
+  2 つ目はいつでも「2 つ目の口座をつなぐ」から（同じ合言葉で、別の口座番号の会員を作る）。
+  搭乗は 1 つ目が済んでいればできる（搭乗券にその旨を添える）。
+- **お客様向けの呼び名。** 接続ツール（MT5 Automatic）はロビーでは**「ドリームランド・パスポート」**（台詞の中では「パスポート」）、
+  つなぐことは「パスポートの発行」、ハルの窓口は**「パスポートカウンター」**（ハル＝パスポート係）、ミナトの窓口は**「搭乗ゲート」**。
+  MT5 のパスワードや合言葉と紛れないよう、「パスポート」は接続ツールのことにしか使わない。パソコン上のファイル名・OS の確認ダイアログは MT5 Automatic のままなので、
+  ダウンロードと呼び出しの台詞には「パソコン上の名前は MT5 Automatic」と添える（名前が違って戸惑わないため）。
+- **スマホでは発行しない。** MT5 もパスポートもパソコンにしか入らないので、スマホ・タブレット（`isPhone`。iPad は
+  Mac を名乗るので `maxTouchPoints` で見分ける）から「パスポートの発行」に進むと `service.pc`：「パソコンで開いて」と
+  リンクを自分に送るボタン（`navigator.share`、無ければコピー）。口座の登録・マニュアル・搭乗ゲートはスマホでも使える。
+  スマホの窓は下から出るシート（立ち絵は名前の横に小さく、台詞と資料は横幅いっぱい）。
+- **ハル（パスポートカウンター）は発行をしない。** ファイルの受け取りと手順の説明だけ。発行は「サービスカウンターへ」で送る。
+- **搭乗口は、搭乗ゲートを押してから選ぶ。** 地図のピンは「搭乗ゲート」1 つ（`pin--gate`）。押すとミナトが
+  搭乗口 1・2 のカード（`DOCS.gates`）を出す。合言葉が済んでいれば自分の搭乗口だけ押せて、もう一方は
+  「OTHER PLAN」で押せない。ピンには「あなたの搭乗口：N 番」が付く（`renderGates`）。
+- **窓口へは「移動」してから話す。** `goTo(spot)`：絵とピン（`#world`）をその窓口に向けて寄せ（`transform-origin`
+  をピンの位置にして `scale(1.14)`）、真ん中に「○○へ」のリボン（`#travel`）を 0.75 秒出してから係員の窓が開く。
+  別の係員へ送る `@service` なども同じ。閉じると元の引きに戻る。`prefers-reduced-motion` では寄せも待ちもしない。
+  搭乗券の有効期間の注記は `VALID_NOTE`（原則 1 年、半年プランは半年で AI の紐付けをやり直す）。
+- **窓口が使えないときも「準備中」を出さない。** `LINKS.register` が `#TODO` のとき・サーバーが 5xx のときは
+  「窓口が立て込んでいる」と言ってサポート LINE を出す（`service.busy`）。
+- **口座開設マニュアルはロビーの中（`dreamland/manual/`）。** HFM 配布の PDF（42 ページ）を、ロビーと同じ装いの
+  1 枚のウェブページに組み直したもの（画面写真は `manual/img/`、PDF から取り出した WebP）。文面は PDF と同じ。
+  HFM 側の画面が変わって作り直すときは、新しい PDF から文章と画像を取り出して `manual/index.html` を組み直す
+  （元の PDF は Google Drive。リンクは `LINKS.accountManual` = `manual/`）。
+- **公開先は Vercel の別プロジェクト `dreamland-lobby`**（https://dreamland-lobby.vercel.app）。`dreamland/` を
+  そのまま静的に出す（`dreamland/vercel.json` で noindex ヘッダー）。更新は `cd dreamland && vercel deploy --prod --yes`
+  （`dreamland/.vercel` に紐付けがある。無ければ `vercel link --yes --project dreamland-lobby`）。本体サイトとは別なので、
+  `/api/lobby` `/api/dreamland` の変更は本体サイト（kinyu-kenkyujo-dec-opt）の push で出す。
+- **出発の演出は「搭乗口の光に包まれて雲の上へ」**（`.fly`）。飛行機の絵は使わない。金の輪が広がり、光が満ちて白に
+  溶けてから本体へ移動する（3.5 秒）。ロイヤルは紺×金の色味（`fly--crystal`）。
+- 動かすには、migration を流し、サイト側に `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` があればよい
+  （新しい環境変数は要らない）。ロビーを置くドメインを `DREAMLAND_ORIGIN` に書けば、CORS をそこだけに絞れる。
+- 試験は `api/_lib/dreamland.test.mjs` と `api/_lib/lobby.test.mjs`（`npm test` に入っている）。
+  **公開の前に `tools/check-lobby.sh` を通す**：JS の文法と、HTML/JS で使っているクラスが CSS に揃っているかを見る
+  （記入欄・搭乗口のカードの CSS がまとめて消えたまま公開され、文字化けのように見えた事故から）。
+  ロビーの接続の流れは、偽のサイト（fetch）と偽のブリッジ（WebSocket）を iframe に差し込んで headless Chrome で通す。ロビーの通し確認は headless Chrome で行う
+  （手元の 8765 番は別のアプリが使っているので、別の番号で `python3 -m http.server` を立てる）。
+
+## サイトの分け方（2026-10-14 から）
+
+- **お客様に見せる顔はロビー（dreamland-lobby.vercel.app）だけ。** 本体サイト（kinyu-kenkyujo-dec-opt）のトップ `/` と
+  知らない URL はロビーへ飛ばす（`App.tsx` の `ToLobby`、`VITE_LOBBY_URL` で差し替え）。研究所の顔は出さない。
+  本体に残すのは仕組みだけ：`/api/*`（窓口）、`/download/*`（接続ツール）、`/login`、`/control`（旧・管制室。
+  稼働／停止・ロット。`Lab`）、`/admin`、`/fleet`、`/fleet/join`。`/chat` は廃止。
+  `Lab` では AI の研究員（リン・ジン・ミオ）を出さない（`HIDDEN_STAFF`）。残るのはユイ・アルゴ・ガンツ。
+- **管理サイトは別の Vercel プロジェクト `dreamland-admin`**（https://dreamland-admin-green.vercel.app）。同じリポジトリを
+  `VITE_SITE_MODE=admin` で動かす（`App.tsx` の `ADMIN_SITE`）。入口は `/`（`AdminGate`）で、口座番号ではなく
+  **管理サイトの合言葉 1 つ**で入る（`admin_login` → 運営用の会員 `operator@dreamland.local`、role = admin）。
+  中は `/admin` と `/fleet` だけ。合言葉は `app_settings.admin_password_hash`（`supabase/migrations/20261014_admin_site.sql`、
+  初期値は `20261014_set_admin_password.sql`、管理画面の「管理サイトの合言葉」からも変えられる）。
+  知っている人は誰でも管理者になれるので、合言葉は外に出さない。
+  更新は `VERCEL_ORG_ID=… VERCEL_PROJECT_ID=prj_qU83tud01kRJnqr9aGCLpmWu7uPR vercel deploy --prod --yes`
+  （リポジトリ直下から。`.vercel` は本体に紐付いているので環境変数で上書きする）。環境変数は Vercel 側に
+  `VITE_SITE_MODE` / `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` / `VITE_RELAY_URL`。
+
 ## 部屋（会員ごとの分離）の決まり
 
+- **会員 ＝ MT5 の口座番号。** 会員登録は「入場パスワード → 口座番号 → お名前 → パスワード」で、
+  メールは聞かない（`auth_register(p_account, p_name, …)` / `auth_login(p_account, …)`、
+  `supabase/migrations/20261012_member_account_login.sql`）。口座が2つある人は会員を2つ作る
+  （それぞれに自分のサイトがある）。
+  入場パスワードはプランの合言葉（`plan_passwords`）で受け、合ったプランが `members.plan` に入る
+  （ロイヤルファーストクラスの 2 口座は、同じ合言葉で登録した 2 つの会員）。画面の呼び名は `memberLabel()`（お名前（口座番号））。
+  `members.email` は残してあるが空（メールで登録した会員は居ない）。
 - **部屋 = 会員のUUID。** 画面は `useBridge(member.id, token)`、ブリッジは `BRIDGE_ID`。
   中継（`server/index.js`）は同じ部屋の中だけを行き来させる。
 - **BAN（管理者画面の「BAN」＝ `status = 'suspended'`）はブリッジも切る。** ブリッジは合言葉を

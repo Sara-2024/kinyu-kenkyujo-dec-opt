@@ -166,7 +166,7 @@ Cursor からはそのまま clone / push できます。Cloud Agent を使う�
 2. **SQL Editor** で [supabase/schema.sql](supabase/schema.sql) を実行
 3. **Project Settings → API** から URL と `anon` key をコピー
 4. ルートの `.env` に `VITE_SUPABASE_URL` と `VITE_SUPABASE_ANON_KEY` を記入
-5. 初回登録の入場パスワードは `TRELAB-ENTRY`（最初に登録した人が管理者）
+5. 初回登録の入場パスワードは `AITrader-dream`（最初に登録した人が管理者）
 6. 管理者画面から入場パスワードを変更する
 
 ### デプロイ時

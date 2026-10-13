@@ -244,6 +244,65 @@ if pf_mig.is_file():
     check("管理者の一覧に OS が出る", "c.platform," in pf_sql)
     check("OS の記録の migration は既存のテーブルを落とさない", "drop table" not in pf_sql.lower())
 
+# ── 8-5) ドリームランドの口座申込の migration も schema.sql とずれていないか ──
+dl_mig = ROOT / "supabase" / "migrations" / "20261012_dreamland_applications.sql"
+check("ドリームランドの申込の migration がある", dl_mig.is_file())
+if dl_mig.is_file():
+    dl_sql = dl_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("ドリームランドの申込の migration の中身が schema.sql と同じ", dl_sql.strip() in schema_all)
+    check("パスワードは一斉制御と同じ鍵で暗号化する", "pgp_sym_encrypt(p_password, public._fleet_key())" in dl_sql)
+    check("同意が無ければ預からない", "NO_CONSENT" in dl_sql)
+    check("一覧と取り出しは管理者だけ", dl_sql.count("_require_admin(p_token)") >= 4)
+    check("一覧はパスワードを返さない", "password" not in dl_sql[dl_sql.index("_dreamland_row_json(r public") : dl_sql.index("dreamland_apply(")].replace("password_enc", ""))
+    check("同じ口座をもう一度送ったら回数を数える", "submissions = public.dreamland_applications.submissions + 1" in dl_sql)
+    check("テーブルは直接読めない", "revoke all on table public.dreamland_applications" in dl_sql)
+    check("ドリームランドの申込の migration は既存のテーブルを落とさない", "drop table" not in dl_sql.lower())
+
+# ── 8-6) 「会員 ＝ 口座番号」の migration も schema.sql とずれていないか ──
+acc_mig = ROOT / "supabase" / "migrations" / "20261012_member_account_login.sql"
+check("口座番号ログインの migration がある", acc_mig.is_file())
+if acc_mig.is_file():
+    acc_sql = acc_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("口座番号ログインの migration の中身が schema.sql と同じ", acc_sql.strip() in schema_all)
+    check("登録は口座番号・お名前・パスワード・入場パスワード", "auth_register(p_account bigint, p_name text, p_password text, p_entry text)" in acc_sql)
+    check("ログインは口座番号とパスワード", "auth_login(p_account bigint, p_password text)" in acc_sql)
+    check("メールでの登録・ログインは消す", "drop function if exists public.auth_register(text, text, text)" in acc_sql and "drop function if exists public.auth_login(text, text)" in acc_sql)
+    check("口座番号は会員ごとに一つ（重複しない）", "members_account_idx" in acc_sql and "ACCOUNT_TAKEN" in acc_sql)
+    check("ロビーの申込と会員を口座番号で結ぶ", "left join public.members m on m.account = r.account" in acc_sql)
+    check("会員の表は落とさない", "drop table" not in acc_sql.lower())
+
+
+# ── 8-7) 「プランごとの合言葉」の migration も schema.sql とずれていないか ──
+plan_mig = ROOT / "supabase" / "migrations" / "20261013_plan_passwords.sql"
+check("プランの合言葉の migration がある", plan_mig.is_file())
+if plan_mig.is_file():
+    plan_sql = plan_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("プランの合言葉の migration の中身が schema.sql と同じ", plan_sql.strip() in schema_all)
+    check("合言葉はハッシュで持つ（crypt）", "crypt(p_entry, password_hash)" in plan_sql and "gen_salt('bf')" in plan_sql)
+    check("登録で合ったプランを会員に記録する", "insert into public.members (account, name, password_hash, role, plan)" in plan_sql)
+    check("これまでの入場パスワードはファーストクラスに引き継ぐ", "select 'first', entry_password_hash from public.app_settings" in plan_sql)
+    check("合言葉の確認は総当たりを遅らせる", "pg_sleep" in plan_sql)
+    check("合言葉を決められるのは管理者だけ", "_require_admin(p_token)" in plan_sql)
+    check("合言葉の表は直接読めない", "revoke all on table public.plan_passwords" in plan_sql)
+    check("プランの合言葉の migration は既存のテーブルを落とさない", "drop table" not in plan_sql.lower())
+
+
+# ── 8-8) 「管理サイトの合言葉」の migration も schema.sql とずれていないか ──
+adm_mig = ROOT / "supabase" / "migrations" / "20261014_admin_site.sql"
+check("管理サイトの migration がある", adm_mig.is_file())
+if adm_mig.is_file():
+    adm_sql = adm_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("管理サイトの migration の中身が schema.sql と同じ", adm_sql.strip() in schema_all)
+    check("合言葉はハッシュで持つ", "crypt(p_password, v_hash)" in adm_sql)
+    check("運営の会員は admin で作る", "'operator@dreamland.local', '運営'" in adm_sql and "'admin')" in adm_sql)
+    check("合言葉の確認は総当たりを遅らせる", "pg_sleep" in adm_sql)
+    check("合言葉を変えられるのは管理者だけ", "_require_admin(p_token)" in adm_sql)
+    check("管理サイトの migration は既存のテーブルを落とさない", "drop table" not in adm_sql.lower())
+
 # ── 8) DB の追加分（migration）と schema.sql がずれていないか ──
 mig_path = ROOT / "supabase" / "migrations" / "20260912_add_connect_tokens.sql"
 schema_path = ROOT / "supabase" / "schema.sql"

@@ -1,18 +1,26 @@
 // 受付。研究所の入口で、受付案内のユイが順に聞いてくる。
-//   はじめての方: 入場パスワード → メールアドレス → パスワード → 入室
-//   会員の方:     メールアドレス・パスワード → 入室
+//   はじめての方: 入場パスワード → MT5 の口座番号 → お名前 → パスワード → 入室
+//   会員の方:     口座番号・パスワード → 入室
+// 会員 ＝ MT5 の口座番号。メールは聞かない。
 // 台詞は characters.ts の RECEPTION にまとめてある。
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { PixelPerson } from '../components/PixelPerson'
 import { authCheckEntry, authErrorMessage } from '../data/auth'
 import { RECEPTION } from '../data/characters'
-import { validateEmail } from '../data/setupFlow'
 import { useAuth } from '../hooks/AuthContext'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { supabase } from '../lib/supabase'
 
-type Step = 'welcome' | 'entry' | 'email' | 'password' | 'login' | 'done'
+type Step = 'welcome' | 'entry' | 'account' | 'name' | 'password' | 'login' | 'done'
+
+/** 口座番号を数に。全角の数字も受ける。数字でなければ null */
+function parseAccount(value: string): number | null {
+  const s = value.trim().replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
+  if (!/^[0-9]{1,13}$/.test(s)) return null
+  const n = Number(s)
+  return n > 0 ? n : null
+}
 
 const RED = '#ff8484'
 
@@ -70,7 +78,8 @@ export function Login() {
   const [leave, setLeave] = useState(false)
 
   const [entry, setEntry] = useState('')
-  const [email, setEmail] = useState('')
+  const [account, setAccount] = useState('')
+  const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
 
@@ -133,7 +142,7 @@ export function Login() {
         return
       }
       // ok === null は「確認する仕組みがまだ無い」。本登録のときに確かめる
-      go('email', ok ? `${RECEPTION.entryOk} ${RECEPTION.askEmail}` : RECEPTION.askEmail)
+      go('account', ok ? `${RECEPTION.entryOk} ${RECEPTION.askAccount}` : RECEPTION.askAccount)
     } catch (err) {
       fail(err)
     } finally {
@@ -141,9 +150,17 @@ export function Login() {
     }
   }
 
-  const submitEmail = () => {
-    if (validateEmail(email) != null) {
-      say(RECEPTION.emailBad, true)
+  const submitAccount = () => {
+    if (parseAccount(account) == null) {
+      say(RECEPTION.accountBad, true)
+      return
+    }
+    go('name', RECEPTION.askName)
+  }
+
+  const submitName = () => {
+    if (!name.trim()) {
+      say(RECEPTION.nameBad, true)
       return
     }
     go('password', RECEPTION.askPassword)
@@ -161,7 +178,7 @@ export function Login() {
     setBusy(true)
     say(RECEPTION.registering)
     try {
-      await register(email.trim(), password, entry.trim())
+      await register(parseAccount(account) ?? 0, name.trim(), password, entry.trim())
       go('done', RECEPTION.registered)
     } catch (err) {
       const msg = authErrorMessage(err)
@@ -178,7 +195,12 @@ export function Login() {
   }
 
   const submitLogin = async () => {
-    if (!email.trim() || !password) return
+    const acct = parseAccount(account)
+    if (acct == null) {
+      say(RECEPTION.accountBad, true)
+      return
+    }
+    if (!password) return
     if (!supabase) {
       fail(new Error('NOT_CONFIGURED'))
       return
@@ -186,7 +208,7 @@ export function Login() {
     setBusy(true)
     say(RECEPTION.checkingLogin)
     try {
-      await login(email.trim(), password)
+      await login(acct, password)
       go('done', RECEPTION.loggedIn)
     } catch (err) {
       fail(err)
@@ -199,7 +221,8 @@ export function Login() {
     e.preventDefault()
     if (busy) return
     if (step === 'entry') void submitEntry()
-    else if (step === 'email') submitEmail()
+    else if (step === 'account') submitAccount()
+    else if (step === 'name') submitName()
     else if (step === 'password') void submitRegister()
     else if (step === 'login') void submitLogin()
   }
@@ -212,7 +235,7 @@ export function Login() {
   }
 
   const progress =
-    step === 'entry' ? 1 : step === 'email' ? 2 : step === 'password' ? 3 : step === 'done' && entry ? 4 : 0
+    step === 'entry' ? 1 : step === 'account' ? 2 : step === 'name' ? 3 : step === 'password' ? 4 : step === 'done' && entry ? 5 : 0
 
   const modeLabel = step === 'login' ? 'ログイン' : step === 'welcome' ? 'ログイン ／ 会員登録' : '会員登録'
 
@@ -281,14 +304,14 @@ export function Login() {
               </p>
               {progress > 0 && (
                 <p className="ml-auto flex items-center gap-1.5 text-[13px] font-bold tracking-wide text-slate-300">
-                  {[1, 2, 3].map((k) => (
+                  {[1, 2, 3, 4].map((k) => (
                     <span
                       key={k}
                       className="h-2 w-6 rounded-full"
                       style={{ background: progress >= k ? 'var(--accent)' : 'rgba(94,204,255,0.18)', boxShadow: progress >= k ? '0 0 6px var(--accent)' : undefined }}
                     />
                   ))}
-                  <span className="ml-1 text-[12px] text-slate-400">{progress === 1 ? '入場確認' : progress === 2 ? '連絡先' : progress === 3 ? 'パスワード' : '完了'}</span>
+                  <span className="ml-1 text-[12px] text-slate-400">{progress === 1 ? '入場確認' : progress === 2 ? '口座番号' : progress === 3 ? 'お名前' : progress === 4 ? 'パスワード' : '完了'}</span>
                 </p>
               )}
             </div>
@@ -329,14 +352,26 @@ export function Login() {
                       disabled={busy}
                     />
                   )}
-                  {(step === 'email' || step === 'login') && (
+                  {(step === 'account' || step === 'login') && (
                     <Field
                       ref={firstInput}
-                      label={RECEPTION.labels.email}
-                      type="email"
-                      value={email}
-                      onChange={setEmail}
+                      label={RECEPTION.labels.account}
+                      type="text"
+                      value={account}
+                      onChange={setAccount}
                       autoComplete="username"
+                      inputMode="numeric"
+                      disabled={busy}
+                    />
+                  )}
+                  {step === 'name' && (
+                    <Field
+                      ref={firstInput}
+                      label={RECEPTION.labels.name}
+                      type="text"
+                      value={name}
+                      onChange={setName}
+                      autoComplete="name"
                       disabled={busy}
                     />
                   )}
@@ -384,7 +419,7 @@ export function Login() {
                       ? '…'
                       : step === 'entry'
                         ? `${RECEPTION.buttons.tell} ▶`
-                        : step === 'email'
+                        : step === 'account' || step === 'name'
                           ? `${RECEPTION.buttons.next} ▶`
                           : step === 'password'
                             ? `${RECEPTION.buttons.register} ▶`
@@ -432,6 +467,7 @@ function Field({
   value,
   onChange,
   autoComplete,
+  inputMode,
   disabled,
 }: {
   ref?: React.Ref<HTMLInputElement>
@@ -440,6 +476,8 @@ function Field({
   value: string
   onChange: (v: string) => void
   autoComplete?: string
+  /** スマホで数字のキーボードを出すとき 'numeric' */
+  inputMode?: 'numeric' | 'text'
   disabled?: boolean
 }) {
   return (
@@ -451,6 +489,7 @@ function Field({
         value={value}
         disabled={disabled}
         autoComplete={autoComplete}
+        inputMode={inputMode}
         onChange={(e) => onChange(e.target.value)}
         className="h-12 w-full rounded-[5px] border px-4 text-[17px] font-bold text-slate-100 outline-none focus:border-[var(--accent)] disabled:opacity-50"
         style={{ background: 'rgba(8,14,26,0.9)', borderColor: 'rgba(148,163,184,0.35)' }}

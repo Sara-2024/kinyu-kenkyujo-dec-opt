@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import {
   authLogin,
   authLogout,
+  authOperatorLogin,
   authMe,
   authRegister,
   memberClearConnection,
@@ -24,8 +25,10 @@ interface AuthState {
   ready: boolean
   member: Member | null
   token: string | null
-  login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, entry: string) => Promise<void>
+  login: (account: number, password: string) => Promise<void>
+  /** 管理サイト：合言葉 1 つで入る */
+  loginOperator: (password: string) => Promise<void>
+  register: (account: number, name: string, password: string, entry: string) => Promise<void>
   logout: () => Promise<void>
   refresh: () => Promise<void>
 }
@@ -86,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 開発中に Supabase を用意せず見た目だけ確認したいとき（npm run dev かつ .env.local に
     // VITE_PREVIEW_MEMBER=1）。本番ビルドには入らない
     if (import.meta.env.DEV && import.meta.env.VITE_PREVIEW_MEMBER === '1') {
-      const preview = { id: '00000000-0000-4000-8000-000000000000', email: 'preview@example.com', role: 'admin', status: 'active', can_trade: true } as Member
+      const preview = { id: '00000000-0000-4000-8000-000000000000', name: 'プレビュー', account: 12345678, email: null, role: 'admin', status: 'active', can_trade: true } as Member
       setMember(preview)
       // 連携の保存先（localStorage）は会員IDごと。プレビューでも同じ動きにする
       setConnectionOwner(preview.id)
@@ -121,16 +124,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const session = await authLogin(email, password)
+    async (account: number, password: string) => {
+      const session = await authLogin(account, password)
+      await adopt(session.token, session.member)
+    },
+    [adopt],
+  )
+
+  const loginOperator = useCallback(
+    async (password: string) => {
+      const session = await authOperatorLogin(password)
       await adopt(session.token, session.member)
     },
     [adopt],
   )
 
   const register = useCallback(
-    async (email: string, password: string, entry: string) => {
-      const session = await authRegister(email, password, entry)
+    async (account: number, name: string, password: string, entry: string) => {
+      const session = await authRegister(account, name, password, entry)
       await adopt(session.token, session.member)
     },
     [adopt],
@@ -146,8 +157,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token])
 
   const value = useMemo(
-    () => ({ ready, member, token, login, register, logout, refresh }),
-    [ready, member, token, login, register, logout, refresh],
+    () => ({ ready, member, token, login, loginOperator, register, logout, refresh }),
+    [ready, member, token, login, loginOperator, register, logout, refresh],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
