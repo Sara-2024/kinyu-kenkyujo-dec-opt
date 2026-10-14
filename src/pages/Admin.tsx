@@ -33,6 +33,16 @@ export function Admin() {
   // 会員ごとのパスポート（接続ツール）へ、停止・稼働・全決済を送る。中継の /fleet を使う
   // （一斉制御と同じ道。部屋＝会員ID を名指しして 1 件だけ送る）
   const fleet = useFleet(member?.role === 'admin' ? token : null, rows.map((r) => r.id))
+  // 中継につながっているのに一覧に無い口座（登録が遅れている・読み直し前）も、行として出す
+  const shownRows: Member[] = [
+    ...rows,
+    ...Object.entries(fleet.states)
+      .filter(([room, st]) => st.online && !rows.some((r) => r.id === room))
+      .map(([room, st]) => {
+        const acct = Number((st.status as { account?: unknown } | null)?.account) || null
+        return { id: room, name: '（連携のみ）', account: acct, server: String((st.status as { server?: unknown } | null)?.server ?? ''), role: 'user', status: 'active', can_trade: true } as unknown as Member
+      }),
+  ]
   const [sent, setSent] = useState<Record<string, string>>({})
   const sendTo = async (row: Member, command: FleetCommand) => {
     const label: Record<FleetCommand, string> = { stop_trading: '停止', start_trading: '稼働', close_all: '全決済', stop_system: 'システム停止' }
@@ -71,6 +81,13 @@ export function Admin() {
 
   useEffect(() => {
     if (ready && member?.role === 'admin' && token) void reload()
+  }, [ready, member, token])
+  // 新しく登録・連携した口座が、開き直さなくても出るように 30 秒ごとに読み直す
+  useEffect(() => {
+    if (!(ready && member?.role === 'admin' && token)) return
+    const id = setInterval(() => void reload(), 30_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, member, token])
 
   if (ready && !member) return <Navigate to="/login" replace />
@@ -179,7 +196,7 @@ export function Admin() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {shownRows.map((row) => (
                 <tr key={row.id} className="border-b" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
                   <td className="px-3 py-3">
                     {row.name || <span className="text-slate-500">{row.email ?? '—'}</span>}
@@ -266,7 +283,7 @@ export function Admin() {
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && (
+              {shownRows.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
                     まだアカウントがありません。
