@@ -15,6 +15,7 @@ import {
   type MemberStatus,
 } from '../data/auth'
 import { useAuth } from '../hooks/AuthContext'
+import { useFleet, type FleetCommand } from '../hooks/useFleet'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { CHARACTERS } from '../data/characters'
 import { DreamlandApplications } from '../components/DreamlandApplications'
@@ -29,6 +30,27 @@ export function Admin() {
   const [pwTarget, setPwTarget] = useState<Member | null>(null)
   const [pw1, setPw1] = useState('')
   const [pw2, setPw2] = useState('')
+  // 会員ごとのパスポート（接続ツール）へ、停止・稼働・全決済を送る。中継の /fleet を使う
+  // （一斉制御と同じ道。部屋＝会員ID を名指しして 1 件だけ送る）
+  const fleet = useFleet(member?.role === 'admin' ? token : null, rows.map((r) => r.id))
+  const [sent, setSent] = useState<Record<string, string>>({})
+  const sendTo = async (row: Member, command: FleetCommand) => {
+    const label: Record<FleetCommand, string> = { stop_trading: '停止', start_trading: '稼働', close_all: '全決済', stop_system: 'システム停止' }
+    if (command === 'close_all' && !window.confirm(`${memberLabel(row)} の建玉と待機注文をすべて閉じます。よろしいですか？`)) return
+    setBusyId(row.id)
+    setError(null)
+    try {
+      const r = await fleet.send(command, [row.id], '管理者画面')
+      setSent((prev) => ({
+        ...prev,
+        [row.id]: r.delivered.includes(row.id) ? `${label[command]}を送りました（${new Date().toLocaleTimeString('ja-JP')}）` : r.refused?.includes(row.id) ? '本人が一斉停止を受け付けない設定です' : 'パスポートが中継に居ません（預かり）',
+      }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '送れませんでした')
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -126,7 +148,8 @@ export function Admin() {
           </Link>
         </div>
         <p className="mt-2 text-[15px] text-slate-400">
-          利用中のアカウント一覧です。権限の付与と、パスワード忘れの再設定ができます。
+          利用中のアカウント一覧です。「パスポート」の列で、その口座の EA を止める・動かす・全決済できます（パスポートが中継につながっている口座だけ）。
+          {fleet.phase === 'denied' ? ' 中継に入れていません（管理者のログインを確かめてください）。' : fleet.phase === 'connecting' ? ' 中継に接続中…' : ''}
         </p>
 
         {error && (
@@ -147,8 +170,9 @@ export function Admin() {
                 <th className="px-3 py-3 font-bold">プラン</th>
                 <th className="px-3 py-3 font-bold">権限</th>
                 <th className="px-3 py-3 font-bold">状態</th>
-                <th className="px-3 py-3 font-bold">自動売買</th>
+                <th className="px-3 py-3 font-bold">お客様の操作</th>
                 <th className="px-3 py-3 font-bold">MT5連携</th>
+                <th className="px-3 py-3 font-bold">パスポート</th>
                 <th className="px-3 py-3 font-bold">OS</th>
                 <th className="px-3 py-3 font-bold">最終ログイン</th>
                 <th className="px-3 py-3 font-bold">操作</th>
@@ -179,6 +203,27 @@ export function Admin() {
                   <td className="px-3 py-3 text-slate-300">
                     {row.connected_account ? `${row.connected_account} / ${row.server ?? ''}` : '—'}
                   </td>
+                  <td className="px-3 py-3">
+                    {(() => {
+                      const st = fleet.states[row.id]
+                      const online = !!st?.online
+                      const running = typeof st?.status?.value === 'number' ? Number(st.status.value) !== 0 : null
+                      return (
+                        <div className="flex flex-col gap-1">
+                          <span style={{ color: online ? '#35f58a' : '#94a3b8' }}>
+                            {online ? `接続中（${running === null ? '状態不明' : running ? 'EA 稼働中' : 'EA 停止中'}）` : '未接続'}
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            <Mini disabled={!online || busyId === row.id} onClick={() => void sendTo(row, 'stop_trading')}>停止</Mini>
+                            <Mini disabled={!online || busyId === row.id} onClick={() => void sendTo(row, 'start_trading')}>稼働</Mini>
+                            <Mini disabled={!online || busyId === row.id} onClick={() => void sendTo(row, 'close_all')}>全決済</Mini>
+                          </div>
+                          {sent[row.id] && <span className="text-[12px] text-slate-400">{sent[row.id]}</span>}
+                          {st?.ack && <span className="text-[12px]" style={{ color: st.ack.ok ? '#35f58a' : '#ff8484' }}>{st.ack.ok ? 'パスポートが実行しました' : `失敗: ${st.ack.error ?? ''}`}</span>}
+                        </div>
+                      )
+                    })()}
+                  </td>
                   <td className="px-3 py-3">{row.platform === 'mac' ? 'Mac' : row.platform === 'windows' ? 'Windows' : '—'}</td>
                   <td className="px-3 py-3 text-slate-400">
                     {row.last_login_at ? new Date(row.last_login_at).toLocaleString('ja-JP') : '—'}
@@ -204,7 +249,7 @@ export function Admin() {
                         disabled={busyId === row.id}
                         onClick={() => void changeTrade(row, !row.can_trade)}
                       >
-                        {row.can_trade ? '売買を止める' : '売買を許可'}
+                        {row.can_trade ? 'お客様の操作を禁止' : 'お客様の操作を許可'}
                       </Mini>
                       <Mini
                         disabled={busyId === row.id}
@@ -223,7 +268,7 @@ export function Admin() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-8 text-center text-slate-500">
+                  <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
                     まだアカウントがありません。
                   </td>
                 </tr>
