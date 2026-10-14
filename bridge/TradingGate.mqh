@@ -209,14 +209,14 @@ void DrawGateStatus()
       fill   = C'6,42,28';
       border = clrLime;
       statec = clrLime;
-      state  = "稼働中（サイトと連携）";
+      state  = "ユメックAIが稼働中";
      }
    else
      {
       fill   = C'52,12,12';
       border = clrOrangeRed;
       statec = clrOrangeRed;
-      state  = "停止中（サイトから停止）";
+      state  = "ユメックAIが停止中";
      }
 
    static string   last_state = "";
