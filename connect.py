@@ -1003,7 +1003,7 @@ def list_bridge_processes() -> list[tuple[int, str]]:
             "Get-CimInstance Win32_Process | "
             "Where-Object { $_.CommandLine -and "
             "($_.CommandLine -like '*bridge.py*' -or $_.CommandLine -like '*--run-bridge*') } | "
-            "ForEach-Object { \"$($_.ProcessId)|$($_.Name)\" }"
+            "ForEach-Object { \"$($_.ProcessId)|$($_.Name)|$($_.CommandLine)\" }"
         )
         try:
             out = subprocess.run(
@@ -1041,15 +1041,19 @@ def list_bridge_processes() -> list[tuple[int, str]]:
         line = line.strip()
         if "|" not in line:
             continue
-        pid_s, image = line.split("|", 1)
+        pid_s, rest = line.split("|", 1)
+        image, _, cmdline = rest.partition("|")
         if not pid_s.strip().isdigit():
             continue
         pid = int(pid_s)
         image = image.strip().lower()
         if pid in skip or pid <= 0:
             continue
-        if not any(h in image for h in BRIDGE_IMAGE_HINTS):
-            continue  # エディタで bridge.py を開いているだけ、など
+        # 「--run-bridge」付きで起動されていれば、名前が何であれブリッジ（名前を書き換えられた exe も拾う。
+        # 「MT5 autimatic.exe」に改名された古い版が止められず、VPS で永久につながらなかった）。
+        # bridge.py はエディタで開いているだけのこともあるので、そちらは名前も見る
+        if "--run-bridge" not in cmdline and not any(h in image for h in BRIDGE_IMAGE_HINTS):
+            continue
         found.append((pid, image))
     # PowerShell が使えない・コマンドラインを読めない PC では何も見つからない。
     # その場合は wmic（コマンドラインで探す）→ tasklist（パスポートの名前）→
@@ -1096,7 +1100,7 @@ def list_bridge_processes_wmic() -> list[tuple[int, str]]:
     try:
         out = subprocess.run(
             ["wmic", "process", "where", "commandline like '%bridge.py%' or commandline like '%--run-bridge%'",
-             "get", "Name,ProcessId", "/format:csv"],
+             "get", "CommandLine,Name,ProcessId", "/format:csv"],
             capture_output=True,
             text=True,
             errors="replace",
@@ -1114,9 +1118,10 @@ def list_bridge_processes_wmic() -> list[tuple[int, str]]:
         if len(parts) < 3 or not parts[-1].isdigit():
             continue  # 見出し行や空行
         pid, image = int(parts[-1]), parts[-2].lower()
+        cmdline = ",".join(parts[1:-2]).lower()   # 命令行にカンマがあっても拾えるように
         if pid in (me, parent):
             continue
-        if any(h in image for h in BRIDGE_IMAGE_HINTS):
+        if "--run-bridge" in cmdline or any(h in image for h in BRIDGE_IMAGE_HINTS):
             found.append((pid, image))
     return found
 

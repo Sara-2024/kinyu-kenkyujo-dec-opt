@@ -226,7 +226,7 @@ def _list_bridge_processes() -> list[int]:
             "Get-CimInstance Win32_Process | "
             "Where-Object { $_.CommandLine -and "
             "($_.CommandLine -like '*bridge.py*' -or $_.CommandLine -like '*--run-bridge*') } | "
-            "ForEach-Object { \"$($_.ProcessId)|$($_.Name)\" }"
+            "ForEach-Object { \"$($_.ProcessId)|$($_.Name)|$($_.CommandLine)\" }"
         )
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
         try:
@@ -263,24 +263,25 @@ def _list_bridge_processes() -> list[int]:
     for line in out.splitlines():
         if "|" not in line:
             continue
-        pid_s, image = line.strip().split("|", 1)
+        pid_s, rest = line.strip().split("|", 1)
+        image, _, cmdline = rest.partition("|")
         if not pid_s.isdigit():
             continue
         pid = int(pid_s)
         image = image.lower()
         if pid in skip:
             continue
-        # 自分と同じ名前だけでなく、改名前・別名でダウンロードした exe（DreamlandPassport (1).exe など）も拾う。
+        # 「--run-bridge」付きで起動されていれば名前が何であれブリッジ（名前を書き換えられた exe も拾う）。
         # 同じ名前しか見ないと、別名の古いブリッジを「触らない」と判定して止められず、
-        # 新しいブリッジは「別のブリッジがすでに動いています」で起動できない（実機で起きた）
-        if "python" in image or image == own_exe or any(h in image for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
+        # 新しいブリッジは「別のブリッジがすでに動いています」で起動できない（実機・VPS で起きた）
+        if "--run-bridge" in cmdline or "python" in image or image == own_exe or any(h in image for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
             pids.append(pid)
     # PowerShell が使えない・コマンドラインを読めない PC への保険①：wmic でコマンドラインから探す
     if os.name == "nt" and not pids:
         try:
             raw = subprocess.run(
                 ["wmic", "process", "where", "commandline like '%bridge.py%' or commandline like '%--run-bridge%'",
-                 "get", "Name,ProcessId", "/format:csv"],
+                 "get", "CommandLine,Name,ProcessId", "/format:csv"],
                 capture_output=True, text=True, errors="replace", check=False, timeout=40,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
             ).stdout
@@ -291,9 +292,10 @@ def _list_bridge_processes() -> list[int]:
             if len(parts) < 3 or not parts[-1].isdigit():
                 continue
             pid, name = int(parts[-1]), parts[-2].lower()
+            cmdline = ",".join(parts[1:-2]).lower()
             if pid in skip:
                 continue
-            if "python" in name or any(h in name for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
+            if "--run-bridge" in cmdline or "python" in name or any(h in name for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
                 pids.append(pid)
     # 保険②：tasklist でパスポートの名前のプロセスを拾う（自分と親は除く）。
     # ロックのファイルがあるのに他に見つからなければ、pythonw.exe（9 月の Python 版）も拾う
