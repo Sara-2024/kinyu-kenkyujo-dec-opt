@@ -566,6 +566,7 @@ const DEFAULT_ROOM_FRESH_MS = 10 * 60000;
 /* ダウンロードした exe を開いただけでは、ツールはどこにも名乗り出ない（設置だけで終わる）。
    設置が済んでこの画面に戻ってきたら、もう一度パスポートを呼び出す。その「戻ってきた」と見なすまでの間と、呼び直しの間隔 */
 const DOWNLOAD_SETTLE_MS = 15000;
+const MT5_POLL_MS = 5000;           // MT5 側の手順を自分から確かめる間隔
 const RELAUNCH_COOLDOWN_MS = 30000;
 
 /* ═══════════════════════════════════════════════
@@ -1300,6 +1301,22 @@ const SCRIPT = {
     if (idx == null) return finishConnect();
     flow.mt5Index = idx;
     setPhase("mt5");
+    pollMt5();
+  }
+
+  /* MT5 側の手順（EA を載せる・アルゴ取引を ON）は、パスポートからの押し出しを待つだけでなく、
+     数秒ごとに自分から状態を取りに行く（本体サイトと同じ）。押し出しが届かない環境で
+     「設置が終わっているのに進まない」のを防ぐ */
+  function pollMt5() {
+    if (flow.phase !== "mt5") return;
+    later(async () => {
+      if (flow.phase !== "mt5") return;
+      if (Bridge.live) {
+        const ack = await Bridge.send("get_status");
+        if (flow.phase === "mt5" && ack && ack.ok) { Bridge.status = { ...(Bridge.status || {}), ...ack }; watchMt5(); }
+      }
+      pollMt5();
+    }, MT5_POLL_MS);
   }
 
   function watchMt5() {
