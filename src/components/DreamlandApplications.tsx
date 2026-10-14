@@ -1,6 +1,7 @@
 // 管理者画面: ドリームランドのロビーで預かった MT5 口座の申込の一覧。
 // EA の納品（設置）のときに、ここからパスワードを取り出す。
 import { useEffect, useState } from 'react'
+import type { Member } from '../data/auth'
 import {
   DREAMLAND_PLAN_NAMES,
   dreamlandDelete,
@@ -11,7 +12,18 @@ import {
   type DreamlandApplication,
 } from '../data/dreamland'
 
-export function DreamlandApplications({ token }: { token: string | null }) {
+const normAcct = (a: unknown) => String(a ?? '').replace(/\D/g, '')
+const normServer = (s: unknown) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+/** 申込の口座（番号・サーバー）と、その会員がパスポートでつないでいる口座が同じか */
+function matchState(row: DreamlandApplication, member: Member | undefined): 'none' | 'match' | 'mismatch' {
+  if (!member || !member.connected_account) return 'none'
+  const sameNo = normAcct(member.connected_account) === normAcct(row.account)
+  const sameServer = !normServer(member.server) || normServer(member.server) === normServer(row.server)
+  return sameNo && sameServer ? 'match' : 'mismatch'
+}
+
+export function DreamlandApplications({ token, members = [] }: { token: string | null; members?: Member[] }) {
   const [rows, setRows] = useState<DreamlandApplication[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -83,7 +95,7 @@ export function DreamlandApplications({ token }: { token: string | null }) {
       </div>
       <p className="mt-1 text-[14px] text-slate-400">
         ロビーのサービスカウンターで記入された MT5 口座です。EA を納品するときに「パスワードを見る」で取り出します。
-        「回数」が 2 以上の人は、同じ口座を何度も送っています。「会員」は、同じ口座番号で本体サイトに登録した人です。
+        「回数」が 2 以上の人は、同じ口座を何度も送っています。「会員」は、同じ口座番号で本体サイトに登録した人、「連携口座」は、その会員がパスポートでつないでいる口座と申込の口座（番号・サーバー）が同じかどうかです。
       </p>
       {error && (
         <p className="mt-3 text-[15px]" style={{ color: '#ff8484' }}>
@@ -100,6 +112,7 @@ export function DreamlandApplications({ token }: { token: string | null }) {
               <th className="px-3 py-2 font-bold">パスワード</th>
               <th className="px-3 py-2 font-bold">お名前</th>
               <th className="px-3 py-2 font-bold">会員</th>
+              <th className="px-3 py-2 font-bold">連携口座</th>
               <th className="px-3 py-2 font-bold">OS</th>
               <th className="px-3 py-2 font-bold">回数</th>
               <th className="px-3 py-2 font-bold">受付日時</th>
@@ -133,6 +146,21 @@ export function DreamlandApplications({ token }: { token: string | null }) {
                   ) : (
                     <span className="text-slate-500">未登録</span>
                   )}
+                </td>
+                <td className="px-3 py-3">
+                  {(() => {
+                    const member = members.find((m) => m.id === row.member_id)
+                    const state = matchState(row, member)
+                    if (state === 'none') return <span className="text-slate-500">未連携</span>
+                    if (state === 'match') return <span style={{ color: '#35f58a' }}>一致</span>
+                    return (
+                      <span style={{ color: '#ff8484' }}>
+                        一致しない
+                        <br />
+                        <span className="text-[12px]">連携: {String(member?.connected_account)} / {member?.server ?? ''}</span>
+                      </span>
+                    )
+                  })()}
                 </td>
                 <td className="px-3 py-3">{row.platform === 'mac' ? 'Mac' : row.platform === 'windows' ? 'Windows' : '—'}</td>
                 <td className="px-3 py-3">
@@ -177,7 +205,7 @@ export function DreamlandApplications({ token }: { token: string | null }) {
             ))}
             {rows.length === 0 && !error && (
               <tr>
-                <td colSpan={11} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={12} className="px-3 py-6 text-center text-slate-500">
                   まだ申込はありません。
                 </td>
               </tr>

@@ -275,7 +275,7 @@ export function Admin() {
           </div>
         )}
 
-        <DreamlandApplications token={token} />
+        <DreamlandApplications token={token} members={rows} />
 
         <NamesSection token={token} />
 

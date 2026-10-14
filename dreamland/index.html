@@ -593,6 +593,7 @@ let members = [];      // つないだ（つなぐ）口座ごとの会員。{ i
 let second = null;     // ロイヤルの2つ目を「あとで」にしたら "later"
 let gatePlan = null;   // いま立っている搭乗口のプラン
 let checks = {};       // 搭乗準備のチェック
+let mismatch = false;  // 口座の登録（申込）とつながった口座が一致しなかったか（台詞から見える）
 const planKey = () => plan || (app && app.plan) || gatePlan || null;
 const currentPlan = () => planKey() || "first";
 const PLAN = () => PLANS[currentPlan()];
@@ -644,7 +645,7 @@ const SCRIPT = {
         ? `サービスカウンターのソラです。\n受付番号 ${app.no} で、MT5 口座（下2桁 ${tail2(app.accountFull || app.account)}）の登録を承っています。次は、パスポートの発行です。`
         : "サービスカウンターのソラです。\n口座開設のご案内、MT5 口座の登録、パスポートの発行を承ります。口座はもうお持ちですか？",
       choices: () => members.length
-        ? [["接続の状態を見る・つなぎ直す", "members", "go"], ...(needSecond() ? [["2つ目の口座をつなぐ", "terms"]] : []), ["設置マニュアル（PDF・動画）", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
+        ? [["接続の状態を見る・つなぎ直す", "members", "go"], ...(needSecond() ? [["2つ目の口座をつなぐ", "terms"]] : []), ["口座の登録をし直す（申込の修正）", "register"], ["設置マニュアル（PDF・動画）", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
         : app
         ? [["パスポートの発行（MT5 とつなぐ）", "connect", "go"], ["登録し直す（プランの変更など）", "register"], ["設置マニュアル（PDF・動画）", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
         : [["まだ持っていない（口座開設の案内）", "account"], ["持っている（MT5 口座を登録する）", "register", "go"], ["パスポートの発行（MT5 とつなぐ）", "connect"], ["設置マニュアル（PDF・動画）", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]] },
@@ -688,7 +689,7 @@ const SCRIPT = {
       choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
     done: { say: () => needSecond()
         ? `1つ目の口座（${tail2(members[members.length - 1].account)}）のパスポートが発行できました。\n2つ目の口座は、今から続けて発行しますか？ あとからでも、このカウンターの「2つ目の口座をつなぐ」でいつでも発行できます。`
-        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : ""}\n次は搭乗ゲートで、搭乗券を受け取ってください。`,
+        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : ""}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}\n次は搭乗ゲートで、搭乗券を受け取ってください。`,
       choices: () => needSecond()
         ? [["2つ目を今から発行する", "terms", "go"], ["あとで発行する", "later"]]
         : [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
@@ -1040,6 +1041,14 @@ const SCRIPT = {
     if (!PLANS[chosen]) return (err.textContent = ERRORS.BAD_PLAN);
     if (!name) return (err.textContent = ERRORS.BAD_NAME);
     if (!f.get("agree") || !f.get("fair")) return (err.textContent = ERRORS.NO_CONSENT);
+    // すでにパスポートでつながっている口座があれば、記入と突き合わせる（違っても送れるが、はっきり伝える）
+    const linked = members.filter((m) => m.done || m.server);
+    const sameOne = linked.find((m) => normAcct(m.account) === normAcct(account));
+    if (sameOne && sameOne.server && normServer(sameOne.server) !== normServer(server)) {
+      if (!form.dataset.warned) { form.dataset.warned = "1"; return (err.textContent = `つながっている口座（${sameOne.account} ／ ${sameOne.server}）とサーバーが一致しないようです。合っていればもう一度「登録して送る」を押してください`); }
+    } else if (linked.length && !sameOne) {
+      if (!form.dataset.warned) { form.dataset.warned = "1"; return (err.textContent = `つながっている口座（${linked.map((m) => m.account).join("・")}）と一致しないようです。別の口座を登録するなら、もう一度「登録して送る」を押してください`); }
+    }
     if (isTodo(LINKS.register)) return show("service", "busy");
 
     setBusy(form, true, "送っています…");
@@ -1275,6 +1284,12 @@ const SCRIPT = {
     if (!Bridge.live && liveChanged && flow.phase === "mt5") { flow.note = "パスポートとの通信が切れました。ツールが動いているか確かめてください"; }
   }
 
+  /* 口座の登録（申込）で記入した口座と、パスポートでつながった口座の突き合わせ。口座番号とサーバーだけ見る */
+  const normAcct = (a) => String(a == null ? "" : a).replace(/\D/g, "");
+  const normServer = (s) => String(s == null ? "" : s).trim().toLowerCase().replace(/\s+/g, " ");
+  const sameAccount = (acct1, srv1, acct2, srv2) => normAcct(acct1) === normAcct(acct2) && (!normServer(srv1) || !normServer(srv2) || normServer(srv1) === normServer(srv2));
+  const mismatchText = (acct, srv) => `口座の登録で記入した口座（${app.accountFull || app.account} ／ ${app.server || "サーバー未記入"}）と、つながっている口座（${acct} ／ ${srv || "サーバー不明"}）が一致しないようです。登録し直すか、MT5 のログインをご確認ください`;
+
   async function checkStatus() {
     setPhase("connecting");
     const ack = await Bridge.send("get_status");
@@ -1294,6 +1309,9 @@ const SCRIPT = {
       return setPhase("failed");
     }
     if (m) { m.server = String(ack.server || ""); saveMembers(); }
+    // 申込（口座の登録）があれば、その口座とつながった口座を突き合わせる。違っても止めないが、はっきり伝える
+    mismatch = !!(app && (app.accountFull || app.account) && !sameAccount(app.accountFull || "", app.server, account, ack.server));
+    if (mismatch) flow.lines.push({ text: mismatchText(account, ack.server), ok: false });
     checks.tool = true; saveChecks(); renderReady();
     const idx = mt5StepIndex(ack);
     if (idx == null) return finishConnect();
