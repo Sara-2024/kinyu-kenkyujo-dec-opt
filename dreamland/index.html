@@ -675,8 +675,11 @@ const SCRIPT = {
       choices: [["サポート LINE", "support"], ["ほかのもの", "start"]] },
     launch: { say: "パスポートを呼び出しています。ブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。", docs: "launch",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ダウンロードの手順を見る", "download"], ["ほかのもの", "start"]] },
-    waiting: { say: "パスポートがつながるのを待っています。ダウンロードしたファイル（DreamlandPassport）を開き終わっていれば、数十秒でつながります。\nまだ開いていない方は、ファイルを開いてから、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "launch",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ダウンロードの手順を見る", "download"], ["それでもつながらない（呼び出す）", "relaunch"], ["ほかのもの", "start"]] },
+    waiting: { say: "パスポートがこの口座につながっているか、確かめています。そのままお待ちください（20 秒ほど）。", docs: "progress", choices: [] },
+    notyet: { say: "パスポートは、まだこの口座につながっていません。\nダウンロードしたファイル（DreamlandPassport-…）を開いて、設置を終えてから、もう一度「設置が終わった（つなぐ）」を押してください。\n以前にこのパソコンで別の口座をつないだことがある場合や、何度押してもつながらない場合は「呼び出す」を押してください。", docs: "launch",
+      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["呼び出す（「開きますか？」が出ます）", "relaunch"], ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
+    stuck: { say: "パスポートはこの口座につながっていますが、この画面が中継に入れていません。ページを再読み込み（F5）して、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "progress",
+      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、このパソコンに入れます。下のボタンからダウンロードして、ダウンロードしたファイルを一度だけ開いてください。開くと、この口座に自動で紐づきます。\n開き終わったら、この画面に戻って「設置が終わった（つなぐ）」を押してください。\n以前から入れてある方は「もう入れてある（呼び出す）」を押してください。", docs: "download",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["もう入れてある（呼び出す）", "relaunch"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
@@ -1226,7 +1229,7 @@ const SCRIPT = {
   /* ── 設置の流れ（サービスカウンターの中だけで進む） ── */
   let consented = false;   // このページを開いているあいだに、注意事項を読んでチェックしたか
   const flow = { idx: -1, phase: null, lines: [], note: "", mt5Index: 0, problem: "", timers: [], retryAccount: "", relaunched: false, startedAt: 0 };
-  const FLOW_NODES = new Set(["launch", "waiting", "download", "connecting", "mt5", "failed"]);
+  const FLOW_NODES = new Set(["launch", "waiting", "notyet", "stuck", "download", "connecting", "mt5", "failed"]);
   const clearFlowTimers = () => { flow.timers.forEach(clearTimeout); flow.timers = []; };
   const later = (fn, ms) => { const id = setTimeout(fn, ms); flow.timers.push(id); return id; };
   const member = () => members[flow.idx] || null;
@@ -1263,16 +1266,40 @@ const SCRIPT = {
       setPhase("launch");
       issueAndLaunch();
     } else {
-      // 開いたパスポートが自分で紐づいて名乗るのを待つだけ（「開きますか？」は出さない）
+      // 開いたパスポートが自分で紐づいて名乗っているかを、その場で確かめて結果を出す（「開きますか？」は出さない）
       setPhase("waiting");
+      verifyInstalled();
+      return;
     }
     later(() => {
-      if (!(flow.phase === "launch" || flow.phase === "waiting") || Bridge.live) return;
-      flow.note = flow.phase === "waiting"
-        ? "まだつながっていません。ダウンロードしたファイルを開きましたか？ 開いたのに進まないときは「それでもつながらない（呼び出す）」を押してください"
-        : "まだ応答がありません。パスポートが開いていれば、そのままお待ちください。入っていなければ「ダウンロードの手順を見る」から入れてください";
+      if (flow.phase !== "launch" || Bridge.live) return;
+      flow.note = "まだ応答がありません。パスポートが開いていれば、そのままお待ちください。入っていなければ「ダウンロードの手順を見る」から入れてください";
       const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
     }, CONNECTOR_WAIT_MS);
+  }
+
+  /* 「設置が終わった（つなぐ）」：中継に「この口座の部屋にパスポートが来ているか」を 20 秒ほど聞き続け、
+     来ていれば次へ（checkStatus）、来ていなければ「まだつながっていません」とはっきり出す */
+  const VERIFY_MS = 20000;
+  async function verifyInstalled() {
+    const m = member(); if (!m) return;
+    const started = flow.startedAt;
+    const http = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
+    const paint = (text) => { flow.note = text; const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(text)}</li>`; };
+    paint("パスポートがこの口座につながっているか確かめています…");
+    let seen = false;
+    while (flow.phase === "waiting" && flow.startedAt === started && Date.now() - started < VERIFY_MS) {
+      if (Bridge.live) return;   // 名乗りが届いた → onBridgeChange が checkStatus へ進める
+      try {
+        const r = await fetch(`${http}/health?room=${encodeURIComponent(m.id)}`, { cache: "no-store" });
+        const b = await r.json();
+        seen = !!(b && b.room && b.room.bridge);
+      } catch (_) {}
+      if (seen) paint("パスポートが来ています。この画面につないでいます…");
+      await new Promise((ok) => setTimeout(ok, 2000));
+    }
+    if (flow.phase !== "waiting" || flow.startedAt !== started || Bridge.live) return;
+    show("service", seen ? "stuck" : "notyet");
   }
 
   /* いまのツールは、ダウンロードして開いただけでは設置だけして終わり、サイトにも中継にも名乗り出ない。
@@ -1319,7 +1346,7 @@ const SCRIPT = {
 
   function onBridgeChange(liveChanged) {
     if (flow.idx < 0) return;
-    if (Bridge.live && (flow.phase === "launch" || flow.phase === "waiting" || flow.phase === "download" || flow.phase === "failed")) return checkStatus();
+    if (Bridge.live && (flow.phase === "launch" || flow.phase === "waiting" || flow.phase === "notyet" || flow.phase === "stuck" || flow.phase === "download" || flow.phase === "failed")) return checkStatus();
     if (flow.phase === "mt5" && Bridge.live) return watchMt5();
     if (!Bridge.live && liveChanged && flow.phase === "mt5") { flow.note = "パスポートとの通信が切れました。ツールが動いているか確かめてください"; }
   }
@@ -1444,7 +1471,7 @@ const SCRIPT = {
     if (nodeKey === "board!") nodeKey = boardNode(true);
     if (nodeKey === "connect" && planKey() && plan) nodeKey = "who";   // 合言葉が済んでいれば、プランの案内から
     if (staffKey === "service" && (nodeKey === "signup" || nodeKey === "login") && !consented) nodeKey = "terms";   // 注意事項は必ず通る
-    if (staffKey === "service" && isPhone && (nodeKey === "terms" || nodeKey === "signup" || nodeKey === "login" || nodeKey === "loginpw" || nodeKey === "launch" || nodeKey === "waiting" || nodeKey === "download")) nodeKey = "pc";   // スマホでは発行できない
+    if (staffKey === "service" && isPhone && (nodeKey === "terms" || nodeKey === "signup" || nodeKey === "login" || nodeKey === "loginpw" || nodeKey === "launch" || nodeKey === "waiting" || nodeKey === "notyet" || nodeKey === "stuck" || nodeKey === "download")) nodeKey = "pc";   // スマホでは発行できない
     if (nodeKey.startsWith("door:")) {
       gatePlan = nodeKey.slice(5);
       markHere("gate", gatePlan);

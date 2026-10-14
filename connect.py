@@ -1976,11 +1976,13 @@ def main() -> int:
     args = [a for a in raw_args if not is_protocol_url(a)]
     CONSOLE = "--console" in args or "--self-test" in args
     # ダウンロードしたファイルを「開いただけ」のとき（引数なし）は、ファイル名の合図で連携する。
-    # まだ連携していない PC だけ。連携済みなら無視する（同じファイルを後で開き直しても、
-    # 使い終わった合図を確かめに行って「つなげませんでした」と出さないため）。
+    # 以前に別の口座でつないだ PC でも、その合図の口座へ切り替える（adopt_room）。
+    # 同じファイルを後で開き直したとき（合図は使い終わっている）は、連携済みならふつうに開いた扱いにする。
     # 自動起動（--startup）や裏のブリッジ（--run-bridge）は同じ exe なので、引数があれば見ない。
-    if not connect_token and FROZEN and not args and not connect_state.is_connected():
+    exe_token = False
+    if not connect_token and FROZEN and not args:
         connect_token = connect_token_from_exe_name()
+        exe_token = bool(connect_token)
         if connect_token:
             log("ファイル名の合図で連携します")
 
@@ -2054,7 +2056,12 @@ def main() -> int:
     if connect_token:
         banner("サイトとの連携")
         room = redeem_connect_token(connect_token)
-        if not room:
+        if not room and exe_token and connect_state.is_connected():
+            # 同じファイルを後で開き直した（合図は使い終わっている）。連携済みなので、
+            # 失敗と言わずに、ふつうに開いたときと同じ動きにする
+            log("ファイル名の合図は使えませんでしたが、連携済みなのでそのまま続けます")
+            connect_token = ""
+        elif not room:
             # ここで黙って終わると、サイトのボタンを押しても何も起きないように見える
             log("連携できませんでした。サイトでもう一度お試しください")
             return show_failure(
