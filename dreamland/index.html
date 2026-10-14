@@ -1125,7 +1125,7 @@ const SCRIPT = {
 
   /* ── パスポート（ブリッジ）の様子を中継から受け取る ── */
   const Bridge = {
-    ws: null, live: false, status: null, waiting: new Map(), seq: 0, room: null, onChange: null, retry: null, closed: true,
+    ws: null, live: false, status: null, waiting: new Map(), seq: 0, room: null, onChange: null, retry: null, closed: true, welcomed: false, closeCode: 0,
     open(room, session) {
       this.close();
       this.closed = false;
@@ -1135,10 +1135,11 @@ const SCRIPT = {
         if (this.closed) return;
         let ws;
         try { ws = new WebSocket(url); } catch (_) { this.retry = setTimeout(connect, 5000); return; }
-        this.ws = ws;
+        this.ws = ws; this.welcomed = false;
         ws.onmessage = (ev) => {
           let p; try { p = JSON.parse(ev.data); } catch (_) { return; }
           if (p.type === "welcome") {
+            this.welcomed = true;
             const mine = (p.bridges || []).find((b) => String(b.bridgeId) === room);
             this.setLive(!!mine, mine || null);
             return;
@@ -1152,7 +1153,7 @@ const SCRIPT = {
             if (p.ok && this.status) { this.status = { ...this.status, ...p }; if (this.onChange) this.onChange(); }
           }
         };
-        ws.onclose = () => { if (this.ws !== ws) return; this.ws = null; this.setLive(false, null); if (!this.closed) this.retry = setTimeout(connect, 5000); };
+        ws.onclose = (ev) => { if (this.ws !== ws) return; this.ws = null; this.closeCode = ev && ev.code || 0; this.setLive(false, null); if (!this.closed) this.retry = setTimeout(connect, 5000); };
         ws.onerror = () => {};
       };
       connect();
@@ -1219,6 +1220,7 @@ const SCRIPT = {
     Bridge.open(m.id, m.token);
     setPhase("launch");
     issueAndLaunch();
+    watchMyRoom();
     // 勝手にダウンロードの画面へは切り替えない（つなぎ中に出ると、何度もダウンロードさせてしまう）。
     // 時間が経ったら、案内の文だけ変える。ダウンロードへ行くのは、お客様が「まだ入れていない」を押したときだけ
     later(() => {
@@ -1226,6 +1228,30 @@ const SCRIPT = {
       flow.note = "まだ応答がありません。パスポートが開いていれば、そのままお待ちください（初回は 1〜2 分かかることがあります）。入っていなければ「まだ入れていない（ダウンロードへ）」を押してください";
       const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
     }, CONNECTOR_WAIT_MS);
+  }
+
+  /* ［確認用］呼び出し中は、中継が見ている事実をそのまま出す。
+     「この会員の部屋にパスポートが来ているか」「この画面と中継がつながっているか」の 2 つで、
+     止まっている理由（パスポートが別の部屋／画面側が中継に入れていない）を、推測ではなく値で切り分ける */
+  const diag = { room: null, since: null };
+  function watchMyRoom() {
+    if (flow.phase !== "launch") return;
+    const m = member(); if (!m) return;
+    const http = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
+    fetch(`${http}/health?room=${encodeURIComponent(m.id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((body) => { if (body && body.room) { diag.room = !!body.room.bridge; diag.since = body.room.since; } else { diag.room = null; } })
+      .catch(() => { diag.room = null; })
+      .finally(() => { renderDiag(); if (flow.phase === "launch") later(watchMyRoom, 3000); });
+  }
+  function renderDiag() {
+    const el = $("prog"); if (!el || flow.phase !== "launch") return;
+    const m = member(); if (!m) return;
+    const open = Bridge.ws && Bridge.ws.readyState === 1;
+    const wsTxt = open ? (Bridge.welcomed ? "つながっています" : "応答待ち") : `切れています${Bridge.closeCode ? `（code ${Bridge.closeCode}）` : ""}`;
+    const roomTxt = diag.room === true ? `来ています（${diag.since ? new Date(diag.since).toLocaleTimeString("ja-JP") : "時刻不明"} から）` : diag.room === false ? "まだ来ていません" : "確認できません";
+    let li = $("diag"); if (!li) { li = document.createElement("li"); li.id = "diag"; li.className = "is-wait"; el.appendChild(li); }
+    li.textContent = `［確認用］会員 ${String(m.id).slice(0, 8)}… ／ この部屋へのパスポート: ${roomTxt} ／ 画面と中継: ${wsTxt}`;
   }
 
   /* いまのツールは、ダウンロードして開いただけでは設置だけして終わり、サイトにも中継にも名乗り出ない。
