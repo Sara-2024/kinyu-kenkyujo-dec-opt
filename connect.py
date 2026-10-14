@@ -933,6 +933,7 @@ def list_bridge_processes() -> list[tuple[int, str]]:
             )
         except (OSError, subprocess.TimeoutExpired):
             return found
+    skip = {me, os.getppid()}   # exe 版は「起動役の親 → 本体」の 2 つで、親も自分
     for line in out.splitlines():
         line = line.strip()
         if "|" not in line:
@@ -942,11 +943,51 @@ def list_bridge_processes() -> list[tuple[int, str]]:
             continue
         pid = int(pid_s)
         image = image.strip().lower()
-        if pid == me or pid <= 0:
+        if pid in skip or pid <= 0:
             continue
         if not any(h in image for h in BRIDGE_IMAGE_HINTS):
             continue  # エディタで bridge.py を開いているだけ、など
         found.append((pid, image))
+    # PowerShell が使えない・コマンドラインを読めない PC では何も見つからない。
+    # その場合は tasklist で「パスポートの名前のプロセス」を全部拾う（自分と親は除く）。
+    # 古いブリッジが残ったまま新しいブリッジが「別のブリッジがすでに動いています」で
+    # 起動できず、サイトからは永久に「来ない」ままになった（実機で起きた）。
+    if os.name == "nt" and not found:
+        for pid, image in list_processes_by_name():
+            if pid not in skip:
+                found.append((pid, image))
+    return found
+
+
+def list_processes_by_name() -> list[tuple[int, str]]:
+    """tasklist で、パスポート（ブリッジ）の名前のプロセスを挙げる。PowerShell が無くても動く。"""
+    if os.name != "nt":
+        return []
+    try:
+        out = subprocess.run(
+            ["tasklist", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+            timeout=30,
+            creationflags=_no_window_flags(),
+            startupinfo=_hidden_startupinfo(),
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    import csv
+    import io
+
+    found: list[tuple[int, str]] = []
+    for row in csv.reader(io.StringIO(out)):
+        if len(row) < 2 or not row[1].strip().isdigit():
+            continue
+        image = row[0].strip().lower()
+        if image in ("python.exe", "pythonw.exe"):
+            continue  # Python は他の用途でも動く。名前だけでは止めない
+        if any(h in image for h in BRIDGE_IMAGE_HINTS if h not in ("python",)):
+            found.append((int(row[1]), image))
     return found
 
 
@@ -1170,6 +1211,11 @@ def start_bridge(session: dict | None = None) -> None:
         log("まだサイトと連携していないので、通信は始めません（EA の設置だけ）")
         return
     our_id = env_value("BRIDGE_ID") or "vps-01"
+    # ロックで見つからない古いブリッジ（別の場所にロックを持つ古い版など）も、
+    # プロセスの名前で探して止める。残っていると新しいブリッジが起動できない
+    if not bridge_already_running() and list_bridge_processes():
+        log("古いブリッジが残っているので止めます")
+        stop_stale_bridge()
     if bridge_already_running():
         local_missing = (
             relay_is_local(relay_url())

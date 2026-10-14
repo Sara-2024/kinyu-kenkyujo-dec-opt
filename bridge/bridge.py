@@ -270,10 +270,34 @@ def _list_bridge_processes() -> list[int]:
         image = image.lower()
         if pid in skip:
             continue
-        if "python" in image or image == own_exe:
+        # 自分と同じ名前だけでなく、改名前・別名でダウンロードした exe（DreamlandPassport (1).exe など）も拾う。
+        # 同じ名前しか見ないと、別名の古いブリッジを「触らない」と判定して止められず、
+        # 新しいブリッジは「別のブリッジがすでに動いています」で起動できない（実機で起きた）
+        if "python" in image or image == own_exe or any(h in image for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
             pids.append(pid)
+    # PowerShell が使えない・コマンドラインを読めない PC への保険：
+    # tasklist でパスポートの名前のプロセスを拾う（自分と親は除く）。
+    if os.name == "nt" and not pids:
+        try:
+            raw = subprocess.run(
+                ["tasklist", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, errors="replace", check=False, timeout=30,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            raw = ""
+        import csv
+        import io
+        for row in csv.reader(io.StringIO(raw)):
+            if len(row) < 2 or not row[1].strip().isdigit():
+                continue
+            name = row[0].strip().lower()
+            pid = int(row[1])
+            if pid in skip or name in ("python.exe", "pythonw.exe"):
+                continue
+            if any(h in name for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
+                pids.append(pid)
     return pids
-
 
 def takeover_old_bridges() -> None:
     """自分より古い版のブリッジが残っていたら終わらせる。
