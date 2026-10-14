@@ -1,4 +1,7 @@
-"""MT5 Automatic の画面（初回の設定だけ）。
+"""ドリームランド・パスポート（MT5 Automatic）の画面（初回の設定だけ）。
+
+装いはロビー（dreamland/index.html）と同じ：クリーム地に金の罫、明朝の見出し、
+ティール（主ボタン）とラベンダー（副ボタン）。ファイル名・OS の確認画面は MT5 Automatic のまま。
 
 40〜60代のお客様が迷わないことを最優先にする。
 
@@ -27,16 +30,23 @@ except Exception:  # noqa: BLE001 - 画面が無い環境
     tk = None  # type: ignore[assignment]
     tkfont = None  # type: ignore[assignment]
 
-APP_NAME = "MT5 Automatic"
+# 窓に出す名前。パソコン上のファイル名（MT5 Automatic）は変えない
+APP_NAME = "ドリームランド｜パスポート"
+APP_KICKER = "D R E A M L A N D   ·   P A S S P O R T"
 
-BG = "#0b1220"
-PANEL = "#111c31"
-TEXT = "#e8edf5"
-MUTED = "#94a3b8"
-ACCENT = "#5eccff"
-OK = "#35f58a"
-WARN = "#ffd23e"
-NG = "#ff8484"
+# ロビーの色（index.css / dreamland/index.html の CSS 変数と同じ）
+BG = "#fdf8ef"        # --cream
+PANEL = "#f3ede2"     # 札の地
+TEXT = "#30384f"      # --ink
+MUTED = "#68718a"     # --muted
+ACCENT = "#69b4bc"    # --teal（主ボタン）
+ACCENT_TEXT = "#fcfff7"
+GOLD = "#aa9461"      # --gold-deep（見出しの飾り）
+LAV_SOFT = "#eeeaf6"  # --lav-soft（副ボタン）
+LAV_TEXT = "#594986"  # --lav-text
+OK = "#578d9a"        # --teal-b
+WARN = "#a4532f"
+NG = "#b74c4c"
 
 
 def close_splash() -> None:
@@ -86,12 +96,17 @@ def headless() -> bool:
 
 
 def _fonts() -> dict[str, Any]:
+    # 見出しは明朝、本文はゴシック（ロビーと同じ組み合わせ）。無い書体なら Tk が近いものに置き換える
+    mac = sys.platform == "darwin"
+    serif = "Hiragino Mincho ProN" if mac else "Yu Mincho"
+    sans = "Hiragino Sans" if mac else "Meiryo UI"
     return {
-        "title": tkfont.Font(family="Meiryo UI", size=18, weight="bold"),
-        "body": tkfont.Font(family="Meiryo UI", size=12),
-        "step": tkfont.Font(family="Meiryo UI", size=13),
-        "button": tkfont.Font(family="Meiryo UI", size=12, weight="bold"),
-        "small": tkfont.Font(family="Meiryo UI", size=10),
+        "kicker": tkfont.Font(family="Georgia", size=9),
+        "title": tkfont.Font(family=serif, size=20, weight="bold"),
+        "body": tkfont.Font(family=sans, size=12),
+        "step": tkfont.Font(family=sans, size=13),
+        "button": tkfont.Font(family=sans, size=12, weight="bold"),
+        "small": tkfont.Font(family=sans, size=10),
     }
 
 
@@ -117,8 +132,10 @@ class SetupWindow:
         self._alive = True
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        tk.Label(self.root, text=APP_NAME, bg=BG, fg=ACCENT, font=self.f["title"]).pack(pady=(22, 2))
-        tk.Frame(self.root, bg=ACCENT, height=2, width=60).pack(pady=(0, 14))
+        # 見出し：小さな金の英字 → 明朝の題名 → 金の細い罫（ロビーの札と同じ並び）
+        tk.Label(self.root, text=APP_KICKER, bg=BG, fg=GOLD, font=self.f["kicker"]).pack(pady=(20, 0))
+        tk.Label(self.root, text=APP_NAME, bg=BG, fg=TEXT, font=self.f["title"]).pack(pady=(2, 0))
+        tk.Frame(self.root, bg=GOLD, height=1, width=72).pack(pady=(8, 14))
 
         self.message = tk.Label(
             self.root, text="MT5を確認しています…", bg=BG, fg=TEXT, font=self.f["body"], wraplength=440, justify="center"
@@ -220,13 +237,15 @@ class SetupWindow:
             text=text,
             command=command,
             font=self.f["button"],
-            bg=ACCENT if primary else PANEL,
+            bg=ACCENT if primary else LAV_SOFT,
             # Mac の Tk はボタンの背景色を変えられない（薄い灰色のまま）ので、文字は濃い色にする。
-            # 薄い文字（TEXT）だと、2つ目のボタンの文字が見えなくなる（実機で起きた）
-            fg="#04121f" if (primary or sys.platform == "darwin") else TEXT,
-            activebackground=ACCENT if primary else PANEL,
+            # 薄い文字だと、2つ目のボタンの文字が見えなくなる（実機で起きた）
+            fg=TEXT if sys.platform == "darwin" else (ACCENT_TEXT if primary else LAV_TEXT),
+            activebackground=ACCENT if primary else LAV_SOFT,
+            activeforeground=TEXT if sys.platform == "darwin" else (ACCENT_TEXT if primary else LAV_TEXT),
             relief="flat",
             bd=0,
+            highlightthickness=0,
             height=2,
             pady=6,  # 老眼と、手の震えを前提に。高さは 44px 以上にする
             cursor="hand2",
@@ -261,9 +280,10 @@ class SetupWindow:
                 value=value,
                 bg=BG,
                 fg=TEXT,
-                selectcolor=PANEL,
+                selectcolor="#ffffff",
                 activebackground=BG,
                 activeforeground=TEXT,
+                highlightthickness=0,
                 font=self.f["step"],
                 anchor="w",
                 justify="left",
@@ -343,10 +363,14 @@ class SetupWindow:
         self.clear_body()
         self.clear_buttons()
         self.say(question)
+        # 案内の行数ぶん窓を高くする（ボタンに隠れて最後の行が読めなくならないように）
+        self.root.update_idletasks()
+        need = 290 + 36 * len(lines) + 58 * 2
+        _center(self.root, 560, min(need, max(400, self.root.winfo_screenheight() - 120)))
         for line in lines:
             tk.Label(
-                self.body, text=line, bg=BG, fg=MUTED, font=self.f["small"], wraplength=440, justify="left"
-            ).pack(anchor="w", pady=2)
+                self.body, text=line, bg=BG, fg=MUTED, font=self.f["small"], wraplength=480, justify="left"
+            ).pack(anchor="w", pady=3)
 
         answer = {"value": False}
 
@@ -384,10 +408,14 @@ class SetupWindow:
         self.clear_body()
         self.clear_buttons()
         self.say(question)
+        # 案内の行数ぶん窓を高くする（ボタンに隠れて最後の行が読めなくならないように）
+        self.root.update_idletasks()
+        need = 290 + 36 * len(lines) + 58 * 2
+        _center(self.root, 560, min(need, max(400, self.root.winfo_screenheight() - 120)))
         for line in lines:
             tk.Label(
-                self.body, text=line, bg=BG, fg=MUTED, font=self.f["small"], wraplength=440, justify="left"
-            ).pack(anchor="w", pady=2)
+                self.body, text=line, bg=BG, fg=MUTED, font=self.f["small"], wraplength=480, justify="left"
+            ).pack(anchor="w", pady=3)
 
         answer = {"value": "closed", "done": False}
 

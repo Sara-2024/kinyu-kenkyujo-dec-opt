@@ -1,7 +1,7 @@
-// サイトのボタンから、お客様のPCの接続ツールを呼び出す／配る。
+// サイトのボタンから、お客様のPCのパスポートを呼び出す／配る。
 //
 // ブラウザは仕組み上、勝手にPCのソフトを起動できない。
-// そのかわり接続ツールが自分を aitrader:// として登録しているので、
+// そのかわりパスポートが自分を aitrader:// として登録しているので、
 // このURLを開くとブラウザがツールを起動してくれる。
 // （ツールがまだ入っていないPCでは何も起きない。その場合はここからダウンロードしてもらう）
 
@@ -12,7 +12,7 @@ export const CONNECTOR_SCHEME = 'aitrader'
 /**
  * 新しいMT5連携の受付を、一時的に止めるスイッチ。
  *
- * サイトは合図（token）方式に切り替わったが、配っている接続ツールがまだ古い。
+ * サイトは合図（token）方式に切り替わったが、配っているパスポートがまだ古い。
  * 古いツールは合図を読めず、そのまま既定の部屋でブリッジを動かしてしまうので、
  * 新しいツールを配り終えるまで、新規の連携を受け付けない。
  *
@@ -24,7 +24,7 @@ export const CONNECTOR_SCHEME = 'aitrader'
 export const CONNECT_PAUSED = false
 
 /**
- * 部屋（会員ID）を知らずに起動した接続ツールが入る、既定の部屋。
+ * 部屋（会員ID）を知らずに起動したパスポートが入る、既定の部屋。
  * ダウンロードした exe を「開くだけ」の初回は aitrader:// を通らないので、ここに来る。
  * サイトはこの部屋にブリッジが現れたら、登録の済んだ aitrader:// で部屋を伝えて呼び直す。
  */
@@ -68,7 +68,7 @@ export async function probeRoom(room: string): Promise<RoomProbe | null> {
 export const CONNECTOR_WAIT_MS = 30_000
 
 /**
- * 接続ツールを呼び出す。
+ * パスポートを呼び出す。
  *
  * URL に載せるのは、その場で作った短命の合図（token）だけ。
  * 会員IDそのものは載せない（記録や履歴に残ると、他人に使われうるため）。
@@ -123,7 +123,7 @@ export function relaunchConnector(): void {
 }
 
 // ────────────────────────────────
-// 接続ツールのダウンロード
+// パスポートのダウンロード
 //   既定は public/download/MT5Automatic.exe（Windows で tools/build-windows.bat を実行して
 //   できたもの。Python 不要で開くだけ）。Python 版の ZIP（tools/pack-connector.sh）も
 //   同じ場所にあり、VITE_CONNECTOR_URL=/download/MT5Automatic.zip で差し替えられる。
@@ -220,7 +220,7 @@ export async function recordPlatform(sessionToken: string | null | undefined, pl
 /** ブラウザに保存ダイアログを出す（普通のダウンロード） */
 export function downloadConnector(platform: Platform = loadPlatform()): void {
   if (typeof document === 'undefined') return
-  // 古い接続ツールを新しく配らない（受付を止めているあいだ）
+  // 古いパスポートを新しく配らない（受付を止めているあいだ）
   if (CONNECT_PAUSED) return
   const target = connectorDownload(platform)
   const a = document.createElement('a')

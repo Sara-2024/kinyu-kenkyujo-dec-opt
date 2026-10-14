@@ -1363,7 +1363,7 @@ def ask_what_to_do(ui, target, st, *, can_switch: bool) -> str | None:
     options = [("use", "このまま使う"), ("again", "設置しなおす")]
     if can_switch:
         options.append(("other", "別のMT5に入れる"))
-    return ui.menu("MT5 Automatic は、すでに設定が済んでいます。", lines, options)
+    return ui.menu("パスポートは、すでに設定が済んでいます。", lines, options)
 
 
 # MT5 でお願いする操作。ここだけは外から自動化できない
@@ -1958,7 +1958,7 @@ def main() -> int:
     # 同じアプリがもう開いていれば、そちらに任せる（二つ同時に置きに行かない）
     if not hold_single_instance():
         log("すでに開いているので、こちらは何もしない")
-        installer_ui.message_box("MT5 Automatic は、すでに開いています。\n開いている画面をご覧ください。")
+        installer_ui.message_box("パスポート（MT5 Automatic）は、すでに開いています。\n開いている画面をご覧ください。")
         return 0
 
     # 部屋が渡されていない（＝サイトからではなく、自分で開いた）とき。

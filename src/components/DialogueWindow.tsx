@@ -3,7 +3,7 @@
 //
 // 「初期設定（MT5との連携）」モードを併せ持つ。担当は受付のユイ。
 // 売りたいのは “設定はAIが代わりに全部やる” という体験なので、
-// お客様にしていただくのは、接続ツールをダウンロードして一度開くことだけ。
+// お客様にしていただくのは、パスポートをダウンロードして一度開くことだけ。
 // 残りはユイが手順を案内し、つながったら管制室のアルゴに引き継ぐ。
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AI_TEXT, ECON_ALERT, SETUP, TOUR, type Character } from '../data/characters'
@@ -82,7 +82,7 @@ function fill(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
 }
 
-/** 呼び出し中に見せる、接続ツールの仕事 */
+/** 呼び出し中に見せる、パスポートの仕事 */
 const CONNECTOR_STEPS = [
   'ログイン中のMT5を探しています',
   'システムをMT5に入れて、使える形にしています',
@@ -310,7 +310,7 @@ export function DialogueWindow({
   }, [bridge.status, shownKind])
 
   // ── 通常会話 ──
-  /** 初期設定のはじまり。接続ツールを呼び出し、入っていなければダウンロードの案内へ */
+  /** 初期設定のはじまり。パスポートを呼び出し、入っていなければダウンロードの案内へ */
   const startSetup = () => {
     clearTimers()
     setInput('')
@@ -330,7 +330,7 @@ export function DialogueWindow({
       return
     }
     // 受付を止めているあいだは、ここで引き返す。
-    // 先へ進めないので、接続ツールの呼び出しも、30秒後のダウンロード案内も出ない。
+    // 先へ進めないので、パスポートの呼び出しも、30秒後のダウンロード案内も出ない。
     if (CONNECT_PAUSED) {
       setAiText(t(SETUP.paused))
       return
@@ -420,7 +420,7 @@ export function DialogueWindow({
     } else {
       const history = await loadAiTrades()
       context = role === 'algo' ? algoContext(bridge.status ?? null, history) : mioContext(bridge.status ?? null, history)
-      if (!context) dataError = '口座の数字を読み取れませんでした。接続ツールが起動しているか見てください。'
+      if (!context) dataError = '口座の数字を読み取れませんでした。パスポートが起動しているか見てください。'
     }
     if (dataError) {
       setAiText(dataError)
@@ -478,7 +478,7 @@ export function DialogueWindow({
           setReport(got.report)
           setReportAt(new Date())
         } else {
-          setAiText('口座の数字を読み取れませんでした。接続ツールが起動しているか見てください。')
+          setAiText('口座の数字を読み取れませんでした。パスポートが起動しているか見てください。')
         }
         setBusy(false)
       })()
@@ -521,7 +521,7 @@ export function DialogueWindow({
   }
   askRef.current = ask
 
-  // 「初期設定をはじめる」→ 接続ツールを呼び出したあと。
+  // 「初期設定をはじめる」→ パスポートを呼び出したあと。
   // ツールが入っていれば数秒でブリッジが名乗り出る。無ければダウンロードの案内に切り替える。
   useEffect(() => {
     if (phase !== 'launching') return
@@ -579,7 +579,7 @@ export function DialogueWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchDefaultRoom, member?.id])
 
-  // 接続ツール（ブリッジ）が生きたら、タイマーではなく実応答で接続を進める
+  // パスポート（ブリッジ）が生きたら、タイマーではなく実応答で接続を進める
   useEffect(() => {
     if (phase !== 'waiting' && phase !== 'download') return
     if (!bridge.live) return
@@ -598,7 +598,7 @@ export function DialogueWindow({
           ? formatBridgeError(bridge.error)
           : 'E008: MT5 連携なしでは接続を完了できません',
       )
-      setAiText('接続ツールからの応答がありません。中継サーバーとブリッジが起動しているか確認してください。')
+      setAiText('パスポートからの応答がありません。中継サーバーとブリッジが起動しているか確認してください。')
       return
     }
     let cancelled = false
@@ -616,7 +616,7 @@ export function DialogueWindow({
               ? formatBridgeError(bridge.error)
               : 'E008: MT5 連携なしでは接続を完了できません',
         )
-        setAiText('MT5の口座情報を読み取れませんでした。接続ツールとMT5が起動しているか確認してください。')
+        setAiText('MT5の口座情報を読み取れませんでした。パスポートとMT5が起動しているか確認してください。')
         return
       }
       const lines = connectChecksFromStatus(ack)
@@ -689,7 +689,7 @@ export function DialogueWindow({
     }
   }, [conn, bridge.live, bridge.status, character.id, phase])
 
-  // 連携済みで戻ってきたのにブリッジが切れている → 接続ツールを一度だけ呼び直す。
+  // 連携済みで戻ってきたのにブリッジが切れている → パスポートを一度だけ呼び直す。
   // ただし、この画面でいちど動いていたブリッジが消えたときは呼ばない
   // （お客様が「停止する」で止めた直後に、サイトが勝手に起こし直してしまうため）。
   useEffect(() => {
@@ -1102,7 +1102,7 @@ export function DialogueWindow({
           )
         })()}
 
-        {/* ══════ 接続ツールを呼び出している間 ══════ */}
+        {/* ══════ パスポートを呼び出している間 ══════ */}
         {phase === 'launching' && (
           <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
             <div
@@ -1148,7 +1148,7 @@ export function DialogueWindow({
           </div>
         )}
 
-        {/* ══════ 接続ツールのダウンロード ══════ */}
+        {/* ══════ パスポートのダウンロード ══════ */}
         {phase === 'download' && (
           <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
             <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -1274,7 +1274,7 @@ export function DialogueWindow({
         {(phase === 'connecting' || phase === 'done') && (
           <div className="border-t px-6 py-4" style={{ borderColor: 'rgba(94,204,255,0.18)' }}>
             <p className="mb-2.5 text-[13px] font-bold text-slate-400">
-              お客様のパソコンで、接続ツールが作業しています。
+              お客様のパソコンで、パスポートが作業しています。
             </p>
             <ol className="space-y-2">
               {checks.length === 0 && phase === 'connecting' && (

@@ -152,8 +152,8 @@ export function AiGatePanel({ gate, bridge }: { gate: AiGateState; bridge: Retur
       )}
       {locked && (
         <p className="mt-2 text-[13px]" style={{ color: '#ffd23e' }}>
-          ⚠ この端末の接続ツールに合言葉が入っていないため、「切」から変えられません。
-          %LOCALAPPDATA%\AITrader\bridge.env に TRELAB_RISK_TOKEN を書いて、接続ツールを開き直してください
+          ⚠ この端末のパスポートに合言葉が入っていないため、「切」から変えられません。
+          %LOCALAPPDATA%\AITrader\bridge.env に TRELAB_RISK_TOKEN を書いて、パスポートを開き直してください
         </p>
       )}
       {!locked && sent && sent !== gate.mode && (

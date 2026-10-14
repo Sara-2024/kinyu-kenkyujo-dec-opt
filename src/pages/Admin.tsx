@@ -361,7 +361,7 @@ function OperatorPasswordSection({ token }: { token: string | null }) {
 }
 
 /**
- * プランごとの合言葉。ロビー（ドリームランド渡航手続き）の「接続ツールの設置」で
+ * プランごとの合言葉。ロビー（ドリームランド渡航手続き）の「パスポートの設置」で
  * お客様が打ち込むもの。合った合言葉のプランに振り分けられ、会員登録でもそのプランが付く。
  */
 function PlanPasswordsSection({ token }: { token: string | null }) {
@@ -393,7 +393,7 @@ function PlanPasswordsSection({ token }: { token: string | null }) {
     <div className="mt-5 rounded-[4px] border px-5 py-5" style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}>
       <p className="text-[16px] font-bold">プランの合言葉</p>
       <p className="mt-1 text-[14px] text-slate-400">
-        ロビーの「接続ツールの設置」でお客様が打ち込む合言葉です。打った合言葉のプランにしか案内されません（ロイヤルの方がファーストへ、
+        ロビーの「パスポートの設置」でお客様が打ち込む合言葉です。打った合言葉のプランにしか案内されません（ロイヤルの方がファーストへ、
         ファーストの方がロイヤルへ行くのを防ぎます）。8文字以上。
       </p>
       {message && (

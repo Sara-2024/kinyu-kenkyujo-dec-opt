@@ -218,7 +218,7 @@ export function ControlPanel({
           <span className="h-4 w-[2px] shrink-0" style={{ background: 'rgba(148,163,184,0.6)' }} />
           <span className="text-[15px] font-bold text-slate-300">AIの見張り</span>
           <span className="text-[13px] text-slate-400">
-            この端末の接続ツールからは、まだ届いていません。接続ツールを一度閉じて開き直してください
+            この端末のパスポートからは、まだ届いていません。パスポートを一度閉じて開き直してください
           </span>
         </div>
       )}
@@ -250,7 +250,7 @@ export function ControlPanel({
           )}
           {bridge.status.ea_same_folder === false && (
             <span className="w-full font-bold text-[#ff8484]">
-              ⚠ MT5と接続ツールが別のフォルダを見ています。接続ツールを開き直してください。
+              ⚠ MT5とパスポートが別のフォルダを見ています。パスポートを開き直してください。
             </span>
           )}
         </div>

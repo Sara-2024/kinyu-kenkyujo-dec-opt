@@ -148,7 +148,7 @@ export function connectChecksFromStatus(s: ConnectStatus): ConnectCheck[] {
 
   return [
     {
-      working: '接続ツールを確認しています',
+      working: 'パスポートを確認しています',
       done: s.mt5_ready
         ? `MT5に接続しました${name ? `（${name}）` : ''}${build ? ` ${build}` : ''}`
         : 'MT5に接続できませんでした',
@@ -165,7 +165,7 @@ export function connectChecksFromStatus(s: ConnectStatus): ConnectCheck[] {
         ? compiled.length > 0
           ? `システムを確認しました（${compiled.join(', ')}）`
           : `ソースを確認しました（${found.join(', ')}）。MetaEditor でコンパイルしてください`
-        : 'Experts にシステムが見つかりません。接続ツールを起動するか、チャートへドラッグしてください',
+        : 'Experts にシステムが見つかりません。パスポートを起動するか、チャートへドラッグしてください',
       ok: installed,
     },
     {

@@ -39,8 +39,8 @@ export const NOTICES: Notice[] = [
   {
     date: '2026-08-10',
     tag: 'お知らせ',
-    title: '接続ツールは黒い画面を出しません',
-    body: 'MT5 Automatic は裏側で動きます。経過は connect.log に残るので、うまくいかないときはそちらをお送りください。',
+    title: 'パスポートは黒い画面を出しません',
+    body: 'パスポート（パソコン上の名前は MT5 Automatic）は裏側で動きます。経過は connect.log に残るので、うまくいかないときはそちらをお送りください。',
   },
   {
     date: '',

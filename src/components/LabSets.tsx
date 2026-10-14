@@ -537,7 +537,7 @@ export function SystemBoard({
   const rows: Array<[string, string]> = [
     ['稼働状況', state.jp],
     ['システム', systemName(s) ?? '—'],
-    ['接続ツール', s?.version ? `版 ${s.version}` : '—'],
+    ['パスポート', s?.version ? `版 ${s.version}` : '—'],
     ['MT5', s?.build ? `${s.terminal_name ?? 'MetaTrader 5'} build ${s.build}` : '—'],
     ['口座', s?.account != null ? `${s.account}${s.server ? ` ／ ${s.server}` : ''}` : '—'],
   ]

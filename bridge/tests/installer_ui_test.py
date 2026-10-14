@@ -36,7 +36,8 @@ w.add_step("ea", "AI Traderの設定"); w.mark("ea", True)
 w.button("閉じる", lambda: None)
 w.root.update_idletasks()
 
-check("題名は MT5 Automatic", w.root.title() == "MT5 Automatic", w.root.title())
+check("題名は ドリームランド｜パスポート", w.root.title() == ui.APP_NAME and "パスポート" in ui.APP_NAME, w.root.title())
+check("ロビーと同じクリーム地", ui.BG.lower() == "#fdf8ef", ui.BG)
 check("案内文が入る", "HFM" in w.message.cget("text"), w.message.cget("text"))
 marks = [m.cget("text") for m, _ in w._steps]
 check("手順に✓が付く", marks == ["✓", "✓"], str(marks))

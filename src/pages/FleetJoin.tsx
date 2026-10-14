@@ -94,7 +94,7 @@ export function FleetJoin() {
           登録をもって、その操作を運営に任せることに同意したものとします。
         </p>
         <p className="mt-1 text-[14px] text-slate-400">
-          口座番号・サーバー名は MT5 のログイン画面に出ているものです。この PC の MT5 Automatic が研究所と連携済みであれば、そのまま制御できます。
+          口座番号・サーバー名は MT5 のログイン画面に出ているものです。この PC のパスポート（MT5 Automatic）が研究所と連携済みであれば、そのまま制御できます。
         </p>
 
         <div className="mt-5 rounded-[4px] border px-5 py-5" style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}>

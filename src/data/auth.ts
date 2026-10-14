@@ -188,7 +188,7 @@ export async function adminSetOperatorPassword(token: string, password: string):
   await rpc('admin_set_admin_password', { p_token: token, p_password: password })
 }
 
-/** プランごとの合言葉（ロビーの「接続ツールの設置」で打つもの）を決める */
+/** プランごとの合言葉（ロビーの「パスポートの設置」で打つもの）を決める */
 export async function adminSetPlanPassword(token: string, plan: 'first' | 'crystal', password: string): Promise<void> {
   await rpc('admin_set_plan_password', { p_token: token, p_plan: plan, p_password: password })
 }
@@ -213,7 +213,7 @@ export async function memberSaveLead(token: string, email: string): Promise<void
 /**
  * MT5と連携するための、短命の合図をもらう。
  *
- * ログイン中のときだけ作れる。会員IDそのものを接続ツールへ渡さないために使う。
+ * ログイン中のときだけ作れる。会員IDそのものをパスポートへ渡さないために使う。
  * 数分で切れ、一度使ったら無効。
  */
 export async function issueConnectToken(token: string): Promise<string | null> {
