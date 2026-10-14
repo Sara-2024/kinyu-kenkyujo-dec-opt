@@ -674,7 +674,7 @@ const SCRIPT = {
     loginpw: { say: "この口座は、以前にパスワード付きで登録されています。そのときのパスワードを入力してください。分からないときはサポート LINE へご連絡ください。", docs: "loginpw",
       choices: [["サポート LINE", "support"], ["ほかのもの", "start"]] },
     waiting: { say: "パスポートがこの口座につながっているか、確かめています。そのままお待ちください（20 秒ほど）。", docs: "progress", choices: [] },
-    notyet: { say: () => `パスポートは、まだこの口座につながっていません。\nダウンロードしたファイル（${osNow() === "mac" ? "ドリームランド・パスポート" : "DreamlandPassport-…"}）を開いて、設置を終えてから、もう一度「設置が終わった（つなぐ）」を押してください。${osNow() === "mac" ? "\nMac で設置が済んでいるのにつながらないときは「パスポートを呼び出す」を押してください。" : ""}`, docs: "launch",
+    notyet: { say: () => `パスポートは、まだこの口座につながっていません。\nダウンロードしたファイル（${osNow() === "mac" ? "ドリームランド・パスポート" : "DreamlandPassport"}）を開いて、設置を終えてから、もう一度「設置が終わった（つなぐ）」を押してください。${osNow() === "mac" ? "\nMac で設置が済んでいるのにつながらないときは「パスポートを呼び出す」を押してください。" : ""}`, docs: "launch",
       choices: () => [["設置が終わった（つなぐ）", "launch", "go"], ...(osNow() === "mac" ? [["パスポートを呼び出す", "relaunch"]] : []), ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     stuck: { say: "パスポートはこの口座につながっていますが、この画面が中継に入れていません。ページを再読み込み（F5）して、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "progress",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
@@ -1290,19 +1290,21 @@ const SCRIPT = {
   /* いまのツールは、ダウンロードして開いただけでは設置だけして終わり、サイトにも中継にも名乗り出ない。
      だから「設置が終わって、この画面に戻ってきた」ことを合図に、もう一度パスポートを呼び出す
      （ダウンロードを押してから、または案内を出してから DOWNLOAD_SETTLE_MS 経ったあと。呼び直しは RELAUNCH_COOLDOWN_MS に1回） */
-  /* ダウンロード。Windows は、ダウンロードするファイル名に合図（使い捨て）を付ける：
-       DreamlandPassport-<合図>.exe
-     パスポートは初回に自分のファイル名から合図を読み、サイトに確かめて、この口座に紐づく。
-     だから「開くだけ」でつながり、サイトから「開きますか？」で呼び出す必要が無い。
-     合図を作れなかったとき（通信できない等）と Mac は、名前を付けずにそのまま配る（呼び出す方式で紐づける） */
+  /* ダウンロード。Windows は、ダウンロード元の URL に合図（使い捨て）を付ける：
+       /download/DreamlandPassport.exe?k=<合図>
+     Windows はダウンロードしたファイルに元の URL を記録する（Zone.Identifier の HostUrl）ので、
+     パスポートは初回にそこから合図を読み、サイトに確かめて、この口座に紐づく。
+     ファイル名は毎回同じ DreamlandPassport.exe（名前を毎回変えると、ブラウザが毎回「初めて見るファイル」として警告する）。
+     記録が無い環境のために、ファイル名に付いた合図（DreamlandPassport-<合図>.exe）も読める。
+     合図を作れなかったとき（通信できない等）と Mac は、そのまま配る（Mac は呼び出す方式で紐づける） */
   const startDownload = async (e, a) => {
     flow.downloadedAt = Date.now();
     const m = member();
     if (osNow() !== "mac" && m && e) {
       e.preventDefault();
       const { status, data } = await api({ action: "connect_token", session: m.token });
-      const name = status === 200 && data.token ? `DreamlandPassport-${data.token}.exe` : "DreamlandPassport.exe";
-      const tmp = document.createElement("a"); tmp.href = LINKS.winFile; tmp.download = name; tmp.style.display = "none";
+      const href = status === 200 && data.token ? `${LINKS.winFile}?k=${data.token}` : LINKS.winFile;
+      const tmp = document.createElement("a"); tmp.href = href; tmp.download = "DreamlandPassport.exe"; tmp.style.display = "none";
       document.body.appendChild(tmp); tmp.click(); tmp.remove();
     }
     flow.note = "ダウンロードが始まりました。ダウンロードしたファイルを開いて、上の手順どおりに進めてください。開き終わったら「設置が終わった（つなぐ）」を押してください";

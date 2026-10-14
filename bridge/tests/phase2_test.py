@@ -60,6 +60,14 @@ check("ファイル名の合図を読める（ダウンロード名）", connect
 check("ブラウザが (1) を付けても読める", connect.connect_token_from_exe_name(f"/tmp/DreamlandPassport-{GOOD} (1).exe") == GOOD)
 check("合図の無い名前は空", connect.connect_token_from_exe_name("/tmp/DreamlandPassport.exe") == "")
 check("短い・16進でない名前は空", connect.connect_token_from_exe_name("/tmp/DreamlandPassport-abc.exe") == "" and connect.connect_token_from_exe_name(f"/tmp/DreamlandPassport-{'z' * 64}.exe") == "")
+import tempfile as _tf
+_zdir = pathlib.Path(_tf.mkdtemp())
+_zexe = _zdir / "DreamlandPassport.exe"; _zexe.write_bytes(b"MZ")
+# Windows の Zone.Identifier（代替データストリーム）の代わりに、同じ名前のファイルで形だけ再現する
+(_zdir / "DreamlandPassport.exe:Zone.Identifier").write_text(f"[ZoneTransfer]\r\nZoneId=3\r\nReferrerUrl=https://dreamland-lobby.vercel.app/\r\nHostUrl=https://dreamland-lobby.vercel.app/download/DreamlandPassport.exe?k={GOOD}\r\n", encoding="utf-8")
+check("ダウンロード元の URL（Zone.Identifier）から合図を読める", connect.connect_token_from_exe_name(str(_zexe)) == GOOD)
+(_zdir / "DreamlandPassport.exe:Zone.Identifier").write_text("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://dreamland-lobby.vercel.app/download/DreamlandPassport.exe\r\n", encoding="utf-8")
+check("URL に合図が無ければ空", connect.connect_token_from_exe_name(str(_zexe)) == "")
 check("ただの引数は読まない", connect.connect_token_from_args(["--console", GOOD]) == "")
 
 # ── 2) URL の room= は、もう読まない ────────────────

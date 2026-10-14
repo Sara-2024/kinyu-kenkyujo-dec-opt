@@ -678,16 +678,46 @@ def connect_token_from_args(argv: list[str]) -> str:
     return ""
 
 
-def connect_token_from_exe_name(exe: str | None = None) -> str:
-    """ダウンロードしたファイルの名前から合図を読む。
+TOKEN_IN_TEXT = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{64})(?![0-9a-fA-F])")
 
-    ロビーは Windows 用を「DreamlandPassport-<合図>.exe」という名前で配る。
+
+def connect_token_from_zone(exe: str | None = None) -> str:
+    """ダウンロード元の URL から合図を読む。
+
+    Windows は、ブラウザでダウンロードしたファイルに「どこから来たか」を
+    Zone.Identifier（代替データストリーム）として記録する。Chrome / Edge は
+    HostUrl= にダウンロード元の URL をそのまま書くので、ロビーが付けた ?k=<合図> が読める。
+    無ければ空（手で削除した・ZIP 経由・別の入れ方）。
+    """
+    path = Path(exe or sys.executable)
+    try:
+        text = (str(path) + ":Zone.Identifier").encode("utf-8")
+        with open(text.decode("utf-8"), "r", encoding="utf-8", errors="ignore") as fh:
+            body = fh.read(8192)
+    except OSError:
+        return ""
+    for line in body.splitlines():
+        if line.lower().startswith(("hosturl=", "referrerurl=")):
+            found = re.search(r"[?&]k=([0-9a-fA-F]{64})(?![0-9a-fA-F])", line)
+            if found:
+                return found.group(1)
+    return ""
+
+
+def connect_token_from_exe_name(exe: str | None = None) -> str:
+    """ダウンロードしたファイルから合図を読む。
+
+    ロビーは Windows 用を「/download/DreamlandPassport.exe?k=<合図>」から配る。
     お客様はそれを開くだけでよく、サイトから aitrader:// で呼び出し直す必要が無い
     （「開きますか？」が出ない）。合図は 64 桁の 16 進で、使い捨て。
-    exe 版（frozen）で、まだ連携していないときにだけ使う（main を見よ）。
+    読む順: ① ダウンロード元の URL（Zone.Identifier） ② ファイル名（DreamlandPassport-<合図>.exe）。
+    exe 版（frozen）で、引数なしで開かれたときにだけ使う（main を見よ）。
     """
+    from_zone = connect_token_from_zone(exe)
+    if from_zone:
+        return from_zone
     name = Path(exe or sys.executable).stem
-    found = re.search(r"(?<![0-9a-fA-F])([0-9a-fA-F]{64})(?![0-9a-fA-F])", name)
+    found = TOKEN_IN_TEXT.search(name)
     return found.group(1) if found else ""
 
 
