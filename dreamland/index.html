@@ -1335,7 +1335,7 @@ const SCRIPT = {
     const account = ack.account != null && String(ack.account) !== "" ? String(ack.account) : "";
     const name = ack.terminal_name ? `（${ack.terminal_name}）` : "";
     flow.lines = [
-      { text: ack.mt5_ready ? `MT5 に接続しました${name}` : "MT5 に接続できませんでした", ok: !!ack.mt5_ready },
+      { text: ack.mt5_ready ? `MT5 に接続しました${name}` : `パスポートが MT5 に接続できていません${ack.mt5_error ? `（${ack.mt5_error}）` : ""}。MT5 を開いて口座にログインしているか確かめてください`, ok: !!ack.mt5_ready },
       { text: account ? `口座 ${account}${ack.server ? ` ／ ${ack.server}` : ""}` : "口座情報を読み取れませんでした", ok: !!account },
       { text: ack.ea_installed ? "運用システム（EA）を確認しました" : "運用システム（EA）がまだ置かれていません。パスポートを起動し直してください", ok: !!ack.ea_installed },
     ];

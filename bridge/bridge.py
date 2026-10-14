@@ -535,6 +535,7 @@ class MT5Controller:
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mt5")
         self._lock = asyncio.Lock()
         self.ready = False
+        self.mt5_error = ""   # 最後に MT5 へつなげなかった理由（サイトに見せる）
         # 「サーバーから最後に指示された状態」。再接続や再起動のあとで復元する。
         # 起動時は adopt_current_state() で MT5 側の実際の値を引き継ぐので、
         # ここでの初期値は「MT5 側にも記録が無かったとき」だけ使われる。
@@ -595,7 +596,9 @@ class MT5Controller:
 
         if not mt5.initialize(**kwargs):
             log.error("MT5 初期化に失敗: %s", mt5.last_error())
+            self.mt5_error = f"MT5 初期化に失敗: {mt5.last_error()}"
             return False
+        self.mt5_error = ""
         return True
 
     async def connect(self) -> bool:
@@ -1757,6 +1760,7 @@ class MT5Controller:
             **ea,
             "server_time": server_now.isoformat(timespec="seconds") if server_now else None,
             "mt5_ready": self.ready,
+            "mt5_error": (self.mt5_error or None) if not self.ready else None,
             "variable": self.cfg.gv_name,
             "value": await self.get_variable(self.cfg.gv_name),
             "desired_value": self.desired_value,
@@ -2216,6 +2220,9 @@ class Bridge:
             if self.stop.is_set():
                 break
             try:
+                boot = getattr(self, "_mt5_boot", None)
+                if boot is not None and not boot.done():
+                    continue   # 起動直後の MT5 接続はまだ進行中。二重に初期化しない
                 term = await self.mt._call(mt5.terminal_info) if self.mt.ready else None
                 if term is None:
                     log.error("MT5 との接続が失われました。再初期化します")
@@ -2272,25 +2279,37 @@ class Bridge:
             log.info("デッドマンSW  : %.0f 秒切断で自動停止", self.cfg.failsafe_sec)
         log.info("=" * 62)
 
-        await self.mt.connect_with_retry(self.stop)
-        if self.stop.is_set():
-            return
-        # 起動直後は、MT5 側にある値をそのまま引き継ぐ。
-        # 勝手に稼働中へ戻さないための要。記録が無いときだけ初期値を書く。
-        try:
-            restored = await self.mt.restore_settings()
-            if restored:
-                log.warning("指令ファイルから消えていた設定を書き戻しました: %s", "、".join(restored))
-        except Exception as exc:  # noqa: BLE001
-            log.warning("設定の書き戻しに失敗しました: %s", exc)
+        # MT5 につながるのを待たずに、先に中継へ名乗る。
+        # 以前は MT5 につながるまで中継に出なかったので、MT5 側でこけると
+        # サイトからは「パスポートが来ない」としか見えず、理由が分からなかった（実機で起きた）。
+        # いまは中継に出て mt5_ready=false と理由（mt5_error）を報告し、MT5 は裏で待つ。
+        async def bring_up_mt5() -> None:
+            await self.mt.connect_with_retry(self.stop)
+            if self.stop.is_set() or not self.mt.ready:
+                return
+            # 起動直後は、MT5 側にある値をそのまま引き継ぐ。
+            # 勝手に稼働中へ戻さないための要。記録が無いときだけ初期値を書く。
+            try:
+                restored = await self.mt.restore_settings()
+                if restored:
+                    log.warning("指令ファイルから消えていた設定を書き戻しました: %s", "、".join(restored))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("設定の書き戻しに失敗しました: %s", exc)
+            try:
+                await self.mt.adopt_current_state()
+            except Exception as exc:  # noqa: BLE001
+                log.exception("起動時の状態引き継ぎに失敗しました（中継への接続は続けます）: %s", exc)
+            if self._active_ws is not None:
+                await self.mt.touch_gate()
+                try:
+                    await self._push_status_if_changed(force=True)
+                except Exception as exc:  # noqa: BLE001
+                    log.debug("MT5 につながった直後の状態送信で例外: %s", exc)
 
-        try:
-            await self.mt.adopt_current_state()
-        except Exception as exc:  # noqa: BLE001
-            log.exception("起動時の状態引き継ぎに失敗しました（中継への接続は続けます）: %s", exc)
+        self._mt5_boot = asyncio.create_task(bring_up_mt5(), name="mt5")
         watchdog = asyncio.create_task(self.watchdog(), name="watchdog")
         pusher = asyncio.create_task(self.status_pusher(), name="pusher")
-        tasks = [watchdog, pusher]
+        tasks = [self._mt5_boot, watchdog, pusher]
         try:
             await self.ws_loop()
         finally:
