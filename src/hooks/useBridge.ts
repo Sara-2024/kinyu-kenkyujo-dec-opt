@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BridgeError, BridgeErrorCode } from '../data/bridgeErrors'
 import type { HistoryStats, PositionRow, TodayStats } from '../data/setupFlow'
 import type { TradeHistory } from '../data/tradeReview'
-import type { AiGateState } from '../data/aiGate'
 
 export interface BridgeStatus {
   bridgeId: string
@@ -55,8 +54,6 @@ export interface BridgeStatus {
   intent_by?: string
   intent_at?: string
   gate_path?: string | null
-  /** AIリスク監督（新規注文の許可・停止）。ブリッジが判定を持っている */
-  ai_gate?: AiGateState
 }
 
 type Ack = {
@@ -127,7 +124,6 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'intent_by',
   'intent_at',
   'gate_path',
-  'ai_gate',
 ]
 
 /**

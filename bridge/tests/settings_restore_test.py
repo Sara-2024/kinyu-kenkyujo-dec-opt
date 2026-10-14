@@ -45,4 +45,12 @@ check("欠けた分だけ戻す", mt._restore_settings_blocking() == ["AI_MAX_PO
 
 # そろっていれば何もしない
 check("そろっていれば触らない", mt._restore_settings_blocking() == [])
+
+# 接続ツールの合図（EA のパネルが「連携済み／未接続」を出す材料）
+import calendar, time
+check("合図を書ける", mt._touch_gate_blocking())
+beat = [l for l in gate.read_text().splitlines() if l.startswith("AI_BRIDGE_AT=")]
+check("合図は PC の時計（ローカル時刻の UNIX 秒）", bool(beat) and abs(float(beat[0].split("=")[1]) - calendar.timegm(time.localtime())) < 5, str(beat))
+check("合図を書いても設定は消えない", "AI_LOT=0.01" in gate.read_text())
+check("合図は控えに入れない", "AI_BRIDGE_AT" not in json.loads((tmp/"gate_settings.json").read_text()))
 print(f"\n{P} ok / {F} NG"); sys.exit(1 if F else 0)

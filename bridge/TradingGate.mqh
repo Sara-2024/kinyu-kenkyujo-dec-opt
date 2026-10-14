@@ -1,6 +1,10 @@
 //+------------------------------------------------------------------+
 //| TradingGate.mqh                                                  |
 //| サイトからの指令をチャート上で見えるようにする。                     |
+//|   ・稼働／停止（AI_TRADING_ALLOWED）・ロット・同時保有数・1日の上限  |
+//|   ・接続ツールが生きているか（AI_BRIDGE_AT。30 秒ごとに書かれる合図）|
+//|   ・状態ファイル（trelab_state.ini。接続ツールが EA の生存を知る）   |
+//| AI による新規注文の見張り（AIリスク監督）は 2026-10-14 に廃止した。   |
 //+------------------------------------------------------------------+
 #property strict
 
@@ -15,6 +19,10 @@ input bool   InpAllowWhenMissing = false;              // 指令が無いとき�
 #define TG_LINE3  "TrelabGate_line3"
 #define TG_LINE4  "TrelabGate_line4"
 #define TG_LINE5  "TrelabGate_line5"
+
+// 接続ツールの合図（AI_BRIDGE_AT）がこれより古ければ「未接続」と出す。
+// 接続ツールは 30 秒ごとに書くので、数回落としても持つ長さにしてある
+#define GATE_ALIVE_SEC 180
 
 bool     g_gate_file_ok = false;
 datetime g_gate_mtime   = 0;
@@ -31,13 +39,9 @@ void SyncGateFileToGlobals()
    g_gate_file_ok = true;
    g_gate_mtime   = (datetime)FileGetInteger(handle, FILE_MODIFY_DATE);
 
-   // AIの見張りの値は、毎回ここで無害な状態に戻してから読み直す。
-   // MT5 のグローバル変数は消えずに残るので、指令ファイルから行が消えても
-   // 古い「停止」が居座り、新規注文が二度と出なくなるため。
-   GlobalVariableSet("AI_GATE_MODE",  0.0);
-   GlobalVariableSet("AI_BUY_ALLOWED",  1.0);
-   GlobalVariableSet("AI_SELL_ALLOWED", 1.0);
-   GlobalVariableSet("AI_GATE_UNTIL", 0.0);
+   // 合図は毎回 0 に戻してから読み直す。MT5 のグローバル変数は消えずに残るので、
+   // 指令ファイルから行が消えても古い合図が居座り、「連携済み」のままになるため
+   GlobalVariableSet("AI_BRIDGE_AT", 0.0);
 
    while(!FileIsEnding(handle))
      {
@@ -69,6 +73,48 @@ bool IsTradingAllowedRaw()
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED) || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
       return false;
    return(GlobalVariableGet(InpGateVariable) >= 0.5);
+  }
+
+//+------------------------------------------------------------------+
+//| 接続ツール（パスポート）が生きているか。                            |
+//|   接続ツールは 30 秒ごとに指令ファイルへ AI_BRIDGE_AT（PC の時計の   |
+//|   UNIX 秒）を書く。それが新しければ「連携済み」。                    |
+//|   古い接続ツールは合図を書かないので、指令ファイルの更新時刻でも見る。 |
+//+------------------------------------------------------------------+
+bool GateBridgeAlive()
+  {
+   if(!g_gate_file_ok)
+      return(false);
+   const datetime now  = TimeLocal();
+   const datetime beat = (datetime)GateNumber("AI_BRIDGE_AT", 0.0);
+   if(beat > 0 && MathAbs((double)(now - beat)) <= GATE_ALIVE_SEC)
+      return(true);
+   if(g_gate_mtime > 0 && MathAbs((double)(now - g_gate_mtime)) <= GATE_ALIVE_SEC)
+      return(true);
+   return(false);
+  }
+
+//--- パネルに出す1行（サイトと連携しているか）
+string SiteLinkLine()
+  {
+   return(GateBridgeAlive() ? "ユメックAIと連携済み" : "ユメックAIと未接続");
+  }
+
+void WriteStateFile(const string state, const bool allowed)
+  {
+   int h = FileOpen("trelab_state.ini",
+                    FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
+   if(h == INVALID_HANDLE)
+      return;
+   FileWriteString(h, "state=" + state + "\n");
+   FileWriteString(h, "allowed=" + (allowed ? "1" : "0") + "\n");
+   FileWriteString(h, "at=" + TimeToString(TimeLocal(), TIME_DATE|TIME_SECONDS) + "\n");
+   FileWriteString(h, "account=" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\n");
+   FileWriteString(h, "ea=" + MQLInfoString(MQL_PROGRAM_NAME) + "\n");
+   FileWriteString(h, "common=" + TerminalInfoString(TERMINAL_COMMONDATA_PATH) + "\n");
+   FileWriteString(h, "symbol=" + _Symbol + "\n");
+   FileWriteString(h, "bridge_alive=" + (GateBridgeAlive() ? "1" : "0") + "\n");
+   FileClose(h);
   }
 
 void PutRect(const string id, const int x, const int y, const int w, const int h, const color fill, const color border)
@@ -116,103 +162,6 @@ void PutLabel(const string id, const int x, const int y, const int size, const c
 //| いまチャートに出している状態を、サイト側から読めるように書き出す。 |
 //| これでサイトの表示と MT5 の表示がズレていないか確認できる。        |
 //+------------------------------------------------------------------+
-//+------------------------------------------------------------------+
-//| AIリスク監督（サイトのブリッジが書く4つの数字）                    |
-//|   AI_GATE_MODE  0=切 1=記録だけ 2=実際に新規注文を止める           |
-//|   AI_BUY_ALLOWED / AI_SELL_ALLOWED  1=許可 0=停止                  |
-//|   AI_GATE_UNTIL 判定の有効期限（サーバー時計の UNIX 秒）           |
-//| ここは読むだけ。決済・ロット・SL/TP には一切触らない。             |
-//+------------------------------------------------------------------+
-// EA が入れる情報（サイトへ書き出す状態ファイルに載せる）
-string GateProfile   = "";   // EA の実際の設定（AI に渡す戦略プロフィールの元）
-int    GateSkipBuy   = 0;    // AIゲートで見送った買いの回数
-int    GateSkipSell  = 0;
-int    GateShadowBuy = 0;    // 記録だけのとき「止めたはず」の回数
-int    GateShadowSell= 0;
-
-int AiGateMode()
-  {
-   return((int)GateNumber("AI_GATE_MODE", 0.0));
-  }
-
-bool AiGateExpired()
-  {
-   const datetime until = (datetime)GateNumber("AI_GATE_UNTIL", 0.0);
-   return(until <= TimeCurrent());
-  }
-
-//--- 新規注文の可否。dir>0 が買い、dir<0 が売り。
-//    戻り値 false = 見送り。reason に日本語の理由、shadow に「記録だけか」を返す。
-bool AiAllowsEntry(const int dir, string &reason, bool &shadow)
-  {
-   reason = "";
-   shadow = false;
-   const int mode = AiGateMode();
-   if(mode <= 0)
-      return(true);                       // 切っているときは何もしない
-   shadow = (mode == 1);                  // 1 = 記録だけ（発注は止めない）
-
-   if(AiGateExpired())
-     {
-      reason = "AIの判定が期限切れ（接続ツールを確認）";
-      return(shadow);                     // 実運用のときだけ止める
-     }
-   const double allowed = (dir > 0) ? GateNumber("AI_BUY_ALLOWED", 1.0) : GateNumber("AI_SELL_ALLOWED", 1.0);
-   if(allowed >= 0.5)
-      return(true);
-   reason = (dir > 0) ? "AIが買いの新規を停止中" : "AIが売りの新規を停止中";
-   return(shadow);
-  }
-
-//--- 見送りを数える（サイトの画面に出す）
-void AiCountSkip(const int dir, const bool shadow)
-  {
-   if(shadow)
-     {
-      if(dir > 0) GateShadowBuy++; else GateShadowSell++;
-     }
-   else
-     {
-      if(dir > 0) GateSkipBuy++; else GateSkipSell++;
-     }
-  }
-
-//--- パネルに出す1行
-string AiGateLine()
-  {
-   const int mode = AiGateMode();
-   if(mode <= 0)
-      return("AI監督 なし");
-   const string head = (mode == 1) ? "AI監督(記録)" : "AI監督";
-   if(AiGateExpired())
-      return(head + "  判定が期限切れ");
-   const bool buy  = (GateNumber("AI_BUY_ALLOWED", 1.0)  >= 0.5);
-   const bool sell = (GateNumber("AI_SELL_ALLOWED", 1.0) >= 0.5);
-   return(StringFormat("%s  買い %s / 売り %s", head, (buy ? "許可" : "停止"), (sell ? "許可" : "停止")));
-  }
-
-void WriteStateFile(const string state, const bool allowed)
-  {
-   int h = FileOpen("trelab_state.ini",
-                    FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
-   if(h == INVALID_HANDLE)
-      return;
-   FileWriteString(h, "state=" + state + "\n");
-   FileWriteString(h, "allowed=" + (allowed ? "1" : "0") + "\n");
-   FileWriteString(h, "at=" + TimeToString(TimeLocal(), TIME_DATE|TIME_SECONDS) + "\n");
-   FileWriteString(h, "account=" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + "\n");
-   FileWriteString(h, "ea=" + MQLInfoString(MQL_PROGRAM_NAME) + "\n");
-   FileWriteString(h, "common=" + TerminalInfoString(TERMINAL_COMMONDATA_PATH) + "\n");
-   FileWriteString(h, "symbol=" + _Symbol + "\n");
-   if(GateProfile != "")
-      FileWriteString(h, "profile=" + GateProfile + "\n");
-   FileWriteString(h, "ai_skip_buy="   + IntegerToString(GateSkipBuy)   + "\n");
-   FileWriteString(h, "ai_skip_sell="  + IntegerToString(GateSkipSell)  + "\n");
-   FileWriteString(h, "ai_shadow_buy=" + IntegerToString(GateShadowBuy) + "\n");
-   FileWriteString(h, "ai_shadow_sell="+ IntegerToString(GateShadowSell)+ "\n");
-   FileClose(h);
-  }
-
 void DrawGateStatus()
   {
    const bool autotrading = (MQLInfoInteger(MQL_TRADE_ALLOWED) && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED));
@@ -293,7 +242,7 @@ void DrawGateStatus()
       entry_info = StringFormat("エントリー %d回  直近 %s", (int)entry_n, TimeToString(last_e, TIME_SECONDS));
    else if(allowed && g_gate_file_ok && autotrading)
       entry_info = "稼働中 — 最初のエントリーを待っています";
-   PutLabel(TG_LINE5, 24, 144, 13, clrSilver, beat + "  " + entry_info + "   " + AiGateLine());
+   PutLabel(TG_LINE5, 24, 144, 13, clrSilver, beat + "  " + entry_info + "   " + SiteLinkLine());
 
    ChartRedraw(0);
   }

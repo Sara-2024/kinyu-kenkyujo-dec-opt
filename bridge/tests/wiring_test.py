@@ -74,8 +74,8 @@ try:
     check("設定フォルダを決められる", bridge_mod._config_dir().name == "AITrader")
 except AttributeError as exc:
     check("設定フォルダを決められる", False, str(exc))
-check("AIリスク監督が用意される", b.risk is not None, "risk_gate を読めていない")
-check("指令を配る係が監督を持っている", getattr(b.router, "risk", None) is b.risk)
+check("AIリスク監督は動かさない（2026-10-14 に廃止）", b.risk is None)
+check("指令を配る係も監督を持たない", getattr(b.router, "risk", None) is None)
 
 # ── 2) 「稼働中か」を見る式が、実在する属性を見ている ──
 watch = lambda: b.mt.desired_value != 0.0  # noqa: E731  bridge.run と同じ式
@@ -87,10 +87,10 @@ except AttributeError as exc:
     print("     ", exc)
 check("稼働判定が実在する属性を見ている", ok)
 
-# ── 3) 画面へ送る内容に AIゲートの状態が混ざる ──
-status = b._with_risk({"account": 1, "ea_skipped": {"ai_skip_buy": 1}}) if b.risk else {}
-check("状態に ai_gate が入る", "ai_gate" in status, str(status.keys()))
-check("ai_gate に買い売りが入る", {"buy", "sell", "mode"} <= set(status["ai_gate"]))
+# ── 3) 画面へ送る内容に AIゲートの状態は混ぜない（廃止）──
+status = b._with_risk({"account": 1})
+check("状態に ai_gate が入らない", "ai_gate" not in status and status.get("account") == 1, str(status.keys()))
+check("接続ツールの合図を書く入口がある", hasattr(b.mt, "touch_gate"))
 
 # ── 4) MT5 コントローラに、監督が呼ぶ入口がそろっている ──
 for name in ("risk_snapshot", "account_mode", "last_closed_m1", "symbol_tick", "set_variables"):

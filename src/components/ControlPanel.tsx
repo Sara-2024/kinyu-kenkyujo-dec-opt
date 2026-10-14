@@ -4,7 +4,6 @@
 // 設定の変更は「MT5のグローバル変数を書き換える」だけなので、
 // EAを載せ直す必要も、MT5を触っていただく必要もない。
 import { useEffect, useRef, useState } from 'react'
-import { AiGatePanel } from './AiGatePanel'
 import { BridgeStatusBar } from './BridgeStatusBar'
 import type { Connection } from '../data/connection'
 import { formatBridgeError } from '../data/bridgeErrors'
@@ -207,21 +206,6 @@ export function ControlPanel({
           {running ? '■ いますぐ停止' : '▶ 自動売買をはじめる'}
         </button>
       </div>
-
-      {/* ── AIの見張り（新規注文の許可・停止）。ブリッジが返した判定をそのまま出す ── */}
-      {bridge.live && bridge.status?.ai_gate && <AiGatePanel gate={bridge.status.ai_gate} bridge={bridge} />}
-      {bridge.live && !bridge.status?.ai_gate && (
-        <div
-          className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[6px] border px-5 py-4"
-          style={{ borderColor: 'rgba(148,163,184,0.3)', background: 'rgba(9,17,31,0.6)' }}
-        >
-          <span className="h-4 w-[2px] shrink-0" style={{ background: 'rgba(148,163,184,0.6)' }} />
-          <span className="text-[15px] font-bold text-slate-300">AIの見張り</span>
-          <span className="text-[13px] text-slate-400">
-            この端末のパスポートからは、まだ届いていません。パスポートを一度閉じて開き直してください
-          </span>
-        </div>
-      )}
 
       {/* ── MT5側が実際に出している状態（表示のズレをその場で見つける） ── */}
       {bridge.live && bridge.status?.ea_state && (

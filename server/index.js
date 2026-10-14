@@ -26,9 +26,9 @@ const CHECK_MEMBERS = Boolean(SUPABASE_URL && SUPABASE_KEY)
 const MEMBER_KEEP_MS = 60_000
 
 /** 画面から受け付ける指令。ここに無いものはブリッジへ流さない */
-const READ_COMMANDS = new Set(['get_status', 'status', 'get_positions', 'positions', 'get_history', 'history', 'get_trades', 'trades', 'get_ai_gate', 'ping'])
+const READ_COMMANDS = new Set(['get_status', 'status', 'get_positions', 'positions', 'get_history', 'history', 'get_trades', 'trades', 'ping'])
 /** 売買の状態を変える指令。`can_trade` が false の会員には通さない */
-const WRITE_COMMANDS = new Set(['start_trading', 'set_variable', 'set_ai_gate'])
+const WRITE_COMMANDS = new Set(['start_trading', 'set_variable'])
 /** 止める操作だけは、売買を禁止された会員にも許す（安全側にしか動かないため） */
 const STOP_COMMANDS = new Set(['stop_trading', 'close_all', 'stop_system'])
 

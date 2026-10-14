@@ -10,9 +10,7 @@ MetaEditor はここでは動かせないので、ソースを読んで
   OnTimer が無い            … ea_alive が立たず、サイトが EA を見つけられない。
                                ユイの初期設定がそこで止まる
   IsTradingAllowedRaw が無い … 管理画面の「停止」を押しても止まらない
-  AiAllowsEntry が無い       … AIの見張りが効かない
   SiteLot が無い             … 管理画面でロットを変えても反映されない
-  GateProfile が無い         … AI に渡す戦略の説明が既定値のままになる
 
 見るのは Windows 用（bridge/<EA_NAMES[0]>.mq5）と Mac 用（bridge/mac/*Yumekku*.mq5）。
 Mac 用には、接続ツールが口座を読むためのファイル書き出し（docs/mac-ea-files.md）も要る。
@@ -81,7 +79,6 @@ def run_checks(source: pathlib.Path) -> None:
     on_init = body_of(src, "OnInit")
     check("OnInit でタイマーを起こしている", "EventSetMillisecondTimer" in on_init)
     check("OnInit でも一度だけ状態を書いている", "SyncGateFileToGlobals" in on_init)
-    check("OnInit で戦略プロフィールを書き出している", "GateProfile" in on_init)
 
     on_deinit = body_of(src, "OnDeinit")
     check("OnDeinit でタイマーを止めている", "EventKillTimer" in on_deinit)
@@ -91,19 +88,17 @@ def run_checks(source: pathlib.Path) -> None:
     open_trade = body_of(src, "OpenTrade")
     check("OpenTrade がある", bool(open_trade))
     check("サイトの稼働／停止を見ている", "SiteAllowsEntry" in open_trade, "")
-    check("AIの見張りを見ている", "AiAllowsEntry" in open_trade, "")
-    check("止めたときに数えている", "AiCountSkip" in open_trade)
+    check("AI 判定（廃止済み）を見ていない", "AiAllowsEntry" not in src and "AiCountSkip" not in src and "GateProfile" not in src)
     check("入ったら回数を記録している", "MarkSiteEntry" in open_trade)
 
     # 停止の判断は、実際に発注する前でなければ意味がない
     if open_trade:
         order = re.search(r"g_trade\.(Buy|Sell)\s*\(", open_trade)
         gate = open_trade.find("SiteAllowsEntry")
-        ai = open_trade.find("AiAllowsEntry")
         check(
             "判断は発注より前にある",
-            order is not None and 0 <= gate < order.start() and 0 <= ai < order.start(),
-            f"停止={gate} AI={ai} 発注={order.start() if order else '無し'}",
+            order is not None and 0 <= gate < order.start(),
+            f"停止={gate} 発注={order.start() if order else '無し'}",
         )
 
     # ── 4) ロットはサイトの設定を使うか ──
@@ -117,7 +112,6 @@ def run_checks(source: pathlib.Path) -> None:
 
     # ── 6) ナンピンを使うときも同じ関門を通るか ──
     basket = body_of(src, "ManageM1Basket")
-    check("ナンピン追加も AI の見張りを通す", "AiAllowsEntry" in basket)
     check("ナンピン追加もサイトの指示を見る", "SiteAllowsEntry" in basket)
 
     # ── 7) 売買ロジックに手を入れていないか（触ってよいのは連携だけ）──
@@ -149,9 +143,19 @@ def run_checks(source: pathlib.Path) -> None:
         check(f"Mac: 説明文に「{word}」が無い", word not in src)
 
 
+# ── TradingGate.mqh（配る部品。リポジトリにあるので必ず見る）──
+GATE = (BRIDGE / "TradingGate.mqh").read_text(encoding="utf-8", errors="ignore")
+print("── bridge/TradingGate.mqh ──")
+check("パネルの表記は「ユメックAIと連携済み」", "ユメックAIと連携済み" in GATE)
+check("パネルの表記は「ユメックAIと未接続」", "ユメックAIと未接続" in GATE)
+check("「判定が期限切れ」は出さない", "判定が期限切れ" not in GATE)
+check("AI 判定（廃止済み）が残っていない", "AiAllowsEntry" not in GATE and "AI_GATE_MODE" not in GATE)
+check("接続ツールの合図（AI_BRIDGE_AT）で生きているかを見る", "AI_BRIDGE_AT" in GATE and "GateBridgeAlive" in GATE)
+check("合図は読むたびに 0 へ戻す（古い合図が居座らない）", 'GlobalVariableSet("AI_BRIDGE_AT", 0.0)' in GATE)
+
 if not SOURCES:
     print("  --   EA のソース（.mq5）が無いので省略します（配るのは .ex5 だけ）")
-    raise SystemExit(0)
+    raise SystemExit(1 if FAIL else 0)
 
 for source in SOURCES:
     print(f"── {source.relative_to(BRIDGE.parent)} ──")

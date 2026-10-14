@@ -89,6 +89,14 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 
 ## AIリスク監督（新規注文の見張り）の決まり
 
+- **廃止（2026-10-14）。** EA は AI の判定を見ない（`TradingGate.mqh` から `AiAllowsEntry` を外した）、
+  ブリッジは `RiskGate` を動かさない、中継の `set_ai_gate` / `get_ai_gate` も無い、画面の「AIの見張り」も無い。
+  `api/_lib/risk.ts`・`bridge/risk_gate.py`・`risk_features.py` とその試験、exe への合言葉の同梱は残っているが、
+  どこからも呼ばれない（消してよい）。以下は当時の決まり（参考）。
+- **EA のパネルの最下行は「ユメックAIと連携済み／ユメックAIと未接続」。** 接続ツールが 30 秒ごとに
+  指令ファイルへ `AI_BRIDGE_AT`（PC の時計の UNIX 秒）を書き（`bridge.py` の `touch_gate`。`watchdog` から）、
+  EA はそれが 3 分より古ければ「未接続」と出す（`GateBridgeAlive`）。古い接続ツールは合図を書かないので、
+  指令ファイルの更新時刻でも見る。新規注文を止める判断には使わない（表示だけ）。
 - **止めるのは新規注文だけ。** 決済・SL/TP・トレーリング・ロットには一切触らない。
   停止中も `ManageM1Basket()` の決済管理は動き続ける。ナンピンの追加も新規注文として
   同じゲートを通す（`bridge/YumekkuEA-1年版.mq5` の `OpenTrade` と ナンピン追加の2か所）。

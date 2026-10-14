@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import calendar
 import functools
 import inspect
 import json
@@ -46,13 +47,6 @@ try:
     load_dotenv()
 except ImportError:
     pass
-
-try:  # AIリスク監督（無くてもブリッジは動く）
-    from risk_gate import MODE_NAMES as RISK_MODE_NAMES, RiskConfig, RiskGate
-except ImportError:  # pragma: no cover
-    RiskGate = None  # type: ignore[assignment]
-    RiskConfig = None  # type: ignore[assignment]
-    RISK_MODE_NAMES = {}
 
 import websockets
 from websockets.exceptions import WebSocketException
@@ -822,6 +816,27 @@ class MT5Controller:
                 except Exception:  # noqa: BLE001 指令ファイル側が本命なので握りつぶす
                     pass
         return True
+
+    # EA のパネルに「ユメックAIと連携済み」を出すための合図。指令ファイルに PC の時計
+    # （UNIX 秒・ローカル時刻。EA の TimeLocal() と同じ数え方）を書き、EA は
+    # それが 3 分より古ければ「未接続」と出す（TradingGate.mqh の GateBridgeAlive）。
+    GATE_HEARTBEAT = "AI_BRIDGE_AT"
+
+    def _touch_gate_blocking(self) -> bool:
+        values = self._load_gate()
+        values[self.GATE_HEARTBEAT] = float(calendar.timegm(time.localtime()))
+        try:
+            self._save_gate(values)
+        except OSError as exc:
+            log.debug("合図を書けませんでした: %s", exc)
+            return False
+        return True
+
+    async def touch_gate(self) -> bool:
+        if not self.ready:
+            return False
+        async with self._lock:
+            return await self._call(self._touch_gate_blocking)
 
     async def set_variables(self, values: dict[str, float]) -> bool:
         if not self.ready or not values:
@@ -1800,20 +1815,6 @@ class CommandRouter:
         command = str(payload.get("command", "")).strip().lower()
         request_id = payload.get("id")
 
-        if command == "set_ai_gate":
-            mode = str(payload.get("mode", "")).strip().lower()
-            if self.risk is None:
-                return self._ack(command, request_id, False, error="AIリスク監督が動いていません")
-            if not self.risk.set_mode(mode):
-                return self._ack(command, request_id, False, error="mode は off / shadow / on / auto")
-            log.info("指令: AIゲートを %s に変更", mode)
-            return self._ack(command, request_id, True, ai_gate=self.risk.status())
-
-        if command == "get_ai_gate":
-            if self.risk is None:
-                return self._ack(command, request_id, False, error="AIリスク監督が動いていません")
-            return self._ack(command, request_id, True, ai_gate=self.risk.status(), history=self.risk.history[:20])
-
         if command == "stop_trading":
             reason = payload.get("reason", "")
             log.warning("指令: 売買停止  理由=%s", reason or "(指定なし)")
@@ -1909,11 +1910,6 @@ class CommandRouter:
 
         if command in ("get_status", "status"):
             status = await self.mt.status(include_today=True)
-            if self.risk is not None:
-                try:
-                    status["ai_gate"] = self.risk.status(status.get("ea_skipped") or {})
-                except Exception as exc:  # noqa: BLE001
-                    log.debug("AIゲートの状態を作れませんでした: %s", exc)
             log.debug("指令: 状態要求 -> %s", status)
             return self._ack(command, request_id, True, **status)
 
@@ -1959,14 +1955,8 @@ class Bridge:
         # いま画面が何枚開いているか（中継が教えてくれる）。
         # 0 のあいだは口座の数字を送らない。
         self.watchers: int = 0
-        # AIリスク監督（新規注文の許可・停止）。設定が無ければ None のまま
+        # AIリスク監督（AI による新規注文の見張り）は 2026-10-14 に廃止した。動かさない
         self.risk: Any | None = None
-        if RiskGate is not None and RiskConfig is not None:
-            try:
-                self.risk = RiskGate(self.mt, RiskConfig(), cfg.bridge_id, _config_dir())
-                self.router.risk = self.risk
-            except Exception as exc:  # noqa: BLE001
-                log.warning("AIリスク監督を用意できませんでした: %s", exc)
 
     # ---------- WebSocket ----------
     def _connect_kwargs(self) -> dict[str, Any]:
@@ -1989,13 +1979,7 @@ class Bridge:
             await ws.send(body)
 
     def _with_risk(self, status: dict[str, Any]) -> dict[str, Any]:
-        """AIリスク監督の状態を、画面へ送る内容に足す。"""
-        if self.risk is None:
-            return status
-        try:
-            status["ai_gate"] = self.risk.status(status.get("ea_skipped") or {})
-        except Exception as exc:  # noqa: BLE001
-            log.debug("AIゲートの状態を作れませんでした: %s", exc)
+        """AIリスク監督は廃止したので、画面へ送る内容はそのまま。"""
         return status
 
     async def _on_connected(self, ws: Any) -> None:
@@ -2240,6 +2224,9 @@ class Bridge:
                         await self.mt.adopt_current_state()
                     continue
 
+                # 30 秒ごとの合図（EA のパネルが「連携済み／未接続」を出す材料）
+                await self.mt.touch_gate()
+
                 if self.cfg.reassert:
                     # サイトでの指示だけが正。MT5 側がそれと違っていたら、
                     # 誰が書き換えたのであれ指示どおりに戻す（＝画面と必ず一致する）。
@@ -2300,11 +2287,6 @@ class Bridge:
         watchdog = asyncio.create_task(self.watchdog(), name="watchdog")
         pusher = asyncio.create_task(self.status_pusher(), name="pusher")
         tasks = [watchdog, pusher]
-        if self.risk is not None:
-            # サイトから停止中は評価しない（新規注文が無いので費用をかけない）
-            tasks.append(
-                asyncio.create_task(self.risk.run(self.stop, lambda: self.mt.desired_value != 0.0), name="risk")
-            )
         try:
             await self.ws_loop()
         finally:
