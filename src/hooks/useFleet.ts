@@ -55,6 +55,12 @@ export function useFleet(session: string | null, rooms: string[]) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return
     ws.send(JSON.stringify({ type: 'fleet_watch', id: `w${++seq.current}`, rooms: roomsKey ? roomsKey.split(',') : [] }))
   }, [roomsKey])
+  // 接続は session が変わったときだけ張り直す。見る部屋が変わっても張り直さない
+  // （張り直すと、一覧が読み込まれるたびに切れて、押した指令の返事を取りこぼす）
+  const watchRef = useRef(watch)
+  useEffect(() => {
+    watchRef.current = watch
+  }, [watch])
 
   useEffect(() => {
     if (!session) return
@@ -78,7 +84,7 @@ export function useFleet(session: string | null, rooms: string[]) {
       ws.onopen = () => {
         opened = true
         setPhase('live')
-        watch()
+        watchRef.current()
       }
       ws.onmessage = (event) => {
         let payload: Record<string, unknown>
@@ -146,7 +152,7 @@ export function useFleet(session: string | null, rooms: string[]) {
       wsRef.current?.close(1000)
       wsRef.current = null
     }
-  }, [session, watch, patch])
+  }, [session, patch])
 
   // 見る部屋が変わったら、見直す
   useEffect(() => {
