@@ -209,7 +209,7 @@ void DrawGateStatus()
       fill   = C'6,42,28';
       border = clrLime;
       statec = clrLime;
-      state  = "ユメックAIが稼働中";
+      state  = "稼働中";
      }
    else
      {
