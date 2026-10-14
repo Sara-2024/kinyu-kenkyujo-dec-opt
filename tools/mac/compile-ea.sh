@@ -1,8 +1,12 @@
 #!/bin/bash
-# Mac 用の EA（bridge/mac/YumekkuEA_mac.mq5）を、この Mac に入っている MT5 の
-# MetaEditor でコンパイルして bridge/mac/YumekkuEA_mac.ex5 にする。
+# EA を、この Mac に入っている MT5 の MetaEditor でコンパイルする。
 #
-#   bash tools/mac/compile-ea.sh
+#   bash tools/mac/compile-ea.sh                  # Mac 用:     bridge/mac/YumekkuEA_mac.mq5 → .ex5
+#   bash tools/mac/compile-ea.sh YumekkuEA_win    # Windows 用: bridge/YumekkuEA_win.mq5     → .ex5
+#   bash tools/mac/compile-ea.sh --all            # 両方
+#
+# .ex5 は OS に依らない（MT5 の中間コード）ので、Windows 用もここで作れる。
+# ソース（.mq5）はどちらも .gitignore で配らない。この Mac にしか無いので消さないこと。
 #
 # 要るもの: /Applications/MetaTrader 5.app（公式の Mac 版 MT5）。
 # その中の Wine で MetaEditor64.exe を黙って動かす。MT5 が起動中でも大丈夫。
@@ -13,8 +17,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SRC_DIR="$ROOT/bridge/mac"
+if [ "${1:-}" = "--all" ]; then
+  bash "$0" YumekkuEA_mac && bash "$0" YumekkuEA_win
+  exit $?
+fi
 EA="${1:-YumekkuEA_mac}"
+# Windows 用（*_win）は bridge/ 直下、Mac 用は bridge/mac/
+case "$EA" in
+  *_win) SRC_DIR="$ROOT/bridge" ;;
+  *)     SRC_DIR="$ROOT/bridge/mac" ;;
+esac
+REL="${SRC_DIR#$ROOT/}"
 APP="${MT5_APP:-/Applications/MetaTrader 5.app}"
 WINE="$APP/Contents/SharedSupport/wine/bin/wine64"
 PREFIX="${WINEPREFIX:-$HOME/Library/Application Support/net.metaquotes.wine.metatrader5}"
@@ -26,7 +39,7 @@ if [ ! -x "$WINE" ]; then
   exit 1
 fi
 if [ ! -f "$SRC_DIR/$EA.mq5" ]; then
-  echo "ソースがありません: bridge/mac/$EA.mq5" >&2
+  echo "ソースがありません: $REL/$EA.mq5" >&2
   exit 1
 fi
 
@@ -50,5 +63,5 @@ if [ ! -f "$WORK/$EA.ex5" ]; then
 fi
 cp "$WORK/$EA.ex5" "$SRC_DIR/$EA.ex5"
 "${PYTHON:-python3}" "$ROOT/tools/make-ea-manifest.py" --dir "$SRC_DIR" --quiet
-echo "できました: bridge/mac/$EA.ex5（$(stat -f%z "$SRC_DIR/$EA.ex5") bytes）"
-echo "次: git add bridge/mac/$EA.ex5 → commit → push で、GitHub が Mac 版の .app を作り直します"
+echo "できました: $REL/$EA.ex5（$(stat -f%z "$SRC_DIR/$EA.ex5") bytes）"
+echo "次: git add $REL/$EA.ex5 → commit → push で、GitHub が配布物（Windows の exe / Mac の .app）を作り直します"

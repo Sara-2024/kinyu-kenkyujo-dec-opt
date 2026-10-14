@@ -4,8 +4,10 @@
 //+------------------------------------------------------------------+
 #property strict
 
-input string InpGateVariable = "AI_TRADING_ALLOWED";
-input bool   InpAllowWhenMissing = false;
+// EA はこのファイルを「ロットなどの入力の後ろ」で include する（設定画面でロットを一番上に出すため）。
+input group "===== サイト連携（変えない） ====="
+input string InpGateVariable = "AI_TRADING_ALLOWED";   // 稼働/停止を受け取る変数名
+input bool   InpAllowWhenMissing = false;              // 指令が無いとき稼働するか
 
 #define TG_BG     "TrelabGate_bg"
 #define TG_TITLE  "TrelabGate_title"
