@@ -1052,18 +1052,81 @@ def list_bridge_processes() -> list[tuple[int, str]]:
             continue  # エディタで bridge.py を開いているだけ、など
         found.append((pid, image))
     # PowerShell が使えない・コマンドラインを読めない PC では何も見つからない。
-    # その場合は tasklist で「パスポートの名前のプロセス」を全部拾う（自分と親は除く）。
+    # その場合は wmic（コマンドラインで探す）→ tasklist（パスポートの名前）→
+    # ロックが取られているなら pythonw.exe（9 月に配った Python 版のブリッジ）の順に拾う。
     # 古いブリッジが残ったまま新しいブリッジが「別のブリッジがすでに動いています」で
-    # 起動できず、サイトからは永久に「来ない」ままになった（実機で起きた）。
+    # 起動できず、サイトからは永久に「来ない」ままになった（Windows の実機・VPS で起きた）。
     if os.name == "nt" and not found:
-        for pid, image in list_processes_by_name():
+        for pid, image in list_bridge_processes_wmic():
+            if pid not in skip:
+                found.append((pid, image))
+    if os.name == "nt" and not found:
+        for pid, image in list_processes_by_name(include_python=bridge_lock_held()):
             if pid not in skip:
                 found.append((pid, image))
     return found
 
 
-def list_processes_by_name() -> list[tuple[int, str]]:
-    """tasklist で、パスポート（ブリッジ）の名前のプロセスを挙げる。PowerShell が無くても動く。"""
+def bridge_lock_held() -> bool:
+    """どれかのロック（古い名前も含む）が誰かに取られているか。取られていれば、ブリッジは確実に動いている。"""
+    for path in all_lock_paths():
+        if not path.is_file():
+            continue
+        try:
+            with path.open("r+") as fh:
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(fh, fcntl.LOCK_UN)
+        except OSError:
+            return True
+    return False
+
+
+def list_bridge_processes_wmic() -> list[tuple[int, str]]:
+    """wmic でコマンドラインから探す（PowerShell が使えない PC 向け。古い Windows Server にもある）。"""
+    if os.name != "nt":
+        return []
+    try:
+        out = subprocess.run(
+            ["wmic", "process", "where", "commandline like '%bridge.py%' or commandline like '%--run-bridge%'",
+             "get", "Name,ProcessId", "/format:csv"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+            timeout=40,
+            creationflags=_no_window_flags(),
+            startupinfo=_hidden_startupinfo(),
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    me, parent = os.getpid(), os.getppid()
+    found: list[tuple[int, str]] = []
+    for line in out.splitlines():
+        parts = [x.strip() for x in line.strip().split(",")]
+        if len(parts) < 3 or not parts[-1].isdigit():
+            continue  # 見出し行や空行
+        pid, image = int(parts[-1]), parts[-2].lower()
+        if pid in (me, parent):
+            continue
+        if any(h in image for h in BRIDGE_IMAGE_HINTS):
+            found.append((pid, image))
+    return found
+
+
+def list_processes_by_name(include_python: bool = False) -> list[tuple[int, str]]:
+    """tasklist で、パスポート（ブリッジ）の名前のプロセスを挙げる。PowerShell が無くても動く。
+
+    include_python=True のときは pythonw.exe も拾う（9 月に配った Python 版のブリッジ）。
+    ロックが取られている（＝ブリッジが確実に動いている）のに名前で見つからないときだけ使う。
+    """
     if os.name != "nt":
         return []
     try:
@@ -1088,7 +1151,11 @@ def list_processes_by_name() -> list[tuple[int, str]]:
             continue
         image = row[0].strip().lower()
         if image in ("python.exe", "pythonw.exe"):
-            continue  # Python は他の用途でも動く。名前だけでは止めない
+            # Python は他の用途でも動く。名前だけでは止めない。
+            # ただしロックが取られているのに他に見つからないときは、pythonw.exe が古いブリッジ
+            if include_python and image == "pythonw.exe":
+                found.append((int(row[1]), image))
+            continue
         if any(h in image for h in BRIDGE_IMAGE_HINTS if h not in ("python",)):
             found.append((int(row[1]), image))
     return found

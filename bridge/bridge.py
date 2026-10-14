@@ -275,8 +275,29 @@ def _list_bridge_processes() -> list[int]:
         # 新しいブリッジは「別のブリッジがすでに動いています」で起動できない（実機で起きた）
         if "python" in image or image == own_exe or any(h in image for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
             pids.append(pid)
-    # PowerShell が使えない・コマンドラインを読めない PC への保険：
-    # tasklist でパスポートの名前のプロセスを拾う（自分と親は除く）。
+    # PowerShell が使えない・コマンドラインを読めない PC への保険①：wmic でコマンドラインから探す
+    if os.name == "nt" and not pids:
+        try:
+            raw = subprocess.run(
+                ["wmic", "process", "where", "commandline like '%bridge.py%' or commandline like '%--run-bridge%'",
+                 "get", "Name,ProcessId", "/format:csv"],
+                capture_output=True, text=True, errors="replace", check=False, timeout=40,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            raw = ""
+        for line in raw.splitlines():
+            parts = [x.strip() for x in line.strip().split(",")]
+            if len(parts) < 3 or not parts[-1].isdigit():
+                continue
+            pid, name = int(parts[-1]), parts[-2].lower()
+            if pid in skip:
+                continue
+            if "python" in name or any(h in name for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
+                pids.append(pid)
+    # 保険②：tasklist でパスポートの名前のプロセスを拾う（自分と親は除く）。
+    # ロックのファイルがあるのに他に見つからなければ、pythonw.exe（9 月の Python 版）も拾う
+    lock_exists = any((_lock_dir() / name).is_file() for name in LOCK_NAMES)
     if os.name == "nt" and not pids:
         try:
             raw = subprocess.run(
@@ -293,7 +314,11 @@ def _list_bridge_processes() -> list[int]:
                 continue
             name = row[0].strip().lower()
             pid = int(row[1])
-            if pid in skip or name in ("python.exe", "pythonw.exe"):
+            if pid in skip or name == "python.exe":
+                continue
+            if name == "pythonw.exe":
+                if lock_exists:
+                    pids.append(pid)
                 continue
             if any(h in name for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
                 pids.append(pid)
