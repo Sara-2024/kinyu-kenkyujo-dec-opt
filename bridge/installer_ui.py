@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 
 from typing import Any, Callable, Sequence
 
@@ -418,6 +419,7 @@ class SetupWindow:
             ).pack(anchor="w", pady=3)
 
         answer = {"value": "closed", "done": False}
+        probe = {"busy": False, "ready": False}
 
         def pick(value: str) -> None:
             if answer["done"]:
@@ -429,15 +431,23 @@ class SetupWindow:
             except Exception:  # noqa: BLE001
                 self._alive = False
 
+        def probe_work() -> None:
+            # check（MT5 への問い合わせ）は数秒かかることがある。窓を止めないよう裏で走らせる
+            try:
+                probe["ready"] = bool(check())
+            except Exception:  # noqa: BLE001
+                pass
+            probe["busy"] = False
+
         def tick() -> None:
             if answer["done"] or not self.alive():
                 return
-            try:
-                if check is not None and check():
-                    pick("ready")
-                    return
-            except Exception:  # noqa: BLE001
-                pass
+            if probe["ready"]:
+                pick("ready")
+                return
+            if check is not None and not probe["busy"]:
+                probe["busy"] = True
+                threading.Thread(target=probe_work, daemon=True).start()
             try:
                 self.root.after(every_ms, tick)
             except Exception:  # noqa: BLE001

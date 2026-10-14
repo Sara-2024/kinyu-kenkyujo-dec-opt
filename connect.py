@@ -32,6 +32,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -232,6 +233,59 @@ def pythonw() -> str:
     if sibling.is_file():
         return str(sibling)
     return sys.executable
+
+
+# ────────────────────────────────────────────────
+# 窓を出しているあいだ、待ち時間や MT5・中継への問い合わせ中に Windows が
+# 「応答なし」と出さないための部品。connect_all が窓を作ったら _UI_FOR_PUMP に入れる。
+# ────────────────────────────────────────────────
+_UI_FOR_PUMP = None
+
+
+def _pump() -> None:
+    ui = _UI_FOR_PUMP
+    if ui is None:
+        return
+    try:
+        ui.pump()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def wait_seconds(sec: float) -> None:
+    """time.sleep の代わり。待っているあいだも窓を動かす。"""
+    end = time.time() + sec
+    while True:
+        _pump()
+        left = end - time.time()
+        if left <= 0:
+            return
+        time.sleep(min(0.1, left))
+
+
+def run_pumping(fn):
+    """時間のかかる処理（MT5 への問い合わせ・中継の確認など）を裏で走らせ、終わるまで窓を動かし続ける。
+
+    窓が無いときは、そのまま呼ぶだけ。
+    """
+    if _UI_FOR_PUMP is None:
+        return fn()
+    box: dict = {}
+
+    def work() -> None:
+        try:
+            box["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001
+            box["error"] = exc
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    while worker.is_alive():
+        _pump()
+        worker.join(0.05)
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
 
 
 def launch_command(*args: str) -> list[str]:
@@ -453,7 +507,7 @@ def wait_for_login(timeout_sec: int = 600, prefer: str | None = None) -> dict | 
             log("setup-windows.bat を先に実行してください")
         return None
 
-    existing = find_logged_in_terminal(prefer)
+    existing = run_pumping(lambda: find_logged_in_terminal(prefer))
     if existing:
         log(f"ログイン済み: {existing['account']} / {existing['server']}")
         return existing
@@ -461,11 +515,11 @@ def wait_for_login(timeout_sec: int = 600, prefer: str | None = None) -> dict | 
     banner(LOGIN_WAIT_TEXT)
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
-        status = find_logged_in_terminal(prefer)
+        status = run_pumping(lambda: find_logged_in_terminal(prefer))
         if status:
             log(f"ログインを確認: {status['account']} / {status['server']}")
             return status
-        time.sleep(2)
+        wait_seconds(2)
     log("ログインを確認できませんでした（時間切れ）")
     return None
 
@@ -1656,6 +1710,8 @@ def connect_all(room: str = "", show: bool = False) -> int:
     """
     banner("接続開始")
     ui = installer_ui.open_window() if show else None
+    global _UI_FOR_PUMP
+    _UI_FOR_PUMP = ui
 
     def say(text: str) -> None:
         log(text)
@@ -1668,8 +1724,8 @@ def connect_all(room: str = "", show: bool = False) -> int:
 
     if room:
         adopt_room(room)
-        if bridge_already_running() and relay_has_bridge(room) is not True:
-            stop_stale_bridge()
+        if run_pumping(lambda: bridge_already_running() and relay_has_bridge(room) is not True):
+            run_pumping(stop_stale_bridge)
 
     # 次からサイトのボタンで起動できるようにする（初回だけ効く）
     register_protocol()
@@ -1700,7 +1756,7 @@ def connect_all(room: str = "", show: bool = False) -> int:
             return give_up(*LOGIN_TIMEOUT_MESSAGE)
 
     try:
-        copy_ea_files(session)
+        run_pumping(lambda: copy_ea_files(session))
     except SystemExit as exc:
         log(str(exc))
         return give_up(
@@ -1712,14 +1768,14 @@ def connect_all(room: str = "", show: bool = False) -> int:
     used = str(session.get("data_path") or "")
     if used:
         connect_state.write(connect_state.current(), terminal=used)
-    gold_symbol.show_in_market_watch(resolve_terminal_exe(session), log=log)
+    run_pumping(lambda: gold_symbol.show_in_market_watch(resolve_terminal_exe(session), log=log))
 
     url = relay_url()
     if relay_is_local(url) and not relay_is_up():
         start_relay()
-        time.sleep(2)
+        wait_seconds(2)
     say("サイトにつないでいます…")
-    start_bridge(session)
+    run_pumping(lambda: start_bridge(session))
 
     banner("接続完了")
     log(f"口座 {session['account']} / {session['server']}")
@@ -1797,7 +1853,7 @@ def choose_session(ui, log=log, always_ask: bool = False) -> tuple[dict | None, 
 
     # Mac（LOGIN_RETRY_LABEL あり）は EA が載るまで何度でも確かめ直す。Windows はこれまでどおり 3 回
     for _ in range(60 if LOGIN_RETRY_LABEL else 3):
-        session = find_logged_in_terminal(chosen)
+        session = run_pumping(lambda: find_logged_in_terminal(chosen))
         if session and _same_path(session.get("data_path", ""), chosen):
             log(f"選んだ MT5 を使います: {session.get('account')} / {session.get('server')}")
             return (session, chosen)
@@ -1849,11 +1905,11 @@ def relay_sees_us(tries: int = 25) -> bool | None:
     our_id = env_value("BRIDGE_ID") or "vps-01"
     seen: bool | None = None
     for i in range(max(1, tries)):
-        seen = relay_has_bridge(our_id)
+        seen = run_pumping(lambda: relay_has_bridge(our_id))
         if seen:
             return True
         if i + 1 < tries:
-            time.sleep(1)
+            wait_seconds(1)
     return seen
 
 
