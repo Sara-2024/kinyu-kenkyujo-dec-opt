@@ -631,9 +631,9 @@ begin
 
   v_token := encode(extensions.gen_random_bytes(32), 'hex');
   insert into public.connect_tokens (token, member_id, expires_at)
-  values (v_token, v_member.id, now() + interval '5 minutes');
+  values (v_token, v_member.id, now() + interval '60 minutes');
 
-  return jsonb_build_object('token', v_token, 'expires_in', 300);
+  return jsonb_build_object('token', v_token, 'expires_in', 3600);
 end;
 $$;
 

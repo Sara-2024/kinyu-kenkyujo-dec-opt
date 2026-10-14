@@ -536,7 +536,7 @@ const LINKS = {
   accountManual: "manual/",                // 口座開設マニュアル（ロビーと同じ世界観で作ったウェブ版。dreamland/manual/）
   loginManual:   "manual-login/",          // MT5 ログインマニュアル（Windows。dreamland/manual-login/）
   winPdf:        "manual-setup/",          // パスポートと EA の設置マニュアル（Windows。dreamland/manual-setup/）
-  winFile:       SITE + "/download/DreamlandPassport.exe",      // Windows用ファイル
+  winFile:       "/download/DreamlandPassport.exe",             // Windows用ファイル（vercel.json の rewrite で本体サイトから取る。同じドメインなので、ダウンロード名に合図を付けられる）
   macPdf:        "#TODO_MAC_PDF",          // Mac PDFマニュアル
   macFile:       SITE + "/download/DreamlandPassport-mac.zip",  // Mac用ファイル
   support:       "https://lin.ee/V0ikrqq",  // サポートLINE
@@ -667,14 +667,18 @@ const SCRIPT = {
       choices: [["口座の登録や案内は、このまま見る", "start"], ["ロビーにもどる", "close"]] },
     terms: { say: "お手続きの前に、必ず下の注意事項をお読みください。\n2つの確認にチェックを入れると、次へ進めます。", docs: "terms",
       choices: [["ほかのもの", "start"]] },
-    signup: { say: () => `${members.length + 1}つ目の口座をつなぎます。\nMT5 の口座番号とお名前、それからドリームランドのサイトに入るためのパスワード（8文字以上。お好きなもの）を決めてください。`, docs: "signup",
+    signup: { say: () => `${members.length + 1}つ目の口座をつなぎます。\nMT5 の口座番号とお名前を入力してください。`, docs: "signup",
       choices: [["登録済みの口座でログインする", "login"], ["ほかのもの", "start"]] },
-    login: { say: "すでに登録した口座ですね。口座番号と、サイトに入るパスワードを入力してください。", docs: "login",
+    login: { say: "すでに登録した口座ですね。口座番号を入力してください。", docs: "login",
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
-    launch: { say: "パスポートを呼び出しています。ブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。\nまだ入れていない方は、下の「パスポートをダウンロード」から入れて、ダウンロードしたファイルを一度開いてください。開き終わったら「設置が終わった（つなぐ）」を押してください。", docs: "launch",
+    loginpw: { say: "この口座は、以前にパスワード付きで登録されています。そのときのパスワードを入力してください。分からないときはサポート LINE へご連絡ください。", docs: "loginpw",
+      choices: [["サポート LINE", "support"], ["ほかのもの", "start"]] },
+    launch: { say: "パスポートを呼び出しています。ブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。", docs: "launch",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ダウンロードの手順を見る", "download"], ["ほかのもの", "start"]] },
-    download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、このパソコンに入れます。下のボタンからダウンロードして、一度だけ開いてください。\n開き終わったら、この画面に戻って「設置が終わった（つなぐ）」を押してください。\nすでに入れてある方は「もう入れてある（呼び出す）」を押してください。", docs: "download",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["もう入れてある（呼び出す）", "launch"], ["ほかのもの", "start"]] },
+    waiting: { say: "パスポートがつながるのを待っています。ダウンロードしたファイル（DreamlandPassport）を開き終わっていれば、数十秒でつながります。\nまだ開いていない方は、ファイルを開いてから、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "launch",
+      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ダウンロードの手順を見る", "download"], ["それでもつながらない（呼び出す）", "relaunch"], ["ほかのもの", "start"]] },
+    download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、このパソコンに入れます。下のボタンからダウンロードして、ダウンロードしたファイルを一度だけ開いてください。開くと、この口座に自動で紐づきます。\n開き終わったら、この画面に戻って「設置が終わった（つなぐ）」を押してください。\n以前から入れてある方は「もう入れてある（呼び出す）」を押してください。", docs: "download",
+      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["もう入れてある（呼び出す）", "relaunch"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
       choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
@@ -688,7 +692,7 @@ const SCRIPT = {
       choices: () => [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
     failed: { say: "パスポートからの応答がありません。ツールと MT5 が起動しているか確かめて、もう一度お試しください。", docs: "progress",
       choices: [["もう一度つなぐ", "launch", "go"], ["ダウンロードからやり直す", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
-    expired: { say: "前回のサイトへのログインが切れています。口座番号と、サイトに入るパスワードでもう一度入ってください。", docs: "login",
+    expired: { say: "前回のログインが切れています。口座番号をもう一度入力してください。", docs: "login",
       choices: [["ほかのもの", "start"]] },
     members: { say: () => `${PLAN().name}の、つないでいる口座です。${needSecond() ? "2つ目の口座は、まだ発行していません。" : ""}`, docs: "members",
       choices: () => [...(needSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), [`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""], ["ほかのもの", "start"]] },
@@ -915,16 +919,20 @@ const SCRIPT = {
       return `<form class="form" id="signup" novalidate autocomplete="off">
         <label class="field"><span>MT5 の口座番号（ログイン ID）</span><input name="account" inputmode="numeric" pattern="[0-9]*" placeholder="例：12345678" required value="${esc(prefill && prefill.accountFull ? prefill.accountFull : "")}"></label>
         <label class="field"><span>お名前</span><input name="name" autocomplete="name" required value="${esc(prefill ? prefill.name || "" : (lastMember() ? lastMember().name || "" : ""))}"></label>
-        ${pwField("password", "サイトに入るパスワード（8文字以上）", "ご自身で決めてください。MT5 のパスワードとは別のものです")}
         <p class="err" id="signup-err" aria-live="polite"></p>
         <button class="enter" type="submit" data-submit>この口座をつなぐ <span aria-hidden="true">›</span></button>
       </form>`;
     },
     login: () => `<form class="form" id="login" novalidate autocomplete="off">
         <label class="field"><span>MT5 の口座番号（ログイン ID）</span><input name="account" inputmode="numeric" pattern="[0-9]*" required value="${esc(flow.retryAccount || "")}"></label>
-        ${pwField("password", "サイトに入るパスワード", "", "current-password")}
         <p class="err" id="login-err" aria-live="polite"></p>
-        <button class="enter" type="submit" data-submit>ログインしてつなぐ <span aria-hidden="true">›</span></button>
+        <button class="enter" type="submit" data-submit>この口座でつなぐ <span aria-hidden="true">›</span></button>
+      </form>`,
+    loginpw: () => `<form class="form" id="loginpw" novalidate autocomplete="off">
+        <label class="field"><span>MT5 の口座番号（ログイン ID）</span><input name="account" inputmode="numeric" pattern="[0-9]*" required value="${esc(flow.retryAccount || "")}"></label>
+        ${pwField("password", "以前に決めたサイトのパスワード", "", "current-password")}
+        <p class="err" id="loginpw-err" aria-live="polite"></p>
+        <button class="enter" type="submit" data-submit>この口座でつなぐ <span aria-hidden="true">›</span></button>
       </form>`,
     launch: () => {
       const link = osNow() === "mac" ? "macFile" : "winFile";
@@ -943,12 +951,12 @@ const SCRIPT = {
           ["システム設定 →「このまま開く」", "「プライバシーとセキュリティ」を下へスクロール →「このまま開く」→ Mac のパスワード。これは初回だけです"],
           ["ログインした MT5 を、このパソコンで開いておく", "口座にログインした MT5 を、この画面を開いているのと同じパソコンで開いたままにしてください（最小化していても大丈夫です）"],
           ["ゴールドのチャートにシステムを載せる", "MT5 の画面で：ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA-1年版 をゴールド（XAUUSD）のチャートへドラッグ →「アルゴ取引を許可」→ OK → 上の「アルゴ取引」を ON。Mac では、これが済むとパスポートが口座を読み取れます"],
-          ["設置が終わったら、この画面に戻って「設置が終わった（つなぐ）」を押す", "「ドリームランド・パスポート を開きますか？」と出たら「開く」を押します"],
+          ["設置が終わったら、この画面に戻って「設置が終わった（つなぐ）」を押す", "開いたパスポートがこの口座に紐づいているか確かめて、次の案内に進みます"],
         ] : [
           ["ブラウザの警告が出たら「保存」", "「一般的にダウンロードされていません」と出たら、ダウンロード欄の「…」→「保存」（Edge は「保持」→「詳細表示」→「それでも保持」）"],
           ["ダウンロードしたファイルを開く", "「ドリームランド・パスポート」をダブルクリック。「Windows によって PC が保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません"],
           ["ログインした MT5 を、このパソコンで開いておく", "口座にログインした MT5 を、この画面を開いているのと同じパソコンで開いたままにしてください（最小化していても大丈夫です）"],
-          ["設置が終わったら、この画面に戻って「設置が終わった（つなぐ）」を押す", "「ドリームランド・パスポート を開きますか？」と出たら「開く」を押します"],
+          ["設置が終わったら、この画面に戻って「設置が終わった（つなぐ）」を押す", "開いたパスポートがこの口座に紐づいているか確かめて、次の案内に進みます"],
         ];
       return `<a class="enter" data-link="${link}" data-download>パスポートをダウンロード（${osNow() === "mac" ? "Mac" : "Windows"} 用） <span aria-hidden="true">↓</span></a>
         <p class="note">お使いのパソコンが違うときは <button type="button" class="linklike" data-os="${osNow() === "mac" ? "win" : "mac"}">${osNow() === "mac" ? "Windows" : "Mac"} 用に切り替える</button></p>
@@ -1076,7 +1084,14 @@ const SCRIPT = {
     show("service", "who");
   };
 
-  /* ── 口座をつなぐ：会員登録（またはログイン）→ パスポートを呼ぶ ── */
+  /* ── 口座をつなぐ：会員登録（またはログイン）→ パスポートを呼ぶ ──
+     サイトのパスワードはお客様に決めさせない。口座番号と合言葉から同じものを作って使う
+     （別のパソコンでも、同じ口座番号と合言葉なら同じ会員に入れる）。サーバー側は変えていない */
+  const derivedPassword = async (account, entry) => {
+    const bytes = new TextEncoder().encode(`${account}:${entry}:dreamland-passport`);
+    const hash = await crypto.subtle.digest("SHA-256", bytes);
+    return "dl" + Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+  };
   const adoptMember = (session, m) => {
     if (m.plan && PLANS[m.plan] && m.plan !== plan) { plan = m.plan; savePlan(); renderGates(); }
     const existing = members.findIndex((x) => x.id === m.id);
@@ -1093,18 +1108,22 @@ const SCRIPT = {
     const err = $("signup-err");
     const account = normDigits(f.get("account"));
     const name = String(f.get("name") || "").trim();
-    const password = String(f.get("password") || "");
     err.textContent = "";
     if (!/^[0-9]{1,13}$/.test(account)) return (err.textContent = ERRORS.BAD_ACCOUNT);
     if (!name) return (err.textContent = ERRORS.BAD_NAME);
-    if (password.length < 8) return (err.textContent = ERRORS.WEAK_PASSWORD);
     if (members.some((m) => String(m.account) === account)) return (err.textContent = "この口座はもうつないでいます。「接続の状態を見る」からつなぎ直せます。");
     const entry = entryPw.get();
     if (!entry) { plan = null; savePlan(); return show("service", "connect"); }
     setBusy(form, true, "登録しています…");
+    const password = await derivedPassword(account, entry);
     const { status, data } = await api({ action: "register", account, name, password, entry });
     if (status !== 200) {
-      if (data.error === "ACCOUNT_TAKEN") { flow.retryAccount = account; err.textContent = ERRORS.ACCOUNT_TAKEN; setBusy(form, false); return; }
+      if (data.error === "ACCOUNT_TAKEN") {
+        // 登録済みなら、そのまま同じ口座で入る（パスワードは同じ作り方なので一致する）
+        const again = await api({ action: "login", account, password });
+        if (again.status === 200) return startConnect(adoptMember(again.data.session, again.data.member));
+        flow.retryAccount = account; setBusy(form, false); return show("service", "loginpw");
+      }
       if (data.error === "BAD_ENTRY") { plan = null; savePlan(); entryPw.set(""); return show("service", "connect"); }
       err.textContent = errText(data.error); setBusy(form, false); return;
     }
@@ -1112,15 +1131,23 @@ const SCRIPT = {
   };
   const submitLogin = async (form) => {
     const f = new FormData(form);
-    const err = $("login-err");
+    const withPw = form.id === "loginpw";
+    const err = $(withPw ? "loginpw-err" : "login-err");
     const account = normDigits(f.get("account"));
-    const password = String(f.get("password") || "");
     err.textContent = "";
     if (!/^[0-9]{1,13}$/.test(account)) return (err.textContent = ERRORS.BAD_ACCOUNT);
-    if (!password) return (err.textContent = ERRORS.BAD_PASSWORD);
+    let password = String(f.get("password") || "");
+    if (!withPw) {
+      const entry = entryPw.get();
+      if (!entry) { plan = null; savePlan(); return show("service", "connect"); }
+      password = await derivedPassword(account, entry);
+    } else if (!password) return (err.textContent = ERRORS.BAD_PASSWORD);
     setBusy(form, true, "確かめています…");
     const { status, data } = await api({ action: "login", account, password });
-    if (status !== 200) { err.textContent = errText(data.error); setBusy(form, false); return; }
+    if (status !== 200) {
+      if (!withPw && data.error === "BAD_CREDENTIALS") { flow.retryAccount = account; setBusy(form, false); return show("service", "loginpw"); }
+      err.textContent = errText(data.error); setBusy(form, false); return;
+    }
     if (data.member.plan && plan && data.member.plan !== plan) {
       err.textContent = `この口座は${PLANS[data.member.plan].name}で登録されています。合言葉のプラン（${PLAN().name}）と違うので、サポート LINE へお問い合わせください。`;
       setBusy(form, false);
@@ -1199,7 +1226,7 @@ const SCRIPT = {
   /* ── 設置の流れ（サービスカウンターの中だけで進む） ── */
   let consented = false;   // このページを開いているあいだに、注意事項を読んでチェックしたか
   const flow = { idx: -1, phase: null, lines: [], note: "", mt5Index: 0, problem: "", timers: [], retryAccount: "", relaunched: false, startedAt: 0 };
-  const FLOW_NODES = new Set(["launch", "download", "connecting", "mt5", "failed"]);
+  const FLOW_NODES = new Set(["launch", "waiting", "download", "connecting", "mt5", "failed"]);
   const clearFlowTimers = () => { flow.timers.forEach(clearTimeout); flow.timers = []; };
   const later = (fn, ms) => { const id = setTimeout(fn, ms); flow.timers.push(id); return id; };
   const member = () => members[flow.idx] || null;
@@ -1219,7 +1246,7 @@ const SCRIPT = {
   /* force=true は「お客様が『設置が終わった／もう入れてある』を押した」「設置から戻ってきた」とき。
      それ以外（登録直後など）は、この端末で一度もつないだことが無ければ、呼び出さずにダウンロードの案内から始める。
      お客様は最初はパスポートを持っていないので、「呼び出しています」から始めると何も起きないまま待たせてしまう */
-  function startConnect(idx, force = false) {
+  function startConnect(idx, mode = "auto") {
     const m = members[idx];
     if (!m) return;
     clearFlowTimers();
@@ -1228,14 +1255,22 @@ const SCRIPT = {
     Bridge.onChange = onBridgeChange;
     Bridge.open(m.id, m.token);
     const installedHere = !!(checks.tool || members.some((x) => x.done));
-    if (!force && !installedHere) { show("service", "download"); return; }
-    setPhase("launch");
-    issueAndLaunch();
-    // 勝手にダウンロードの画面へは切り替えない（つなぎ中に出ると、何度もダウンロードさせてしまう）。
-    // 時間が経ったら、案内の文だけ変える。ダウンロードへ行くのは、お客様が「まだ入れていない」を押したときだけ
+    if (mode === "auto") {
+      if (!installedHere) { show("service", "download"); return; }   // 最初はパスポートを持っていない
+      mode = "launch";                                                // 以前つないだことがある端末は呼び出す
+    }
+    if (mode === "launch") {
+      setPhase("launch");
+      issueAndLaunch();
+    } else {
+      // 開いたパスポートが自分で紐づいて名乗るのを待つだけ（「開きますか？」は出さない）
+      setPhase("waiting");
+    }
     later(() => {
-      if (flow.phase !== "launch" || Bridge.live) return;
-      flow.note = "まだ応答がありません。パスポートを開いたあと「設置が終わった（つなぐ）」を押してください。入っていなければ、下の「パスポートをダウンロード」から入れてください";
+      if (!(flow.phase === "launch" || flow.phase === "waiting") || Bridge.live) return;
+      flow.note = flow.phase === "waiting"
+        ? "まだつながっていません。ダウンロードしたファイルを開きましたか？ 開いたのに進まないときは「それでもつながらない（呼び出す）」を押してください"
+        : "まだ応答がありません。パスポートが開いていれば、そのままお待ちください。入っていなければ「ダウンロードの手順を見る」から入れてください";
       const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
     }, CONNECTOR_WAIT_MS);
   }
@@ -1243,6 +1278,24 @@ const SCRIPT = {
   /* いまのツールは、ダウンロードして開いただけでは設置だけして終わり、サイトにも中継にも名乗り出ない。
      だから「設置が終わって、この画面に戻ってきた」ことを合図に、もう一度パスポートを呼び出す
      （ダウンロードを押してから、または案内を出してから DOWNLOAD_SETTLE_MS 経ったあと。呼び直しは RELAUNCH_COOLDOWN_MS に1回） */
+  /* ダウンロード。Windows は、ダウンロードするファイル名に合図（使い捨て）を付ける：
+       DreamlandPassport-<合図>.exe
+     パスポートは初回に自分のファイル名から合図を読み、サイトに確かめて、この口座に紐づく。
+     だから「開くだけ」でつながり、サイトから「開きますか？」で呼び出す必要が無い。
+     合図を作れなかったとき（通信できない等）と Mac は、名前を付けずにそのまま配る（呼び出す方式で紐づける） */
+  const startDownload = async (e, a) => {
+    flow.downloadedAt = Date.now();
+    const m = member();
+    if (osNow() !== "mac" && m && e) {
+      e.preventDefault();
+      const { status, data } = await api({ action: "connect_token", session: m.token });
+      const name = status === 200 && data.token ? `DreamlandPassport-${data.token}.exe` : "DreamlandPassport.exe";
+      const tmp = document.createElement("a"); tmp.href = LINKS.winFile; tmp.download = name; tmp.style.display = "none";
+      document.body.appendChild(tmp); tmp.click(); tmp.remove();
+    }
+    flow.note = "ダウンロードが始まりました。ダウンロードしたファイルを開いて、上の手順どおりに進めてください。開き終わったら「設置が終わった（つなぐ）」を押してください";
+    const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
+  };
   // 戻ってきたときに勝手に呼び出さない（ダウンロードしたファイルを開いた直後に、サイト側でも
   // 「開きますか？」が出てしまう）。呼び出すのは「設置が終わった（つなぐ）」を押したときだけ。
 
@@ -1266,7 +1319,7 @@ const SCRIPT = {
 
   function onBridgeChange(liveChanged) {
     if (flow.idx < 0) return;
-    if (Bridge.live && (flow.phase === "launch" || flow.phase === "download" || flow.phase === "failed")) return checkStatus();
+    if (Bridge.live && (flow.phase === "launch" || flow.phase === "waiting" || flow.phase === "download" || flow.phase === "failed")) return checkStatus();
     if (flow.phase === "mt5" && Bridge.live) return watchMt5();
     if (!Bridge.live && liveChanged && flow.phase === "mt5") { flow.note = "パスポートとの通信が切れました。ツールが動いているか確かめてください"; }
   }
@@ -1391,7 +1444,7 @@ const SCRIPT = {
     if (nodeKey === "board!") nodeKey = boardNode(true);
     if (nodeKey === "connect" && planKey() && plan) nodeKey = "who";   // 合言葉が済んでいれば、プランの案内から
     if (staffKey === "service" && (nodeKey === "signup" || nodeKey === "login") && !consented) nodeKey = "terms";   // 注意事項は必ず通る
-    if (staffKey === "service" && isPhone && (nodeKey === "terms" || nodeKey === "signup" || nodeKey === "login" || nodeKey === "launch" || nodeKey === "download")) nodeKey = "pc";   // スマホでは発行できない
+    if (staffKey === "service" && isPhone && (nodeKey === "terms" || nodeKey === "signup" || nodeKey === "login" || nodeKey === "loginpw" || nodeKey === "launch" || nodeKey === "waiting" || nodeKey === "download")) nodeKey = "pc";   // スマホでは発行できない
     if (nodeKey.startsWith("door:")) {
       gatePlan = nodeKey.slice(5);
       markHere("gate", gatePlan);
@@ -1427,6 +1480,7 @@ const SCRIPT = {
       const ent = docs.querySelector("form#entry");   if (ent) wireForm(ent, submitEntry);
       const sgn = docs.querySelector("form#signup");  if (sgn) wireForm(sgn, submitSignup);
       const lgn = docs.querySelector("form#login");   if (lgn) wireForm(lgn, submitLogin);
+      const lpw = docs.querySelector("form#loginpw"); if (lpw) wireForm(lpw, submitLogin);
       const shareBtn = docs.querySelector("[data-share]"), copyBtn = docs.querySelector("[data-copy]");
       const pageUrl = () => location.origin + location.pathname + "#connect";
       if (shareBtn) shareBtn.addEventListener("click", async () => {
@@ -1445,11 +1499,11 @@ const SCRIPT = {
         trm.addEventListener("submit", (e) => { e.preventDefault(); if (!boxes.every((x) => x.checked)) return; consented = true; show("service", "signup"); });
         const firstBox = boxes[0]; if (firstBox) firstBox.focus({ preventScroll: true });
       }
-      docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect), true)));
+      docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect), "launch")));
       docs.querySelectorAll("[data-door]").forEach((b) => b.addEventListener("click", () => show("gate", "door:" + b.dataset.door)));
       docs.querySelectorAll("[data-os]").forEach((b) => b.addEventListener("click", () => { osChoice = b.dataset.os; show(staffKey, nodeKey); }));
       const dl = docs.querySelector("[data-download]");
-      if (dl) { dl.removeAttribute("target"); dl.setAttribute("download", ""); dl.addEventListener("click", () => { flow.downloadedAt = Date.now(); flow.note = "ダウンロードが始まりました。ファイルを開いて、上の手順どおりに進めてください。終わったら「設置が終わった（つなぐ）」を押してください"; const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`; }); }
+      if (dl) { dl.removeAttribute("target"); dl.setAttribute("download", ""); dl.addEventListener("click", (e) => startDownload(e, dl)); }
       if (nodeKey === "download" && staffKey === "service") { flow.phase = "download"; flow.downloadShownAt = flow.downloadShownAt || Date.now(); later(watchDefaultRoom, DEFAULT_ROOM_POLL_MS); }
     }
     choiceList(node).forEach(([label, to, flag], i) => {
@@ -1523,9 +1577,11 @@ const SCRIPT = {
     if (to === "next") to = nextStep();
     if (to === "entry!") { plan = null; savePlan(); entryPw.set(""); renderGates(); return show("service", "connect"); }
     if (to === "later") { second = "later"; saveSecond(); return show("service", "later"); }
-    if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, true) : show("service", "connect"); }
+    // 「設置が終わった（つなぐ）」：Windows は開いたパスポートが自分で紐づくので待つだけ。Mac は呼び出す
+    if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, osNow() === "mac" ? "launch" : "wait") : show("service", "connect"); }
+    if (to === "relaunch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, "launch") : show("service", "connect"); }
     if (to === "download" && staffKey === "service") { if (flow.idx < 0 && members.length) flow.idx = members.length - 1; return show("service", "download"); }
-    if (to.startsWith("reconnect:")) return startConnect(Number(to.slice(10)), true);
+    if (to.startsWith("reconnect:")) return startConnect(Number(to.slice(10)), "launch");
     if (to.startsWith("@")) {
       const [target, node] = to.slice(1).split(":");
       return goTo(target, node || "start");   // 別の窓口へ移動してから話す

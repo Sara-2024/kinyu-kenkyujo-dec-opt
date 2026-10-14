@@ -56,6 +56,10 @@ check(
 check("短い合図は読まない", connect.connect_token_from_args(["aitrader://connect?token=abc"]) == "")
 check("16進でない合図は読まない", connect.connect_token_from_args([f"aitrader://connect?token={'z' * 64}"]) == "")
 check("合図が無ければ空", connect.connect_token_from_args(["aitrader://connect?room=" + MEMBER]) == "")
+check("ファイル名の合図を読める（ダウンロード名）", connect.connect_token_from_exe_name(f"C:\\Users\\x\\Downloads\\DreamlandPassport-{GOOD}.exe") == GOOD)
+check("ブラウザが (1) を付けても読める", connect.connect_token_from_exe_name(f"/tmp/DreamlandPassport-{GOOD} (1).exe") == GOOD)
+check("合図の無い名前は空", connect.connect_token_from_exe_name("/tmp/DreamlandPassport.exe") == "")
+check("短い・16進でない名前は空", connect.connect_token_from_exe_name("/tmp/DreamlandPassport-abc.exe") == "" and connect.connect_token_from_exe_name(f"/tmp/DreamlandPassport-{'z' * 64}.exe") == "")
 check("ただの引数は読まない", connect.connect_token_from_args(["--console", GOOD]) == "")
 
 # ── 2) URL の room= は、もう読まない ────────────────
@@ -311,7 +315,16 @@ if mig_path.is_file():
     mig = mig_path.read_text(encoding="utf-8")
     schema = schema_path.read_text(encoding="utf-8")
     body = mig[mig.index("create table if not exists public.connect_tokens") :]
-    check("migration の中身が schema.sql と同じ", body.strip() in schema)
+    # 合図の期限は 20261014_connect_token_ttl.sql で 5 分 → 60 分にした。schema.sql は新しいほう
+    body = body.replace("now() + interval '5 minutes'", "now() + interval '60 minutes'").replace("'expires_in', 300", "'expires_in', 3600")
+    check("migration の中身が schema.sql と同じ（期限だけ 60 分）", body.strip() in schema)
+    ttl_path = ROOT / "supabase" / "migrations" / "20261014_connect_token_ttl.sql"
+    check("期限を延ばす migration がある", ttl_path.is_file())
+    if ttl_path.is_file():
+        ttl = ttl_path.read_text(encoding="utf-8")
+        fn = ttl[ttl.index("create or replace function public.connect_token_issue") :]
+        check("期限を延ばす migration の関数が schema.sql と同じ", fn.strip() in schema)
+        check("期限は 60 分", "interval '60 minutes'" in ttl and "'expires_in', 3600" in ttl)
     for name in ("connect_tokens", "connect_token_issue", "connect_token_redeem"):
         check(f"migration に {name} が入っている", name in mig)
     check("索引も入っている", "connect_tokens_member_idx" in mig and "connect_tokens_expires_idx" in mig)

@@ -678,6 +678,19 @@ def connect_token_from_args(argv: list[str]) -> str:
     return ""
 
 
+def connect_token_from_exe_name(exe: str | None = None) -> str:
+    """ダウンロードしたファイルの名前から合図を読む。
+
+    ロビーは Windows 用を「DreamlandPassport-<合図>.exe」という名前で配る。
+    お客様はそれを開くだけでよく、サイトから aitrader:// で呼び出し直す必要が無い
+    （「開きますか？」が出ない）。合図は 64 桁の 16 進で、使い捨て。
+    exe 版（frozen）で、まだ連携していないときにだけ使う（main を見よ）。
+    """
+    name = Path(exe or sys.executable).stem
+    found = re.search(r"(?<![0-9a-fA-F])([0-9a-fA-F]{64})(?![0-9a-fA-F])", name)
+    return found.group(1) if found else ""
+
+
 def site_url() -> str:
     return (env_value("TRELAB_SITE_URL") or PRODUCTION_SITE).rstrip("/")
 
@@ -1962,6 +1975,14 @@ def main() -> int:
     room = ""
     args = [a for a in raw_args if not is_protocol_url(a)]
     CONSOLE = "--console" in args or "--self-test" in args
+    # ダウンロードしたファイルを「開いただけ」のとき（引数なし）は、ファイル名の合図で連携する。
+    # まだ連携していない PC だけ。連携済みなら無視する（同じファイルを後で開き直しても、
+    # 使い終わった合図を確かめに行って「つなげませんでした」と出さないため）。
+    # 自動起動（--startup）や裏のブリッジ（--run-bridge）は同じ exe なので、引数があれば見ない。
+    if not connect_token and FROZEN and not args and not connect_state.is_connected():
+        connect_token = connect_token_from_exe_name()
+        if connect_token:
+            log("ファイル名の合図で連携します")
 
     os.chdir(str(ROOT))
     log(f"起動 argv={raw_args} frozen={FROZEN} room={room or '-'}")
