@@ -321,6 +321,7 @@ a[aria-disabled="true"]{cursor:default}
 .notice--big .notice__title{font-size:16px;margin-bottom:8px}
 .notice--big b{font-size:1.04em}
 .err{margin:0;font-size:13px;color:#b74c4c;min-height:1em}
+.linklike{background:none;border:0;padding:0;margin:0;color:var(--lav);text-decoration:underline;font:inherit;font-size:13px;cursor:pointer;min-height:44px}
 /* 接続の進みぐあい（接続ツールが返した結果だけを出す） */
 .prog{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:6px}
 .prog li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:13.5px;line-height:1.5;color:var(--ink)}
@@ -571,6 +572,10 @@ const CONNECTOR_WAIT_MS = 30000;
 const DEFAULT_ROOM = "vps-01";
 const DEFAULT_ROOM_POLL_MS = 3000;
 const DEFAULT_ROOM_FRESH_MS = 10 * 60000;
+/* ダウンロードした exe を開いただけでは、ツールはどこにも名乗り出ない（設置だけで終わる）。
+   設置が済んでこの画面に戻ってきたら、もう一度パスポートを呼び出す。その「戻ってきた」と見なすまでの間と、呼び直しの間隔 */
+const DOWNLOAD_SETTLE_MS = 15000;
+const RELAUNCH_COOLDOWN_MS = 30000;
 
 /* ═══════════════════════════════════════════════
    係員と台詞。文言はここだけ直せばよい。
@@ -676,8 +681,8 @@ const SCRIPT = {
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
     launch: { say: "パスポートを呼び出しています。お使いのパソコンにパスポートが入っていれば、このまま数秒でつながります。\nブラウザに「MT5 Automatic を開きますか？」と出たら「開く」を押してください。", docs: "progress",
       choices: [["まだ入れていない（ダウンロードへ）", "download"], ["ほかのもの", "start"]] },
-    download: { say: "このパソコンには、まだパスポートが入っていないようです。下のボタンからダウンロードして、一度だけ開いてください（ファイルの名前は MT5 Automatic です）。\nツールが起動すると、この画面が自動で先に進みます。", docs: "download",
-      choices: [["もう一度呼び出す（入れてある）", "launch"], ["ほかのもの", "start"]] },
+    download: { say: "このパソコンには、まだパスポートが入っていないようです。下のボタンからダウンロードして、一度だけ開いてください（ファイルの名前は MT5 Automatic です）。\n設置が終わってこの画面に戻ってくると、自動でつなぎにいきます。進まないときは「設置が終わった（つなぐ）」を押してください。", docs: "download",
+      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
       choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
@@ -769,7 +774,10 @@ const SCRIPT = {
     } catch (_) {}
     return null;
   })();
-  const platformName = () => (os === "mac" ? "mac" : "windows");
+  /* 自動判定が違っていたら、ダウンロードの画面で切り替えられる */
+  let osChoice = null;
+  const osNow = () => osChoice || os;
+  const platformName = () => (osNow() === "mac" ? "mac" : "windows");
   /* スマホ・タブレット（MT5 もパスポートも入らない）。iPad は Mac を名乗るので指で触れるかで見分ける */
   const isPhone = (() => {
     try {
@@ -879,7 +887,7 @@ const SCRIPT = {
       + doc("PDF", "Mac 設置マニュアル", "手順を見ながら進めたい方はこちら", "macPdf", "ひらく"),
     ea: () => `<ol class="steps">
         <li><span>MT5 を起こして、口座に<b>ログイン</b>しておく</span></li>
-        <li><span>左の「ナビゲーター」にある <b>${os === "mac" ? "YumekkuEA_mac" : "YumekkuEA_win"}</b> を、<b>ゴールド（XAUUSD）のチャート</b>へドラッグ</span></li>
+        <li><span>左の「ナビゲーター」にある <b>${osNow() === "mac" ? "YumekkuEA_mac" : "YumekkuEA_win"}</b> を、<b>ゴールド（XAUUSD）のチャート</b>へドラッグ</span></li>
         <li><span>出てきた画面で<b>「アルゴ取引を許可」</b>にチェックを入れて OK</span></li>
         <li><span>MT5 の上のほうにある<b>「アルゴ取引」ボタン</b>を押して、緑にする</span></li>
       </ol><p class="note">Windows の方は YumekkuEA_win、Mac の方は YumekkuEA_mac です。</p>`,
@@ -944,27 +952,29 @@ const SCRIPT = {
         ? flow.lines.map((l) => `<li class="${l.ok === true ? "is-ok" : l.ok === false ? "is-ng" : "is-wait"}">${esc(l.text)}</li>`).join("")
         : `<li class="is-wait">${esc(flow.note || "パスポートを呼び出しています")}</li>`}</ul>`,
     download: () => {
-      const link = os === "mac" ? "macFile" : "winFile";
-      const steps = os === "mac" ? [
+      const link = osNow() === "mac" ? "macFile" : "winFile";
+      const steps = osNow() === "mac" ? [
           ["ダウンロードした ZIP を開く", "ダウンロード欄の「MT5 Automatic.zip」をクリック（Safari は自動で展開されます）。「MT5 Automatic」が出ます"],
           ["「MT5 Automatic」をダブルクリック →「完了」", "「開けません」と出たら「完了」を押します。「ゴミ箱に入れる」は押さないでください"],
           ["システム設定 →「このまま開く」", "「プライバシーとセキュリティ」を下へスクロール →「このまま開く」→ Mac のパスワード。これは初回だけです"],
           ["MT5 はログインしたままに", "いつも通り口座に入っていれば、そのままで大丈夫です"],
-          ["あとは待つだけ", "ツールが起動すると、この画面が自動で先へ進みます"],
+          ["ゴールドのチャートにシステムを載せる", "MT5 の画面で：ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA_mac をゴールド（XAUUSD）のチャートへドラッグ →「アルゴ取引を許可」→ OK → 上の「アルゴ取引」を ON。Mac では、これが済むとパスポートが口座を読み取れます"],
+          ["設置が終わったら、この画面に戻る", "戻ると自動でパスポートを呼び出します。「MT5 Automatic を開きますか？」と出たら「開く」。進まないときは「設置が終わった（つなぐ）」を押してください"],
         ] : [
           ["ブラウザの警告が出たら「保存」", "「一般的にダウンロードされていません」と出たら、ダウンロード欄の「…」→「保存」（Edge は「保持」→「詳細表示」→「それでも保持」）"],
           ["ダウンロードしたファイルを開く", "「MT5 Automatic」をダブルクリック。「Windows によって PC が保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません"],
           ["MT5 はログインしたままに", "いつも通り口座に入っていれば、そのままで大丈夫です"],
-          ["あとは待つだけ", "ツールが起動すると、この画面が自動で先へ進みます"],
+          ["設置が終わったら、この画面に戻る", "戻ると自動でパスポートを呼び出します。「MT5 Automatic を開きますか？」と出たら「開く」。進まないときは「設置が終わった（つなぐ）」を押してください"],
         ];
-      return `<a class="enter" data-link="${link}" data-download>パスポートをダウンロード（${os === "mac" ? "Mac" : "Windows"} 用） <span aria-hidden="true">↓</span></a>
+      return `<a class="enter" data-link="${link}" data-download>パスポートをダウンロード（${osNow() === "mac" ? "Mac" : "Windows"} 用） <span aria-hidden="true">↓</span></a>
+        <p class="note">お使いのパソコンが違うときは <button type="button" class="linklike" data-os="${osNow() === "mac" ? "win" : "mac"}">${osNow() === "mac" ? "Windows" : "Mac"} 用に切り替える</button></p>
         <ol class="steps">${steps.map(([t, d]) => `<li><span><b>${esc(t)}</b><br>${esc(d)}</span></li>`).join("")}</ol>
-        <ul class="prog" id="prog"><li class="is-wait">${esc(flow.note || "ツールが起動するのを待っています")}</li></ul>`;
+        <ul class="prog" id="prog"><li class="is-wait">${esc(flow.note || "設置が終わって、この画面に戻るのを待っています")}</li></ul>`;
     },
     mt5steps: () => {
       const idx = flow.mt5Index;
       const steps = [
-        ["システムをチャートに載せる", `ナビゲーター →「エキスパートアドバイザ」→ ${os === "mac" ? "YumekkuEA_mac" : "YumekkuEA_win"} をゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK`],
+        ["システムをチャートに載せる", `ナビゲーター →「エキスパートアドバイザ」→ ${osNow() === "mac" ? "YumekkuEA_mac" : "YumekkuEA_win"} をゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK`],
         ["「アルゴ取引」ボタンを ON にする", "MT5 上部のボタンが緑になれば OK（「自動売買」と表示される版もあります）"],
       ];
       return `<ol class="steps steps--live">${steps.map(([t, d], i) => `<li class="${i < idx ? "is-done" : i === idx ? "is-active" : ""}"><span><b>${esc(t)}</b><br>${esc(d)}</span></li>`).join("")}</ol>
@@ -1037,7 +1047,7 @@ const SCRIPT = {
       const res = await fetch(LINKS.register, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ account, server, password, plan: chosen, name, platform: os === "win" ? "windows" : os === "mac" ? "mac" : null, consent: true }),
+        body: JSON.stringify({ account, server, password, plan: chosen, name, platform: osNow() === "win" ? "windows" : osNow() === "mac" ? "mac" : null, consent: true }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1216,7 +1226,7 @@ const SCRIPT = {
     const m = members[idx];
     if (!m) return;
     clearFlowTimers();
-    flow.idx = idx; flow.lines = []; flow.note = ""; flow.mt5Index = 0; flow.problem = ""; flow.relaunched = false; flow.startedAt = Date.now();
+    flow.idx = idx; flow.lines = []; flow.note = ""; flow.mt5Index = 0; flow.problem = ""; flow.relaunched = false; flow.startedAt = Date.now(); flow.downloadShownAt = 0;
     api({ action: "platform", session: m.token, platform: platformName() });
     Bridge.onChange = onBridgeChange;
     Bridge.open(m.id, m.token);
@@ -1225,7 +1235,22 @@ const SCRIPT = {
     later(() => { if (flow.phase === "launch" && !Bridge.live) setPhase("download"); }, CONNECTOR_WAIT_MS);
   }
 
-  /* ダウンロードしたツールを「開くだけ」の初回は、部屋を知らないまま既定の部屋に来る。来たら合図を付けて呼び直す */
+  /* いまのツールは、ダウンロードして開いただけでは設置だけして終わり、サイトにも中継にも名乗り出ない。
+     だから「設置が終わって、この画面に戻ってきた」ことを合図に、もう一度パスポートを呼び出す
+     （ダウンロードを押してから、または案内を出してから DOWNLOAD_SETTLE_MS 経ったあと。呼び直しは RELAUNCH_COOLDOWN_MS に1回） */
+  let autoRelaunchAt = 0;
+  const relaunchOnReturn = () => {
+    if (document.visibilityState !== "visible" || flow.phase !== "download" || flow.idx < 0 || flow.relaunched) return;
+    const since = flow.downloadedAt || flow.downloadShownAt || 0;
+    if (!since || Date.now() - since < DOWNLOAD_SETTLE_MS) return;
+    if (Date.now() - autoRelaunchAt < RELAUNCH_COOLDOWN_MS) return;
+    autoRelaunchAt = Date.now();
+    startConnect(flow.idx);
+  };
+  document.addEventListener("visibilitychange", relaunchOnReturn);
+  window.addEventListener("focus", relaunchOnReturn);
+
+  /* 古いツールを「開くだけ」の初回は、部屋を知らないまま既定の部屋に来る。来たら合図を付けて呼び直す */
   const watchDefaultRoom = () => {
     if (flow.phase !== "download" || flow.relaunched) return;
     const http = RELAY.replace(/^wss:/, "https:").replace(/^ws:/, "http:").replace(/\/app(\?.*)?$/, "");
@@ -1319,7 +1344,7 @@ const SCRIPT = {
     const c = val(node.choices);
     if (typeof c === "string" && c.startsWith("os:")) {
       const [w, m] = c.slice(3).split(",");
-      return [["Windows", w, os === "win" ? "pick" : ""], ["Mac", m, os === "mac" ? "pick" : ""], ["ほかのもの", "start"]];
+      return [["Windows", w, osNow() === "win" ? "pick" : ""], ["Mac", m, osNow() === "mac" ? "pick" : ""], ["ほかのもの", "start"]];
     }
     return c || [];
   };
@@ -1401,9 +1426,10 @@ const SCRIPT = {
       }
       docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect))));
       docs.querySelectorAll("[data-door]").forEach((b) => b.addEventListener("click", () => show("gate", "door:" + b.dataset.door)));
+      docs.querySelectorAll("[data-os]").forEach((b) => b.addEventListener("click", () => { osChoice = b.dataset.os; show(staffKey, nodeKey); }));
       const dl = docs.querySelector("[data-download]");
-      if (dl) { dl.removeAttribute("target"); dl.setAttribute("download", ""); dl.addEventListener("click", () => { flow.note = "ダウンロードが始まりました。ファイルを開いて、上の手順どおりに進めてください。起動すると自動で先へ進みます"; const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`; }); }
-      if (nodeKey === "download" && staffKey === "service") { flow.phase = "download"; later(watchDefaultRoom, DEFAULT_ROOM_POLL_MS); }
+      if (dl) { dl.removeAttribute("target"); dl.setAttribute("download", ""); dl.addEventListener("click", () => { flow.downloadedAt = Date.now(); flow.note = "ダウンロードが始まりました。ファイルを開いて、上の手順どおりに進めてください。起動すると自動で先へ進みます"; const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`; }); }
+      if (nodeKey === "download" && staffKey === "service") { flow.phase = "download"; flow.downloadShownAt = flow.downloadShownAt || Date.now(); later(watchDefaultRoom, DEFAULT_ROOM_POLL_MS); }
     }
     choiceList(node).forEach(([label, to, flag], i) => {
       const b = document.createElement("button");

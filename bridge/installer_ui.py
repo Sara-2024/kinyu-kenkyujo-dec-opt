@@ -16,6 +16,7 @@ tkinter は Python に同梱されているので、追加の部品は要らな�
 from __future__ import annotations
 
 import os
+import sys
 
 from typing import Any, Callable, Sequence
 
@@ -220,7 +221,9 @@ class SetupWindow:
             command=command,
             font=self.f["button"],
             bg=ACCENT if primary else PANEL,
-            fg="#04121f" if primary else TEXT,
+            # Mac の Tk はボタンの背景色を変えられない（薄い灰色のまま）ので、文字は濃い色にする。
+            # 薄い文字（TEXT）だと、2つ目のボタンの文字が見えなくなる（実機で起きた）
+            fg="#04121f" if (primary or sys.platform == "darwin") else TEXT,
             activebackground=ACCENT if primary else PANEL,
             relief="flat",
             bd=0,
@@ -361,6 +364,70 @@ class SetupWindow:
         except Exception:  # noqa: BLE001
             self._alive = False
         return answer["value"] and self.alive()
+
+    def ask_or_wait(
+        self,
+        question: str,
+        yes: str,
+        no: str,
+        lines: Sequence[str] = (),
+        check: Callable[[], bool] | None = None,
+        every_ms: int = 2000,
+    ) -> str:
+        """はい／いいえを聞きながら、条件が整うのを待つ。
+
+        返り値は "yes" / "no" / "ready"（check が真になった）/ "closed"（✕ で閉じられた）。
+        Mac で「EA を載せると自動で先へ進む」ために使う。
+        """
+        if not self.alive():
+            return "closed"
+        self.clear_body()
+        self.clear_buttons()
+        self.say(question)
+        for line in lines:
+            tk.Label(
+                self.body, text=line, bg=BG, fg=MUTED, font=self.f["small"], wraplength=440, justify="left"
+            ).pack(anchor="w", pady=2)
+
+        answer = {"value": "closed", "done": False}
+
+        def pick(value: str) -> None:
+            if answer["done"]:
+                return
+            answer["done"] = True
+            answer["value"] = value
+            try:
+                self.root.quit()
+            except Exception:  # noqa: BLE001
+                self._alive = False
+
+        def tick() -> None:
+            if answer["done"] or not self.alive():
+                return
+            try:
+                if check is not None and check():
+                    pick("ready")
+                    return
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                self.root.after(every_ms, tick)
+            except Exception:  # noqa: BLE001
+                self._alive = False
+
+        self.button(yes, lambda: pick("yes"), primary=True)
+        self.button(no, lambda: pick("no"), primary=False)
+        if check is not None:
+            try:
+                self.root.after(every_ms, tick)
+            except Exception:  # noqa: BLE001
+                self._alive = False
+        try:
+            self.root.mainloop()
+        except Exception:  # noqa: BLE001
+            self._alive = False
+        answer["done"] = True
+        return answer["value"] if self.alive() or answer["value"] != "closed" else "closed"
 
     def finish(self, lines: Sequence[str], ok: bool = True) -> None:
         if not self.alive():

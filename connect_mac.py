@@ -331,7 +331,42 @@ def message_box(text: str, title: str = PRODUCT_NAME) -> bool:
 _orig_account_of = connect.account_of
 
 
+def install_ea_for(data_path: str) -> None:
+    """繋ぐ MT5 が決まったら、ログインを読み取る前に Mac 用の EA を置いておく。
+
+    Mac は EA がチャートで書く控えでしか口座を読めないので、EA が無いと永久に
+    「ログインしていません」になる。置くだけ（載せるのはお客様）。同じ中身なら触らない。
+    """
+    try:
+        target = next((t for t in list_terminals() if connect._same_path(t.data_path, data_path)), None)
+        if target is None:
+            return
+        mt5_detect_mac.point_appdata_at(target)
+        source = connect.ea_manager.load_source(connect.BRIDGE_DIR)
+        if source is None:
+            return
+        after = connect.ea_manager.install(target.data_path, source, old_names=(), log=connect.log)
+        connect.log(f"EA の状態（ログインを読む前）: {after.as_dict()}")
+    except Exception as exc:  # noqa: BLE001
+        connect.log(f"EA を置けませんでした: {exc}")
+
+
 def _patch() -> None:
+    # Mac は「EA が控えを書いているか」でログインを判定する。文言もそれに合わせる
+    connect.LOGIN_MISSING_TITLE = "{label} の口座をまだ読み取れません。"
+    connect.LOGIN_MISSING_LINES = (
+        "Mac では、ゴールドのチャートに YumekkuEA_mac が載って動いているときだけ、口座を読み取れます。",
+        "MT5 の画面で：ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA_mac を、ゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK。",
+        "MT5 の上のほうにある「アルゴ取引」ボタンも押して、緑にしてください。",
+        "載せると、この画面は自動で先へ進みます（数秒かかります）。",
+    )
+    connect.LOGIN_RETRY_LABEL = "載せたので、もう一度確かめる"
+    connect.LOGIN_WAIT_TEXT = "ゴールドのチャートに YumekkuEA_mac が載るのを待っています"
+    connect.LOGIN_TIMEOUT_MESSAGE = (
+        "MT5 の口座を読み取れませんでした。",
+        "ゴールドのチャートに YumekkuEA_mac を載せて「アルゴ取引」を ON にしてから、もう一度このアプリを開いてください。",
+    )
+    connect.PREPARE_TERMINAL = install_ea_for
     connect.mt5_detect.list_terminals = list_terminals
     connect.mt5_detect.describe = describe
     connect.find_logged_in_terminal = find_logged_in_terminal

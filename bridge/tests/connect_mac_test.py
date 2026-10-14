@@ -119,6 +119,11 @@ check("ログイン済みの判定が Mac 版になっている", connect.find_l
 check("ブリッジの起動が Mac 版になっている", connect.start_bridge is connect_mac.start_bridge)
 check("MetaTrader5 として mt5_files が入っている", sys.modules["MetaTrader5"] is connect_mac.mt5_files)
 check("設定の置き場が ~/Library/Application Support の下", str(connect.CONFIG_DIR).startswith(str(HOME / "Library")), str(connect.CONFIG_DIR))
+check("「ログインしていません」の案内が Mac 用（EA を載せる手順）になっている", "YumekkuEA_mac" in " ".join(connect.LOGIN_MISSING_LINES) and "ナビゲーター" in " ".join(connect.LOGIN_MISSING_LINES))
+check("見出しも「ログインしていない」ではなく「読み取れない」", "読み取れません" in connect.LOGIN_MISSING_TITLE)
+check("確かめ直すボタンがある（載せると自動で進む）", bool(connect.LOGIN_RETRY_LABEL))
+check("時間切れの案内も EA を載せる手順", "YumekkuEA_mac" in connect.LOGIN_TIMEOUT_MESSAGE[1])
+check("ログインを読む前に EA を置く", connect.PREPARE_TERMINAL is connect_mac.install_ea_for)
 
 # ── 2) MT5 を探す ──
 terminals = connect_mac.list_terminals()

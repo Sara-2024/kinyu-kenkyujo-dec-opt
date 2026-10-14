@@ -454,7 +454,7 @@ def wait_for_login(timeout_sec: int = 600, prefer: str | None = None) -> dict | 
         log(f"ログイン済み: {existing['account']} / {existing['server']}")
         return existing
 
-    banner("MT5 へのログインを待っています")
+    banner(LOGIN_WAIT_TEXT)
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
         status = find_logged_in_terminal(prefer)
@@ -1624,6 +1624,23 @@ def show_status() -> int:
     return 0
 
 
+# 「選んだ MT5 にログインしていません」のときの案内。
+# Windows は MT5 本体に聞くのでこの文でよいが、Mac は EA がチャートで書く控えでしか
+# 口座を読めないので、connect_mac._patch が「EA を載せてください」に差し替える。
+LOGIN_MISSING_TITLE = "{label} にログインしていません。"
+LOGIN_MISSING_LINES = (
+    "そのMT5でログインしてから、もう一度このアプリを開いてください。",
+    "ほかのMT5を使うときは「別のMT5を選ぶ」を押してください。",
+)
+# 空なら「別のMT5を選ぶ／閉じる」の2択。文字があれば「<これ>／別のMT5を選ぶ」になり、
+# 押すと（または条件が整うと）確かめ直す
+LOGIN_RETRY_LABEL = ""
+LOGIN_WAIT_TEXT = "MT5 へのログインを待っています"
+LOGIN_TIMEOUT_MESSAGE = ("MT5にログインできていません。", "MT5で口座にログインしてから、もう一度このアプリを開いてください。")
+# 繋ぐ MT5 が決まった直後に呼ぶ（Mac は、ログインを読み取る前に EA を置いておく必要がある）
+PREPARE_TERMINAL = None
+
+
 def connect_all(room: str = "", show: bool = False) -> int:
     """サイトのボタン1つで呼ばれる本体。
 
@@ -1673,12 +1690,10 @@ def connect_all(room: str = "", show: bool = False) -> int:
                 "MT5を開いてログインしてから、もう一度このアプリを開いてください。",
             )
         launch_mt5(exe)
+        say(LOGIN_WAIT_TEXT + "…")
         session = wait_for_login(prefer=chosen or None)
         if session is None or (chosen and not _same_path(session.get("data_path", ""), chosen)):
-            return give_up(
-                "MT5にログインできていません。",
-                "MT5で口座にログインしてから、もう一度このアプリを開いてください。",
-            )
+            return give_up(*LOGIN_TIMEOUT_MESSAGE)
 
     try:
         copy_ea_files(session)
@@ -1773,7 +1788,11 @@ def choose_session(ui, log=log, always_ask: bool = False) -> tuple[dict | None, 
             return None
         remember(chosen)
 
-    for _ in range(3):
+    if chosen and PREPARE_TERMINAL:
+        PREPARE_TERMINAL(chosen)
+
+    # Mac（LOGIN_RETRY_LABEL あり）は EA が載るまで何度でも確かめ直す。Windows はこれまでどおり 3 回
+    for _ in range(60 if LOGIN_RETRY_LABEL else 3):
         session = find_logged_in_terminal(chosen)
         if session and _same_path(session.get("data_path", ""), chosen):
             log(f"選んだ MT5 を使います: {session.get('account')} / {session.get('server')}")
@@ -1786,15 +1805,19 @@ def choose_session(ui, log=log, always_ask: bool = False) -> tuple[dict | None, 
         if ui is None:
             # 画面が無い（自動起動など）ときは、乗り換えずに「まだログインしていない」扱い
             return (None, chosen)
-        if not ui.ask(
-            f"{label} にログインしていません。",
-            "別のMT5を選ぶ",
-            "閉じる",
-            [
-                "そのMT5でログインしてから、もう一度このアプリを開いてください。",
-                "ほかのMT5を使うときは「別のMT5を選ぶ」を押してください。",
-            ],
-        ):
+        title = LOGIN_MISSING_TITLE.format(label=label)
+        if LOGIN_RETRY_LABEL:
+            # 「確かめ直す／別のMT5を選ぶ」。条件が整えば（EA が載れば）押さなくても先へ進む
+            ready = lambda: find_logged_in_terminal(chosen) is not None  # noqa: E731
+            if hasattr(ui, "ask_or_wait"):
+                answer = ui.ask_or_wait(title, LOGIN_RETRY_LABEL, "別のMT5を選ぶ", list(LOGIN_MISSING_LINES), check=ready)
+            else:
+                answer = "yes" if ui.ask(title, LOGIN_RETRY_LABEL, "別のMT5を選ぶ", list(LOGIN_MISSING_LINES)) else "no"
+            if answer == "closed":
+                return None
+            if answer in ("yes", "ready"):
+                continue
+        elif not ui.ask(title, "別のMT5を選ぶ", "閉じる", list(LOGIN_MISSING_LINES)):
             return None
         picked = ask_pick()
         if not picked:
