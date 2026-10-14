@@ -90,9 +90,13 @@ jobs:
           $sha = (git rev-parse --short HEAD)
           git commit -m "[skip ci] exe を作り直す（自動ビルド $sha）"
           # 同じ push で動く Mac 側の自動ビルド（build-mac）が先に commit していることがある。
-          # 押し負けたら取り直して、もう一度押す
+          # 押し負けたら取り直して、もう一度押す。
+          # 前のビルドの exe が先に入っていると、同じファイルでぶつかる（exe は 2 進ファイルなので
+          # 自動では混ぜられない）。そのときは「いま作った exe」で上書きする（-X theirs）。
+          # 途中でこけた rebase が残ると次の取り直しもこけるので、毎回片づけてから取り直す
           for ($i = 1; $i -le 5; $i++) {
-            git pull --rebase origin main
+            git rebase --abort 2>$null
+            git pull --rebase -X theirs origin main
             git push
             if ($LASTEXITCODE -eq 0) { exit 0 }
             Write-Host "push できなかったので取り直します（$i 回目）"
