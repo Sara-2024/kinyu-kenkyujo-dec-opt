@@ -673,9 +673,9 @@ const SCRIPT = {
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
     loginpw: { say: "この口座は、以前にパスワード付きで登録されています。そのときのパスワードを入力してください。分からないときはサポート LINE へご連絡ください。", docs: "loginpw",
       choices: [["サポート LINE", "support"], ["ほかのもの", "start"]] },
-    waiting: { say: "パスポートがこの口座につながっているか、確かめています。そのままお待ちください（20 秒ほど）。", docs: "progress", choices: [] },
-    notyet: { say: () => `パスポートは、まだこの口座につながっていません。\nダウンロードしたファイル（${osNow() === "mac" ? "ドリームランド・パスポート" : "DreamlandPassport"}）を開いて、設置を終えてから、もう一度「設置が終わった（つなぐ）」を押してください。${osNow() === "mac" ? "\nMac で設置が済んでいるのにつながらないときは「パスポートを呼び出す」を押してください。" : ""}`, docs: "launch",
-      choices: () => [["設置が終わった（つなぐ）", "launch", "go"], ...(osNow() === "mac" ? [["パスポートを呼び出す", "relaunch"]] : []), ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
+    waiting: { say: "パスポートをこの口座につないでいます。ブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。そのままお待ちください（30 秒ほど）。", docs: "progress", choices: [] },
+    notyet: { say: "パスポートは、まだこの口座につながっていません。\nパスポートをまだ入れていなければ、下の「パスポートをダウンロード」から入れて開いてください。入れてあれば、もう一度「設置が終わった（つなぐ）」を押して、ブラウザの「開きますか？」で「開く」を押してください。", docs: "launch",
+      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     stuck: { say: "パスポートはこの口座につながっていますが、この画面が中継に入れていません。ページを再読み込み（F5）して、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "progress",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、下のボタンからダウンロードして、手順どおりに設置してください。マニュアルも下にあります。\n設置が終わったら、この画面に戻って「設置が終わった（つなぐ）」を押してください。つながっているかを確かめて、次の案内に進みます。", docs: "download",
@@ -1256,22 +1256,23 @@ const SCRIPT = {
     Bridge.onChange = onBridgeChange;
     Bridge.open(m.id, m.token);
     if (mode === "auto") { show("service", "download"); return; }   // 案内はダウンロードのページ 1 枚だけ
-    // 「設置が終わった」：開いたパスポートがこの口座に紐づいて名乗っているかを、その場で確かめて結果を出す。
-    // "launch"（Mac の「パスポートを呼び出す」）だけ、確かめる前に aitrader:// で呼ぶ
+    // 「設置が終わった」：サイトからパスポートを呼び出して（aitrader://。これまで通っていた確実な道）
+    // この口座に紐づけ、名乗ってきたかをその場で確かめて結果を出す。
+    // ダウンロードしたファイルがすでに紐づけていれば、呼び出しは同じ部屋へのつなぎ直しになるだけ
     setPhase("waiting");
-    if (mode === "launch") issueAndLaunch();
+    issueAndLaunch();
     verifyInstalled();
   }
 
   /* 「設置が終わった（つなぐ）」：中継に「この口座の部屋にパスポートが来ているか」を 20 秒ほど聞き続け、
      来ていれば次へ（checkStatus）、来ていなければ「まだつながっていません」とはっきり出す */
-  const VERIFY_MS = 20000;
+  const VERIFY_MS = 30000;
   async function verifyInstalled() {
     const m = member(); if (!m) return;
     const started = flow.startedAt;
     const http = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
     const paint = (text) => { flow.note = text; const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(text)}</li>`; };
-    paint("パスポートがこの口座につながっているか確かめています…");
+    paint("パスポートを呼び出して、この口座につながるのを待っています…");
     let seen = false;
     while (flow.phase === "waiting" && flow.startedAt === started && Date.now() - started < VERIFY_MS) {
       if (Bridge.live) return;   // 名乗りが届いた → onBridgeChange が checkStatus へ進める
