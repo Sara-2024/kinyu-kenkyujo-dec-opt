@@ -244,7 +244,7 @@ check("build-mac.sh は本体を機種ごとに作って（--binary）まとめ�
 check("自動ビルドは macOS で回る", "runs-on: macos" in workflow)
 check("自動ビルドは Apple シリコンと Intel の両方で本体を作る", "macos-15-intel" in workflow and "arch: arm64" in workflow and "arch: x86_64" in workflow)
 check("自動ビルドは 2 機種ぶんそろってから .app にする", "MT5Automatic-x86_64" in workflow and "--assemble" in workflow)
-check("自動ビルドの置き場とサイトのダウンロード先が同じ", "public/download/MT5Automatic-mac.zip" in workflow and "/download/MT5Automatic-mac.zip" in connector)
+check("自動ビルドの置き場とサイトのダウンロード先が同じ", "public/download/DreamlandPassport-mac.zip" in workflow and "/download/DreamlandPassport-mac.zip" in connector)
 check("Mac 版の部品に MetaTrader5 を入れない", "MetaTrader5" not in [ln.split(">=")[0] for ln in (BRIDGE / "requirements-mac.txt").read_text().splitlines() if ln and not ln.startswith("#")])
 
 print(f"\n{PASS} ok / {FAIL} NG")

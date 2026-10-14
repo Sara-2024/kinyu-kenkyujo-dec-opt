@@ -1,7 +1,7 @@
-"""ドリームランド・パスポート（MT5 Automatic）の画面（初回の設定だけ）。
+"""ドリームランド・パスポート（接続ツール。DreamlandPassport.exe）の画面（初回の設定だけ）。
 
 装いはロビー（dreamland/index.html）と同じ：クリーム地に金の罫、明朝の見出し、
-ティール（主ボタン）とラベンダー（副ボタン）。ファイル名・OS の確認画面は MT5 Automatic のまま。
+ティール（主ボタン）とラベンダー（副ボタン）。ファイル名は DreamlandPassport.exe / ドリームランド・パスポート.app。
 
 40〜60代のお客様が迷わないことを最優先にする。
 
@@ -30,7 +30,7 @@ except Exception:  # noqa: BLE001 - 画面が無い環境
     tk = None  # type: ignore[assignment]
     tkfont = None  # type: ignore[assignment]
 
-# 窓に出す名前。パソコン上のファイル名（MT5 Automatic）は変えない
+# 窓に出す名前（見出し）。OS に出る名前は connect.PRODUCT_NAME
 APP_NAME = "ドリームランド｜パスポート"
 APP_KICKER = "D R E A M L A N D   ·   P A S S P O R T"
 

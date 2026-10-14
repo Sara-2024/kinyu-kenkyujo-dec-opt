@@ -1,7 +1,7 @@
 // 口座の登録（会員）。自社のデモ口座を一斉制御の対象にするための登録ページ。
 //
 // ここで登録した口座は、「運営が止めてよい」と許可したものとして扱う。
-// 止める合図は、この会員の PC で動く MT5 Automatic へ流す（パスワードは使わない）。
+// 止める合図は、この会員の PC で動く ドリームランド・パスポート へ流す（パスワードは使わない）。
 import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
@@ -94,7 +94,7 @@ export function FleetJoin() {
           登録をもって、その操作を運営に任せることに同意したものとします。
         </p>
         <p className="mt-1 text-[14px] text-slate-400">
-          口座番号・サーバー名は MT5 のログイン画面に出ているものです。この PC のパスポート（MT5 Automatic）が研究所と連携済みであれば、そのまま制御できます。
+          口座番号・サーバー名は MT5 のログイン画面に出ているものです。この PC のパスポートが研究所と連携済みであれば、そのまま制御できます。
         </p>
 
         <div className="mt-5 rounded-[4px] border px-5 py-5" style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}>

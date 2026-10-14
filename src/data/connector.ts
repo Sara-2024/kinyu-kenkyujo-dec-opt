@@ -124,17 +124,17 @@ export function relaunchConnector(): void {
 
 // ────────────────────────────────
 // パスポートのダウンロード
-//   既定は public/download/MT5Automatic.exe（Windows で tools/build-windows.bat を実行して
+//   既定は public/download/DreamlandPassport.exe（Windows で tools/build-windows.bat を実行して
 //   できたもの。Python 不要で開くだけ）。Python 版の ZIP（tools/pack-connector.sh）も
-//   同じ場所にあり、VITE_CONNECTOR_URL=/download/MT5Automatic.zip で差し替えられる。
+//   同じ場所にあり、VITE_CONNECTOR_URL=/download/DreamlandPassport.zip で差し替えられる。
 //   .exe なら「開くだけ」、.zip なら「展開して はじめる.bat を開く」と案内が変わる。
 // ────────────────────────────────
 export type ConnectorKind = 'exe' | 'zip' | 'mac'
 
 /**
  * お客様のパソコン。配るものと手順が変わる。
- *   windows … MT5Automatic.exe（Python 部品で MT5 を直接読む）
- *   mac     … MT5Automatic-mac.zip（EA が書くファイルを読む。tools/mac/ 参照）
+ *   windows … DreamlandPassport.exe（Python 部品で MT5 を直接読む）
+ *   mac     … DreamlandPassport-mac.zip（EA が書くファイルを読む。tools/mac/ 参照）
  * サイト・中継・一斉制御はどちらも同じ。
  */
 export type Platform = 'windows' | 'mac'
@@ -150,20 +150,20 @@ export interface ConnectorDownload {
 }
 
 /** お客様が受け取るファイルの名前。中身は同じで、名前だけ分かりやすくする */
-const SAVE_AS = 'MT5 Automatic.exe'
-const SAVE_AS_MAC = 'MT5 Automatic.zip'
+const SAVE_AS = 'ドリームランド・パスポート.exe'
+const SAVE_AS_MAC = 'ドリームランド・パスポート.zip'
 
 function windowsDownload(): ConnectorDownload {
-  const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/MT5Automatic.exe'
-  const filename = url.split('?')[0].split('/').pop() || 'MT5Automatic.zip'
+  const url = (import.meta.env.VITE_CONNECTOR_URL as string | undefined)?.trim() || '/download/DreamlandPassport.exe'
+  const filename = url.split('?')[0].split('/').pop() || 'DreamlandPassport.zip'
   const kind: ConnectorKind = /\.exe$/i.test(filename) ? 'exe' : 'zip'
   // ZIP を配るときは中身が違うので、名前もそのまま使う
   return { url, filename, saveAs: kind === 'exe' ? SAVE_AS : filename, kind, platform: 'windows' }
 }
 
 function macDownload(): ConnectorDownload {
-  const url = (import.meta.env.VITE_CONNECTOR_URL_MAC as string | undefined)?.trim() || '/download/MT5Automatic-mac.zip'
-  const filename = url.split('?')[0].split('/').pop() || 'MT5Automatic-mac.zip'
+  const url = (import.meta.env.VITE_CONNECTOR_URL_MAC as string | undefined)?.trim() || '/download/DreamlandPassport-mac.zip'
+  const filename = url.split('?')[0].split('/').pop() || 'DreamlandPassport-mac.zip'
   return { url, filename, saveAs: SAVE_AS_MAC, kind: 'mac', platform: 'mac' }
 }
 

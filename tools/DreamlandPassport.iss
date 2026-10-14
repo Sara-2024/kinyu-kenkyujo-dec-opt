@@ -1,10 +1,10 @@
-; MT5 Automatic のインストーラー（Inno Setup 6）
+; ドリームランド・パスポート のインストーラー（Inno Setup 6）
 ;
 ; 作り方:
-;   1. Windows で tools\build-windows.bat を実行して dist\MT5Automatic.exe を作る
+;   1. Windows で tools\build-windows.bat を実行して dist\DreamlandPassport.exe を作る
 ;   2. Inno Setup 6 をインストール（https://jrsoftware.org/isdl.php）
 ;   3. このファイルを Inno Setup Compiler で開いて [ビルド]
-;   → tools\installer\MT5Automatic-Setup.exe ができる
+;   → tools\installer\DreamlandPassport-Setup.exe ができる
 ;
 ; 方針:
 ;   ・管理者権限を要求しない（PrivilegesRequired=lowest）。UAC の画面を出さない
@@ -12,10 +12,10 @@
 ;   ・aitrader:// の登録はここで行う。アンインストールで消える
 ;   ・コード署名はまだ。SmartScreen の警告が出る（別工程で対応）
 
-#define AppName "MT5 Automatic"
+#define AppName "ドリームランド・パスポート"
 #define AppVersion "1.0.0"
-#define AppPublisher "MT5 Automatic"
-#define AppExe "MT5Automatic.exe"
+#define AppPublisher "ドリームランド・パスポート"
+#define AppExe "DreamlandPassport.exe"
 
 [Setup]
 AppId={{9A5C2F41-7E6B-4C2A-9E3D-1B7F0A8C5D24}
@@ -28,7 +28,7 @@ DisableProgramGroupPage=yes
 DisableDirPage=yes
 PrivilegesRequired=lowest
 OutputDir=installer
-OutputBaseFilename=MT5Automatic-Setup
+OutputBaseFilename=DreamlandPassport-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

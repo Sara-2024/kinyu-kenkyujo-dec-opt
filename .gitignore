@@ -37,3 +37,4 @@ server/node_modules/
 # PyInstaller の作業フォルダ（tools/build-windows.bat）
 build/
 MT5Automatic.spec
+DreamlandPassport.spec

@@ -122,7 +122,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   どちらか欠けていれば「切」のまま動かない（`/api/risk` は 503 を返す）。
   `risk_secret.py` はコミットしない。
   **ただし、この合言葉は配布物（exe）から取り出せる。** PyInstaller の同梱物を展開すれば
-  数分で復元できるので、`public/download/MT5Automatic.exe` を公開している以上、
+  数分で復元できるので、`public/download/DreamlandPassport.exe` を公開している以上、
   「誰でも取れる」前提で扱うこと。`api/_lib/risk.ts` の `RATE_LIMIT` は
   1インスタンスのメモリで数えているだけなので、サーバーレスでは悪用の歯止めにならない
   （事故で叩きすぎるのを止めるためのもの）。実際の歯止めは AI 提供元の予算上限で作る。
@@ -151,16 +151,19 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **AI へ送る JSON は詰めて書く。** `buildUserPrompt` で整形（インデント）すると、
   改行と空白のぶんだけ入力トークンが増える。呼ぶ回数が多いので効いてくる。
 
-## MT5 Automatic（お客様に配る Windows アプリ）
+## ドリームランド・パスポート（お客様に配る接続ツール。旧称 MT5 Automatic）
 
-配るのは1つの exe（`MT5Automatic.exe`／表示名は MT5 Automatic）。
+配るのは1つの exe（`DreamlandPassport.exe`／表示名は「ドリームランド・パスポート」。2026-10-14 に MT5Automatic から改名。
+PyInstaller の `--name` と `public/download/` の名前だけ変え、保存先（`%LOCALAPPDATA%\AITrader`、`~/Library/Application Support/MT5Automatic`）・
+ロック名・Mac の本体名（`MT5Automatic-<機種>`）・bundle id は変えていない。既存の PC では新しい exe を一度開くと
+`aitrader://` の登録と自動起動が新しい名前に切り替わる。`LEGACY_APP_NAMES` に「MT5 Automatic」を足してある）。
 中身は接続ツールとブリッジで、**状態で動きが変わる**。
 
 - **ルートは2つ（Windows / Mac）。** サイト・中継・一斉制御・会員・BAN は共通で、
   違うのはお客様のパソコンで動く部分だけ。初期設定の「接続ツールのダウンロード」で
   お客様がどちらかを選ぶ（`DialogueWindow` の `platform`。ブラウザから推定し、選び直せる。
   `localStorage` の `mt5automatic.platform` に覚える）。配るものは `connector.ts` の
-  `CONNECTOR_DOWNLOADS`（windows = `MT5Automatic.exe`、mac = `MT5Automatic-mac.zip`、
+  `CONNECTOR_DOWNLOADS`（windows = `DreamlandPassport.exe`、mac = `DreamlandPassport-mac.zip`、
   `VITE_CONNECTOR_URL_MAC` で差し替え）。手順は `installSteps('mac')`。
   **誰がどちらを使っているかは2か所に残す**：サイトが初期設定を始めた／選んだときに
   `member_platform_set`（`member_connections.platform`、管理者画面と一斉制御の「OS」列）、
@@ -201,7 +204,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
     連携の配線（`SiteAllowsEntry` / `AiAllowsEntry` / `SiteLot` / `OnTimer`）と Mac のファイル
     書き出しが揃っているかは `bridge/tests/ea_gate_test.py` が見る（ソースがある手元だけ）。
     `TodayRealizedPnL` は M30 軸も数える（Windows 用の元ソースは M1/H1 だけ数えていた）。
-  - **配るのは `MT5 Automatic.app` を ZIP にしたもの**（`public/download/MT5Automatic-mac.zip`）。
+  - **配るのは `ドリームランド・パスポート.app` を ZIP にしたもの**（`public/download/DreamlandPassport-mac.zip`）。
     **Apple シリコン用（arm64）と Intel 用（x86_64）の本体を両方同梱**し、
     `tools/mac/launcher.applescript` が `uname -m` で使い分ける（お客様はどちらでも同じ ZIP）。
     `tools/mac/build-mac.sh --binary` が PyInstaller で動かしている機種の本体を作り、
@@ -289,13 +292,13 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   次回それと見比べて「更新が要るか」を決める。
 - **窓の名前と装いはロビーに合わせる。** 題名は「ドリームランド｜パスポート」（`installer_ui.APP_NAME`）、
   クリーム地・金の罫・明朝の見出し・ティールの主ボタン（ロビーの CSS 変数と同じ色）。起動画像は `tools/splash.png`。
-  ファイル名（MT5Automatic.exe / .app）と OS の確認画面は MT5 Automatic のままなので、文中で触れるときは
-  「パソコン上の名前は MT5 Automatic」と添える。本体サイトの文言も「接続ツール」ではなく「パスポート」。
+  ファイル名は DreamlandPassport.exe / ドリームランド・パスポート.app、ブラウザの「開きますか？」も
+  「ドリームランド・パスポート」（`connect.PRODUCT_NAME`）。本体サイトの文言も「接続ツール」ではなく「パスポート」。
   Mac の Tk はボタンの背景色を変えられないので、文字は濃い色にする（薄いと消える）。
 - **画面に技術用語を出さない。** `bridge/installer_ui.py`。MQL5・Experts・
   ブリッジ・API・Python・Socket は書かない。失敗しても原因ではなく
   「次に何をすればいいか」だけを出す。ボタンは高さ 44px 以上。
-- **インストーラーは `tools/MT5Automatic.iss`**（Inno Setup 6）。
+- **インストーラーは `tools/DreamlandPassport.iss`**（Inno Setup 6）。
   管理者権限を要求せず、`aitrader://` の登録とアンインストールまで面倒を見る。
 
 ### サイトとの連携（Phase 2）
@@ -342,7 +345,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **黒い画面（コンソール）を出さない。** お客様は「何か怖いものが動いた」と感じる。
   - 押すファイルは2つだけ。増やさない。
   - `はじめる.bat` … 自分が確認するとき（画面つき。初回の準備もここ）
-  - `MT5Automatic.vbs` / `MT5Automatic.exe` … お客様が使うもの（画面なし。表示名は MT5 Automatic）
+  - `MT5Automatic.vbs` / `DreamlandPassport.exe` … お客様が使うもの（画面なし。表示名は ドリームランド・パスポート）
   - 個別のスクリプトは `tools/` に置く。プロジェクト直下に増やさない。
   - `connect.py` から他のプログラムを呼ぶときは `run_hidden` / `spawn_hidden` を使う。
     直に `subprocess.Popen` を書かない（ウィンドウが出る）。
@@ -356,13 +359,13 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   （`TRUSTED_SITES`）。サイトのドメインを増やしたらここに足す。
   ブラウザは登録なしにPCのソフトを起動できないので、**初回だけツールを一度開いてもらう**
   導線は残しておく。配り方はサイトの「接続ツールをダウンロード」ボタン
-  （既定は `public/download/MT5Automatic.exe`。**exe は GitHub Actions が自動で作る**：
+  （既定は `public/download/DreamlandPassport.exe`。**exe は GitHub Actions が自動で作る**：
   `connect.py` / `bridge/` / `tools/build-windows.bat` を main に push すると
   `.github/workflows/build-exe.yml` が Windows で `build-windows.bat` を回し、
   できた exe を `[skip ci]` 付きで commit する。手元の Windows で
   `3_リリースする.bat` を押しても同じものができる。AIの見張りの合言葉は
   リポジトリの Secrets `TRELAB_RISK_TOKEN` から入る。Python 不要で、ユイの手順は「開くだけ」）。
-  Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/MT5Automatic.zip`
+  Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/DreamlandPassport.zip`
   で差し替えられる。`connect.py` や `bridge/` を変えたら exe を作り直して置き直すこと。
   メールで送る導線は廃止した。
 - **MT5 に送る EA は `bridge/YumekkuEA_win.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、

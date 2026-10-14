@@ -49,7 +49,7 @@ function BrowserWarning() {
           ⚠
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-bold">MT5 Automatic.exe</span>
+          <span className="block truncate text-[13px] font-bold">ドリームランド・パスポート.exe</span>
           <span className="block text-[12px]" style={{ color: '#6b7280' }}>
             一般的にダウンロードされていません
           </span>
@@ -112,7 +112,7 @@ function MacNotOpened() {
   return (
     <div style={macFrame}>
       <div className="px-4 pt-3 pb-2 text-center">
-        <div className="text-[14px] font-bold">“MT5 Automatic”は開けません。</div>
+        <div className="text-[14px] font-bold">“ドリームランド・パスポート”は開けません。</div>
         <div className="mt-1 text-[12px]" style={{ color: '#6b7280' }}>
           Appleは、このアプリにMacに損害を与える可能性のあるマルウェアが含まれていないことを確認できませんでした。
         </div>
@@ -138,7 +138,7 @@ function MacOpenAnyway() {
         </div>
         <div className="mt-2 flex items-center gap-3">
           <span className="min-w-0 flex-1 text-[12px]">
-            “MT5 Automatic”は、Macを保護するためにブロックされました。
+            “ドリームランド・パスポート”は、Macを保護するためにブロックされました。
           </span>
           <span className="shrink-0" style={{ ...macButton, ...hit, fontWeight: 700 }}>
             このまま開く

@@ -2,19 +2,19 @@
 # ================================================================
 #  サイトの「接続ツールをダウンロード」ボタンで配るファイルを作る
 #
-#    public/download/MT5Automatic.zip  … 接続ツール一式（Python 版）
-#    public/download/MT5Automatic.exe  … Windows で tools/build-windows.bat を
-#                                    実行して dist/MT5Automatic.exe ができていれば、それも置く
+#    public/download/DreamlandPassport.zip  … 接続ツール一式（Python 版）
+#    public/download/DreamlandPassport.exe  … Windows で tools/build-windows.bat を
+#                                    実行して dist/DreamlandPassport.exe ができていれば、それも置く
 #
 #  Mac / Linux で:  bash tools/pack-connector.sh
 #  作ったファイルはコミットする（Vercel が public/ をそのまま配る）。
-#  サイトの既定は exe。ZIP を配るときは VITE_CONNECTOR_URL=/download/MT5Automatic.zip にする。
+#  サイトの既定は exe。ZIP を配るときは VITE_CONNECTOR_URL=/download/DreamlandPassport.zip にする。
 # ================================================================
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 OUT=public/download
-STAGE="$(mktemp -d)/MT5Automatic"
+STAGE="$(mktemp -d)/DreamlandPassport"
 mkdir -p "$OUT" "$STAGE/bridge" "$STAGE/tools"
 
 # お客様のPCで使うものだけ。venv・.env・ログ・中継サーバー・画面は入れない
@@ -47,10 +47,10 @@ MT5 のパスワードを入力する場面はありません。
 うまくいかないとき: %LOCALAPPDATA%\AITrader\connect.log をお送りください
 TXT
 
-rm -f "$OUT/MT5Automatic.zip"
+rm -f "$OUT/DreamlandPassport.zip"
 # macOS の zip は日本語ファイル名に UTF-8 の印を付けないので、Windows で展開すると
 # 文字化けする。Python の zipfile なら印が付く。
-python3 - "$STAGE" "$OUT/MT5Automatic.zip" <<'PY'
+python3 - "$STAGE" "$OUT/DreamlandPassport.zip" <<'PY'
 import os, sys, zipfile
 stage, out = sys.argv[1], sys.argv[2]
 root = os.path.dirname(stage)
@@ -67,9 +67,9 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
                 z.write(full, name)
 PY
 rm -rf "$(dirname "$STAGE")"
-echo "できました: $OUT/MT5Automatic.zip ($(du -h "$OUT/MT5Automatic.zip" | cut -f1))"
+echo "できました: $OUT/MT5Automatic.zip ($(du -h "$OUT/DreamlandPassport.zip" | cut -f1))"
 
-if [ -f dist/MT5Automatic.exe ]; then
-  cp dist/MT5Automatic.exe "$OUT/MT5Automatic.exe"
+if [ -f dist/DreamlandPassport.exe ]; then
+  cp dist/DreamlandPassport.exe "$OUT/DreamlandPassport.exe"
   echo "できました: $OUT/MT5Automatic.exe"
 fi

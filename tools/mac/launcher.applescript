@@ -1,4 +1,4 @@
--- MT5 Automatic（Mac）の .app の中身。
+-- ドリームランド・パスポート（Mac）の .app の中身。本体のファイル名（MT5Automatic-<機種>）と写し先は変えていない。
 --
 -- 役割は 2 つだけ:
 --   1. ダブルクリックされたら、同梱の本体（Resources/bin/MT5Automatic-<機種>）を起こす
@@ -41,7 +41,7 @@ on launchWith(args)
 	do shell script quoted form of binPath() & " " & args & " > /dev/null 2>&1 &"
 end launchWith
 
--- 同じ .app が何個も残っていると（Downloads に「MT5 Automatic 2.app」「3.app」…）、
+-- 同じ .app が何個も残っていると（Downloads に「ドリームランド・パスポート 2.app」「3.app」…）、
 -- サイトのボタン（aitrader://）がどれに届くか分からない。古い版に届くと、中の本体が
 -- Gatekeeper に止められて何も起きない（実機で起きた）。
 -- 開かれた .app を登録し直して、以後の aitrader:// はこちらに来るようにする。

@@ -100,7 +100,7 @@ api/
 
 **画面・中継・ブリッジ・AI までつながっている。**
 
-- 接続ツールは「接続ツールをダウンロード」ボタンで配る（`public/download/MT5Automatic.exe`、Python 不要）
+- 接続ツールは「接続ツールをダウンロード」ボタンで配る（`public/download/DreamlandPassport.exe`、Python 不要）
 - 口座番号・稼働状況・成績はブリッジが MT5 から返した値だけを表示する
 - 研究員の回答は Gemini（`GEMINI_API_KEY`）。鍵が無いときは `characters.ts` の定型文
 
@@ -123,7 +123,7 @@ WebSocketで指令を待ち受け、MT5のグローバル変数を書き換え�
 
 1. **AI の鍵** — Vercel の環境変数に `GEMINI_API_KEY` を入れる（下の「研究員の AI」参照）
 2. **接続ツールの更新** — `connect.py` や `bridge/` を変えたら、Windows で `tools/build-windows.bat`
-   を実行して `public/download/MT5Automatic.exe` を置き直す
+   を実行して `public/download/DreamlandPassport.exe` を置き直す
 
 中継サーバー（画面とブリッジをつなぐ WebSocket）は `server/` にあり、Render で動いている。
 手順は [DEPLOY.md](DEPLOY.md)。

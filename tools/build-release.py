@@ -7,9 +7,9 @@
   1. EA を用意する           （bridge に .ex5 があればそのまま使う。
                               無いときだけ MetaEditor を探してコンパイルする）
   2. 版と中身の控えを作る    （ea_manifest.json）
-  3. 接続ツールをビルドする  （MT5Automatic.exe）
+  3. 接続ツールをビルドする  （DreamlandPassport.exe）
   4. インストーラーを作る    （Inno Setup。入っていなければ飛ばす）
-  5. 配布用の置き場へコピー  （public\\download\\MT5Automatic.exe）
+  5. 配布用の置き場へコピー  （public\\download\\DreamlandPassport.exe）
 
 途中で失敗したら、そこで止めて「何をすればいいか」を出す。
 """
@@ -302,10 +302,10 @@ def make_manifest(ex5: Path) -> dict:
 def stop_running() -> None:
     """裏で動いているブリッジを止める。
 
-    動いたままだと dist\\MT5Automatic.exe を掴んでいて、作り直せない
+    動いたままだと dist\\DreamlandPassport.exe を掴んでいて、作り直せない
     （PermissionError: アクセスが拒否されました）。
     """
-    exe = ROOT / "dist" / "MT5Automatic.exe"
+    exe = ROOT / "dist" / "DreamlandPassport.exe"
     if not exe.is_file():
         return
     try:
@@ -326,17 +326,17 @@ def stop_running() -> None:
         except OSError:
             pass
         try:
-            exe.rename(exe.with_name(f"MT5Automatic.old-{int(time.time())}.exe"))
+            exe.rename(exe.with_name(f"DreamlandPassport.old-{int(time.time())}.exe"))
             print("  … 使用中だったので、古いほうを退かしました")
             return
         except OSError:
             time.sleep(2)
-    print("  ！ dist\\MT5Automatic.exe を退かせません。停止する.bat を押してからやり直してください")
+    print("  ！ dist\\DreamlandPassport.exe を退かせません。停止する.bat を押してからやり直してください")
 
 
 def sweep_old_exe() -> None:
     """退かした古い exe を、使われていなければ消す。"""
-    for path in (ROOT / "dist").glob("MT5Automatic.old-*.exe"):
+    for path in (ROOT / "dist").glob("DreamlandPassport.old-*.exe"):
         try:
             path.unlink()
         except OSError:
@@ -351,7 +351,7 @@ def build_exe() -> Path:
     sweep_old_exe()
     print("  … ビルド中（数分かかります）")
     result = subprocess.run([str(bat), "--from-release"], cwd=str(ROOT), shell=True)
-    exe = ROOT / "dist" / "MT5Automatic.exe"
+    exe = ROOT / "dist" / "DreamlandPassport.exe"
     if result.returncode != 0 or not exe.is_file():
         die(
             "接続ツールを作れませんでした",
@@ -359,7 +359,7 @@ def build_exe() -> Path:
             "  tools\\停止する.bat を押してから、もう一度実行してください。",
             "  それ以外なら、上に出ている PyInstaller の記録を見てください。",
         )
-    ok(f"MT5Automatic.exe（{exe.stat().st_size:,} バイト）")
+    ok(f"DreamlandPassport.exe（{exe.stat().st_size:,} バイト）")
     return exe
 
 
@@ -425,7 +425,7 @@ def install_iscc() -> Path | None:
 
 def build_installer() -> Path | None:
     iscc = find_iscc()
-    iss = ROOT / "tools" / "MT5Automatic.iss"
+    iss = ROOT / "tools" / "DreamlandPassport.iss"
     if iscc is None:
         print("  － Inno Setup が入っていません（お客様に渡すインストーラーを作る道具）")
         answer = input("     いま入れますか？ (Y/n): ").strip().lower()
@@ -437,7 +437,7 @@ def build_installer() -> Path | None:
             return None
     print(f"  … {iscc.name} で作成中")
     result = subprocess.run([str(iscc), str(iss)], cwd=str(ROOT / "tools"), capture_output=True, text=True)
-    out = ROOT / "tools" / "installer" / "MT5Automatic-Setup.exe"
+    out = ROOT / "tools" / "installer" / "DreamlandPassport-Setup.exe"
     if result.returncode != 0 or not out.is_file():
         tail = "\n      ".join((result.stdout or result.stderr or "").strip().splitlines()[-8:])
         die("インストーラーを作れませんでした", f"記録:\n      {tail}" if tail else "")
@@ -454,16 +454,16 @@ def place(exe: Path, placeholder: str) -> None:
         print("     本物の .ex5 に差し替えてから、もう一度実行してください。")
         print("     ここまでの exe とインストーラーは、配線の確認には使えます。")
         return
-    target = ROOT / "public" / "download" / "MT5Automatic.exe"
+    target = ROOT / "public" / "download" / "DreamlandPassport.exe"
     target.parent.mkdir(parents=True, exist_ok=True)
     before = target.stat().st_size if target.is_file() else 0
     target.write_bytes(exe.read_bytes())
-    ok(f"public\\download\\MT5Automatic.exe を置き換えました（{before:,} → {target.stat().st_size:,} バイト）")
+    ok(f"public\\download\\DreamlandPassport.exe を置き換えました（{before:,} → {target.stat().st_size:,} バイト）")
 
 
 def main() -> int:
     print("=" * 62)
-    print("  MT5 Automatic を作る")
+    print("  ドリームランド・パスポート を作る")
     print("=" * 62)
 
     step("EA を用意する")
@@ -493,7 +493,7 @@ def main() -> int:
     print("  できました")
     print("=" * 62)
     print(f"  EA          : bridge\\{EA_NAME}.ex5（版 {manifest['version']}）")
-    print("  接続ツール  : dist\\MT5Automatic.exe")
+    print("  接続ツール  : dist\\DreamlandPassport.exe")
     if installer:
         print(f"  インストーラー: {installer}")
     print()
@@ -505,7 +505,7 @@ def main() -> int:
     print("    2. リリース手順.md の実機テスト A〜E を行う")
     print("    3. 問題なければ、下の2つをコミットして push する")
     print(f"         bridge\\{EA_NAME}.ex5")
-    print("         public\\download\\MT5Automatic.exe")
+    print("         public\\download\\DreamlandPassport.exe")
     print()
     return 0
 

@@ -1,7 +1,7 @@
-# お客様に配る exe（MT5Automatic.exe）を、GitHub の Windows で自動で作る。
+# お客様に配る exe（DreamlandPassport.exe）を、GitHub の Windows で自動で作る。
 #
 # connect.py や bridge/ を変えて push すると、ここが exe を作り直して
-# public/download/MT5Automatic.exe を commit する → Vercel がサイトに載せる。
+# public/download/DreamlandPassport.exe を commit する → Vercel がサイトに載せる。
 # 手元の Windows で 3_リリースする.bat を押す必要は無くなる
 # （押しても構わない。同じものができる）。
 #
@@ -71,18 +71,18 @@ jobs:
       - name: できたか確かめる
         shell: pwsh
         run: |
-          $exe = "public/download/MT5Automatic.exe"
+          $exe = "public/download/DreamlandPassport.exe"
           if (-not (Test-Path $exe)) { throw "exe ができていません" }
           $size = (Get-Item $exe).Length
           if ($size -lt 20000000) { throw "exe が小さすぎます ($size bytes)" }
-          Write-Host "MT5Automatic.exe: $size bytes"
+          Write-Host "DreamlandPassport.exe: $size bytes"
 
       - name: サイトの置き場へ commit する
         shell: pwsh
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/download/MT5Automatic.exe
+          git add public/download/DreamlandPassport.exe
           if (git diff --cached --quiet) {
             Write-Host "exe は変わっていません（commit なし）"
             exit 0

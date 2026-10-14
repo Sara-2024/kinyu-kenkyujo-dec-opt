@@ -12,7 +12,7 @@
 
 サイトに口座パスワードは一切渡さない。
 
-  MT5Automatic.exe をダブルクリック        … 初回は MT5 を探して EA を置くだけ（画面つき）
+  DreamlandPassport.exe をダブルクリック   … 初回は MT5 を探して EA を置くだけ（画面つき）
                                          連携済みなら、これまでどおり裏でつなぎ直す
   MT5Automatic.vbs をダブルクリック       … 画面を出さずに全部やる
   python connect.py --console          … 経過を画面に出す（調査用）
@@ -89,12 +89,14 @@ OLD_EA_NAMES = (
 )
 INCLUDE_FILES = ("TradingGate.mqh",)
 
-PRODUCT_NAME = "MT5 Automatic"
-APP_NAME = "MT5 Automatic"
+# お客様に見える名前（aitrader:// の登録名・ブラウザの「開きますか？」）。ファイル名は DreamlandPassport.exe
+PRODUCT_NAME = "ドリームランド・パスポート"
+# Windows の自動起動（Run）に登録する名前。前の名前は LEGACY_APP_NAMES で片づける
+APP_NAME = "DreamlandPassport"
 PROTOCOL = "aitrader"
 LEGACY_PROTOCOL = "trelab"
 # 前の版が自動起動に登録していた名前。見つけたら消して、いまの名前で登録し直す
-LEGACY_APP_NAMES = ("AIトレーダー", "TrelabConnect")
+LEGACY_APP_NAMES = ("MT5 Automatic", "AIトレーダー", "TrelabConnect")
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 # このPCの「部屋」は会員ID（UUID）だけ。ここを緩くしていたので、
 # 悪意あるページが `aitrader://connect?room=<自分のID>` を開かせるだけで、
@@ -782,7 +784,7 @@ def process_image(pid: int) -> str:
 # （MT5Automatic に変えたとき足し忘れ、動いている古いブリッジを「触らない」と判定して
 #   止められず、新しいブリッジも起動しないまま「接続完了」と言っていた）
 BRIDGE_IMAGE_HINTS = tuple(
-    sorted({"python", "aitrader", "trelab", "mt5automatic", Path(sys.executable).stem.lower()})
+    sorted({"python", "aitrader", "trelab", "mt5automatic", "dreamlandpassport", Path(sys.executable).stem.lower()})
 )
 
 
@@ -1958,7 +1960,7 @@ def main() -> int:
     # 同じアプリがもう開いていれば、そちらに任せる（二つ同時に置きに行かない）
     if not hold_single_instance():
         log("すでに開いているので、こちらは何もしない")
-        installer_ui.message_box("パスポート（MT5 Automatic）は、すでに開いています。\n開いている画面をご覧ください。")
+        installer_ui.message_box("パスポートは、すでに開いています。\n開いている画面をご覧ください。")
         return 0
 
     # 部屋が渡されていない（＝サイトからではなく、自分で開いた）とき。

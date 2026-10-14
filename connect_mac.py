@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MT5 Automatic の Mac 版の入口。
+"""ドリームランド・パスポート（接続ツール）の Mac 版の入口。
 
 Windows 版の本体（connect.py）をそのまま読み込み、OS に依存する関数だけ
 ここで差し替えて動かす。初回の設定（EA を置く）・サイトからの合図（token）・
@@ -298,7 +298,7 @@ def start_bridge(session: dict | None = None) -> None:
             log("ブリッジはすでに動いています")
             return
         if connect.bridge_already_running():
-            log("古いブリッジを終了できませんでした。アクティビティモニタで MT5Automatic を終了してから、もう一度お試しください")
+            log("古いブリッジを終了できませんでした。アクティビティモニタで MT5Automatic（パスポートの本体）を終了してから、もう一度お試しください")
             return
     cmd = [sys.executable, "--run-bridge"] if FROZEN else [sys.executable, str(HERE / "connect_mac.py"), "--run-bridge"]
     log(f"ブリッジを裏側で起動します（接続先 {connect.relay_url()}）")
@@ -378,7 +378,7 @@ def _patch() -> None:
     connect.ensure_mt5 = ensure_mt5
     connect.register_protocol = register_protocol
     # --status の「aitrader:// の登録」は Windows のレジストリを見る。Mac では .app が受ける
-    connect._protocol_command = lambda: "MT5 Automatic.app（Info.plist の CFBundleURLTypes）"
+    connect._protocol_command = lambda: "ドリームランド・パスポート.app（Info.plist の CFBundleURLTypes）"
     connect.register_startup = register_startup
     connect.startup_command = startup_command
     connect.unregister_startup = unregister_startup

@@ -269,7 +269,7 @@ export function Fleet() {
               <p className="mt-1 text-[15px] text-slate-300">{COMMAND_NOTE[confirm]}</p>
               {onlineCount < targetRooms.length && (
                 <p className="mt-1 text-[14px]" style={{ color: '#ffd23e' }}>
-                  つながっていない {targetRooms.length - onlineCount} 台には、次にその PC のパスポート（MT5 Automatic）がつながった瞬間に渡します。
+                  つながっていない {targetRooms.length - onlineCount} 台には、次にその PC のパスポートがつながった瞬間に渡します。
                 </p>
               )}
               <div className="mt-3 flex flex-wrap gap-3">
@@ -428,7 +428,7 @@ export function Fleet() {
               {allRows.length === 0 && (
                 <tr>
                   <td colSpan={13} className="px-3 py-8 text-center text-slate-500">
-                    まだ口座がありません。口座の PC でパスポート（MT5 Automatic）がサイトと連携すると、ここに「対象」として出ます。
+                    まだ口座がありません。口座の PC でパスポートがサイトと連携すると、ここに「対象」として出ます。
                   </td>
                 </tr>
               )}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MT5 Automatic の Mac 版（MT5 Automatic.app）を作って、サイトの置き場に ZIP で置く。
+# ドリームランド・パスポート（MT5 Automatic 改め）の Mac 版（ドリームランド・パスポート.app）を作って、サイトの置き場に ZIP で置く。
 #
 #   bash tools/mac/build-mac.sh              … 本体を作って .app に包む（この Mac で作れる機種ぶん）
 #   bash tools/mac/build-mac.sh --binary     … 本体（dist/MT5Automatic-<機種>）だけ作る
@@ -7,8 +7,8 @@
 #
 # できるもの:
 #   dist/MT5Automatic-arm64 / dist/MT5Automatic-x86_64 … PyInstaller で 1 ファイルにした本体
-#   dist/MT5 Automatic.app                 … 配るアプリ（署名なし。右クリック→開く で通る）
-#   public/download/MT5Automatic-mac.zip   … サイトの「接続ツールをダウンロード（Mac）」が配るもの
+#   dist/ドリームランド・パスポート.app                 … 配るアプリ（署名なし。右クリック→開く で通る）
+#   public/download/DreamlandPassport-mac.zip   … サイトの「接続ツールをダウンロード（Mac）」が配るもの
 #
 # .app の中身:
 #   Contents/Resources/bin/MT5Automatic-arm64   … Apple シリコン用
@@ -25,12 +25,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-APP_NAME="MT5 Automatic"
+APP_NAME="ドリームランド・パスポート"
 BIN_NAME="MT5Automatic"
 BUNDLE_ID="jp.trelab.mt5automatic"
 DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
-ZIP="$ROOT/public/download/MT5Automatic-mac.zip"
+ZIP="$ROOT/public/download/DreamlandPassport-mac.zip"
 PY="${PYTHON:-python3}"
 MODE="${1:-all}"
 
@@ -138,7 +138,7 @@ info["CFBundleShortVersionString"] = "1.0"
 info["CFBundleVersion"] = build
 # サイトのボタン（aitrader://）で起こせるように
 info["CFBundleURLTypes"] = [{
-    "CFBundleURLName": "MT5 Automatic connect",
+    "CFBundleURLName": "Dreamland Passport connect",
     "CFBundleURLSchemes": ["aitrader"],
     "LSHandlerRank": "Owner",
 }]

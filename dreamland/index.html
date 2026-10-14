@@ -544,10 +544,10 @@ const LINKS = {
   accountManual: "manual/",                // 口座開設マニュアル（ロビーと同じ世界観で作ったウェブ版。dreamland/manual/）
   winPdf:        "#TODO_WIN_PDF",          // Windows PDFマニュアル
   winVideo:      "#TODO_WIN_VIDEO",        // Windows 動画マニュアル
-  winFile:       SITE + "/download/MT5Automatic.exe",      // Windows用ファイル
+  winFile:       SITE + "/download/DreamlandPassport.exe",      // Windows用ファイル
   macPdf:        "#TODO_MAC_PDF",          // Mac PDFマニュアル
   macVideo:      "#TODO_MAC_VIDEO",        // Mac 動画マニュアル
-  macFile:       SITE + "/download/MT5Automatic-mac.zip",  // Mac用ファイル
+  macFile:       SITE + "/download/DreamlandPassport-mac.zip",  // Mac用ファイル
   support:       "https://lin.ee/V0ikrqq",  // サポートLINE
   register:      SITE + "/api/dreamland",  // 口座の登録を送る先（サイトのサーバー関数）
   lobby:         SITE + "/api/lobby",      // 合言葉の確認・会員登録・接続の合図（サイトのサーバー関数）
@@ -679,9 +679,9 @@ const SCRIPT = {
       choices: [["登録済みの口座でログインする", "login"], ["ほかのもの", "start"]] },
     login: { say: "すでに登録した口座ですね。口座番号と、サイトに入るパスワードを入力してください。", docs: "login",
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
-    launch: { say: "パスポートを呼び出しています。お使いのパソコンにパスポートが入っていれば、このまま数秒でつながります。\nブラウザに「MT5 Automatic を開きますか？」と出たら「開く」を押してください。", docs: "progress",
+    launch: { say: "パスポートを呼び出しています。お使いのパソコンにパスポートが入っていれば、このまま数秒でつながります。\nブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。", docs: "progress",
       choices: [["まだ入れていない（ダウンロードへ）", "download"], ["ほかのもの", "start"]] },
-    download: { say: "このパソコンには、まだパスポートが入っていないようです。下のボタンからダウンロードして、一度だけ開いてください（ファイルの名前は MT5 Automatic です）。\n設置が終わってこの画面に戻ってくると、自動でつなぎにいきます。進まないときは「設置が終わった（つなぐ）」を押してください。", docs: "download",
+    download: { say: "このパソコンには、まだパスポートが入っていないようです。下のボタンからダウンロードして、一度だけ開いてください。\n設置が終わってこの画面に戻ってくると、自動でつなぎにいきます。進まないときは「設置が終わった（つなぐ）」を押してください。", docs: "download",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
@@ -702,7 +702,7 @@ const SCRIPT = {
       choices: () => [...(needSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), [`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""], ["ほかのもの", "start"]] },
   },
   tool: {
-    start: { say: "パスポートカウンターのハルです。\nドリームランド・パスポートは、お手元の MT5 に渡航の許可を与える接続ツールです（パソコン上の名前は MT5 Automatic）。設置そのものは、サービスカウンターのソラが合言葉を確かめてから進めます。こちらでは、ツールの受け取りと手順のご説明をしています。",
+    start: { say: "パスポートカウンターのハルです。\nドリームランド・パスポートは、お手元の MT5 に渡航の許可を与える接続ツールです。設置そのものは、サービスカウンターのソラが合言葉を確かめてから進めます。こちらでは、ツールの受け取りと手順のご説明をしています。",
       choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["パスポートのファイルだけ受け取る", "os"], ["発行の手順を知りたい", "ea"], ["どんな仕組み？", "how"], ["ありがとう", "close"]] },
     os: { say: "お使いのパソコンはどちらですか？（パスポートは Windows が基本です。Mac の方は Mac 用をお渡しします）", choices: "os:win,mac" },
     win: { say: "Windows 用のパスポートです。\nダウンロードして、一度ひらいてください。お使いの MT5 を見つけて、ドリームランドの運用システム（EA）を置くところまで自動で進みます。", docs: "winTool",
@@ -881,7 +881,7 @@ const SCRIPT = {
       + doc("▶", "Windows 動画マニュアル", "止めながら一緒に進められます", "winVideo", "見る"),
     macManual: () => doc("PDF", "Mac 設置マニュアル", "画面の写真つき。印刷もできます", "macPdf", "ひらく")
       + doc("▶", "Mac 動画マニュアル", "止めながら一緒に進められます", "macVideo", "見る"),
-    winTool: () => doc("↓", "パスポート（Windows 用）", "パソコン上の名前は MT5 Automatic。ダウンロードして一度ひらく", "winFile", "受け取る")
+    winTool: () => doc("↓", "パスポート（Windows 用）", "ダウンロードして一度ひらく", "winFile", "受け取る")
       + doc("PDF", "Windows 設置マニュアル", "手順を見ながら進めたい方はこちら", "winPdf", "ひらく"),
     macTool: () => doc("↓", "パスポート（Mac 用）", "Apple シリコン・Intel どちらも同じファイル", "macFile", "受け取る")
       + doc("PDF", "Mac 設置マニュアル", "手順を見ながら進めたい方はこちら", "macPdf", "ひらく"),
@@ -954,17 +954,17 @@ const SCRIPT = {
     download: () => {
       const link = osNow() === "mac" ? "macFile" : "winFile";
       const steps = osNow() === "mac" ? [
-          ["ダウンロードした ZIP を開く", "ダウンロード欄の「MT5 Automatic.zip」をクリック（Safari は自動で展開されます）。「MT5 Automatic」が出ます"],
-          ["「MT5 Automatic」をダブルクリック →「完了」", "「開けません」と出たら「完了」を押します。「ゴミ箱に入れる」は押さないでください"],
+          ["ダウンロードした ZIP を開く", "ダウンロード欄の「DreamlandPassport-mac.zip」をクリック（Safari は自動で展開されます）。「ドリームランド・パスポート」が出ます"],
+          ["「ドリームランド・パスポート」をダブルクリック →「完了」", "「開けません」と出たら「完了」を押します。「ゴミ箱に入れる」は押さないでください"],
           ["システム設定 →「このまま開く」", "「プライバシーとセキュリティ」を下へスクロール →「このまま開く」→ Mac のパスワード。これは初回だけです"],
           ["ログインした MT5 を、このパソコンで開いておく", "口座にログインした MT5 を、この画面を開いているのと同じパソコンで開いたままにしてください（最小化していても大丈夫です）"],
           ["ゴールドのチャートにシステムを載せる", "MT5 の画面で：ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA_mac をゴールド（XAUUSD）のチャートへドラッグ →「アルゴ取引を許可」→ OK → 上の「アルゴ取引」を ON。Mac では、これが済むとパスポートが口座を読み取れます"],
-          ["設置が終わったら、この画面に戻る", "戻ると自動でパスポートを呼び出します。「MT5 Automatic を開きますか？」と出たら「開く」。進まないときは「設置が終わった（つなぐ）」を押してください"],
+          ["設置が終わったら、この画面に戻る", "戻ると自動でパスポートを呼び出します。「ドリームランド・パスポート を開きますか？」と出たら「開く」。進まないときは「設置が終わった（つなぐ）」を押してください"],
         ] : [
           ["ブラウザの警告が出たら「保存」", "「一般的にダウンロードされていません」と出たら、ダウンロード欄の「…」→「保存」（Edge は「保持」→「詳細表示」→「それでも保持」）"],
-          ["ダウンロードしたファイルを開く", "「MT5 Automatic」をダブルクリック。「Windows によって PC が保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません"],
+          ["ダウンロードしたファイルを開く", "「ドリームランド・パスポート」をダブルクリック。「Windows によって PC が保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません"],
           ["ログインした MT5 を、このパソコンで開いておく", "口座にログインした MT5 を、この画面を開いているのと同じパソコンで開いたままにしてください（最小化していても大丈夫です）"],
-          ["設置が終わったら、この画面に戻る", "戻ると自動でパスポートを呼び出します。「MT5 Automatic を開きますか？」と出たら「開く」。進まないときは「設置が終わった（つなぐ）」を押してください"],
+          ["設置が終わったら、この画面に戻る", "戻ると自動でパスポートを呼び出します。「ドリームランド・パスポート を開きますか？」と出たら「開く」。進まないときは「設置が終わった（つなぐ）」を押してください"],
         ];
       return `<a class="enter" data-link="${link}" data-download>パスポートをダウンロード（${osNow() === "mac" ? "Mac" : "Windows"} 用） <span aria-hidden="true">↓</span></a>
         <p class="note">お使いのパソコンが違うときは <button type="button" class="linklike" data-os="${osNow() === "mac" ? "win" : "mac"}">${osNow() === "mac" ? "Windows" : "Mac"} 用に切り替える</button></p>
@@ -1260,7 +1260,7 @@ const SCRIPT = {
         if (!body || !body.room || !body.room.bridge || flow.phase !== "download" || flow.relaunched) return;
         if (typeof body.room.since === "number" && body.room.since < flow.startedAt - DEFAULT_ROOM_FRESH_MS) return;
         flow.relaunched = true;
-        flow.note = "パスポートが起動しました。ブラウザに「MT5 Automatic を開きますか？」と出たら「開く」を押してください";
+        flow.note = "パスポートが起動しました。ブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください";
         const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
         issueAndLaunch();
       })

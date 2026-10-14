@@ -148,7 +148,7 @@ check("選んだ MT5 が無ければ、まず名指しせずにほかを探す",
 
 # ── 5-3) 古いブリッジを exe の名前で見分けられる（名前を変えても止められる） ──
 real_image = bridge_mod._process_image
-for image, expect in (("MT5Automatic.exe", True), ("AITrader.exe", True), ("pythonw.exe", True), ("notepad.exe", False)):
+for image, expect in (("DreamlandPassport.exe", True), ("MT5Automatic.exe", True), ("AITrader.exe", True), ("pythonw.exe", True), ("notepad.exe", False)):
     bridge_mod._process_image = lambda pid, _i=image: _i
     check(f"{image} はブリッジ{'として扱う' if expect else 'ではない'}", bridge_mod._is_bridge_process(4242) is expect)
 bridge_mod._process_image = real_image

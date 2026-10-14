@@ -197,7 +197,7 @@ def _is_bridge_process(pid: int) -> bool:
         return False
     # 前の名前（AITrader.exe）で動いている古いブリッジも、自分と同じ名前のものも相手にする。
     # exe の名前を変えたらここにも足す（connect.py の BRIDGE_IMAGE_HINTS と同じ考え方）
-    hints = ("python", "aitrader", "mt5automatic", "trelab", Path(sys.executable).name.lower())
+    hints = ("python", "aitrader", "mt5automatic", "dreamlandpassport", "trelab", Path(sys.executable).name.lower())
     return any(h in image for h in hints)
 
 

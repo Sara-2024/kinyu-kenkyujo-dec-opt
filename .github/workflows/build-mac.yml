@@ -1,8 +1,8 @@
-# お客様に配る Mac 版（MT5 Automatic.app）を、GitHub の macOS で自動で作る。
+# お客様に配る Mac 版（ドリームランド・パスポート.app）を、GitHub の macOS で自動で作る。
 #
 # connect.py / connect_mac.py / bridge/ / tools/mac/ を変えて push すると、
 #   1. Apple シリコン（macos-15）と Intel（macos-15-intel）で本体を 1 つずつ作り
-#   2. 1 つの .app にまとめて public/download/MT5Automatic-mac.zip を commit する
+#   2. 1 つの .app にまとめて public/download/DreamlandPassport-mac.zip を commit する
 # → Vercel がサイトに載せる（Windows 版の build-exe.yml と同じ流れ）。
 #
 # 署名はしない（Apple Developer の証明書が要る）。お客様は初回だけ
@@ -107,18 +107,18 @@ jobs:
 
       - name: できたか確かめる
         run: |
-          zip="public/download/MT5Automatic-mac.zip"
+          zip="public/download/DreamlandPassport-mac.zip"
           test -f "$zip" || { echo ".zip ができていません"; exit 1; }
           size=$(stat -f%z "$zip")
-          echo "MT5Automatic-mac.zip: $size bytes"
+          echo "DreamlandPassport-mac.zip: $size bytes"
           test "$size" -gt 10000000 || { echo ".zip が小さすぎます（2 機種ぶん入っていない？）"; exit 1; }
-          ls "dist/MT5 Automatic.app/Contents/Resources/bin/"
+          ls "dist/ドリームランド・パスポート.app/Contents/Resources/bin/"
 
       - name: サイトの置き場へ commit する
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/download/MT5Automatic-mac.zip
+          git add public/download/DreamlandPassport-mac.zip
           if git diff --cached --quiet; then
             echo ".zip は変わっていません（commit なし）"
             exit 0

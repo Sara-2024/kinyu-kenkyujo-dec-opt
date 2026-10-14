@@ -20,11 +20,11 @@ export function installSteps(kind: 'exe' | 'zip' | 'mac'): UserStep[] {
       {
         no: 1,
         title: 'ダウンロードした ZIP を開く',
-        detail: 'ダウンロード欄の「MT5Automatic-mac.zip」をクリック（Safari は自動で展開されます）。「MT5 Automatic」が出ます',
+        detail: 'ダウンロード欄の「DreamlandPassport-mac.zip」をクリック（Safari は自動で展開されます）。「ドリームランド・パスポート」が出ます',
       },
       {
         no: 2,
-        title: '「MT5 Automatic」をダブルクリック → 「完了」',
+        title: '「ドリームランド・パスポート」をダブルクリック → 「完了」',
         detail: '「開けません」「Apple は確認できませんでした」と出たら「完了」を押します。「ゴミ箱に入れる」は押さないでください',
         figure: 'macNotOpened',
       },
@@ -32,7 +32,7 @@ export function installSteps(kind: 'exe' | 'zip' | 'mac'): UserStep[] {
         no: 3,
         title: 'システム設定 →「このまま開く」',
         detail:
-          '画面左上の  →「システム設定」→ 左の「プライバシーとセキュリティ」→ 下へスクロール →「"MT5 Automatic" は Mac を保護するためにブロックされました」の「このまま開く」→ Mac のパスワード（または Touch ID）→ もう一度「このまま開く」。これは初回だけです。macOS 14 以前は、右クリック →「開く」→「開く」で通ります',
+          '画面左上の  →「システム設定」→ 左の「プライバシーとセキュリティ」→ 下へスクロール →「"ドリームランド・パスポート" は Mac を保護するためにブロックされました」の「このまま開く」→ Mac のパスワード（または Touch ID）→ もう一度「このまま開く」。これは初回だけです。macOS 14 以前は、右クリック →「開く」→「開く」で通ります',
         figure: 'macOpenAnyway',
       },
       { no: 4, title: 'ログインした MT5 を、このパソコンで開いておく', detail: '口座にログインした MT5 を、この画面を開いているのと同じパソコンで開いたままにしてください（最小化していても大丈夫です）' },
@@ -51,7 +51,7 @@ export function installSteps(kind: 'exe' | 'zip' | 'mac'): UserStep[] {
       {
         no: 2,
         title: 'ダウンロードしたファイルを開く',
-        detail: '「MT5 Automatic」をダブルクリック。「WindowsによってPCが保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません',
+        detail: '「ドリームランド・パスポート」をダブルクリック。「WindowsによってPCが保護されました」と出たら「詳細情報」→「実行」。黒い画面は出ません',
         figure: 'smartScreen',
       },
       { no: 3, title: 'ログインした MT5 を、このパソコンで開いておく', detail: '口座にログインした MT5 を、この画面を開いているのと同じパソコンで開いたままにしてください（最小化していても大丈夫です）' },
@@ -59,7 +59,7 @@ export function installSteps(kind: 'exe' | 'zip' | 'mac'): UserStep[] {
     ]
   }
   return [
-    { no: 1, title: 'ZIPを展開する', detail: 'ダウンロードした MT5Automatic.zip を右クリック →「すべて展開」' },
+    { no: 1, title: 'ZIPを展開する', detail: 'ダウンロードした DreamlandPassport.zip を右クリック →「すべて展開」' },
     { no: 2, title: '「はじめる.bat」を開く', detail: '展開したフォルダの中にあります。画面の案内どおり Enter を押すだけ（初回は数分かかります）' },
     { no: 3, title: 'ログインした MT5 を、このパソコンで開いておく', detail: '口座にログインした MT5 を、この画面を開いているのと同じパソコンで開いたままにしてください（最小化していても大丈夫です）' },
     { no: 4, title: 'あとは待つだけ', detail: 'ツールが起動すると、この画面が自動で先へ進みます' },
