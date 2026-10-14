@@ -1188,6 +1188,7 @@ def tell(ui, message: str, hint: str = "") -> None:
     黙って終わると、お客様には「壊れている」としか見えない。
     """
     log(f"{message} {hint}".strip())
+    release_single_instance()  # 窓を出して待つ前に、次の合図を受け取れるようにしておく
     if ui:
         ui.fail(message, hint)
     else:
@@ -1219,6 +1220,27 @@ def hold_single_instance() -> bool:
         return True
     except Exception:  # noqa: BLE001
         return True
+
+
+def release_single_instance() -> None:
+    """二重起動防止を外す。
+
+    「接続完了」や失敗の窓を開いたまま待つ前に呼ぶ。この窓はお客様が閉じるまで
+    残るので、持ったままだと、そのあとサイトの合図（aitrader://）で開いた 2 つ目が
+    「すでに開いています」で何もせず終わり、合図（使い捨て）だけが消える。
+    ロビーは名乗りを待ち続け、「パスポートを呼び出しています」から一生進まない（実機で起きた）。
+    窓を出して待つだけの段階では、置く・つなぐの作業は終わっているので、外してよい。
+    """
+    global _INSTANCE_MUTEX
+    if _INSTANCE_MUTEX is None:
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.kernel32.CloseHandle(_INSTANCE_MUTEX)
+    except Exception:  # noqa: BLE001
+        pass
+    _INSTANCE_MUTEX = None
 
 
 def setup_phase1() -> int:
@@ -1465,6 +1487,7 @@ def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool, acc
             where = beat["symbol"] or "チャート"
             lines.append(f"{where} で動いています。準備ができました。")
             lines.append("このアプリは閉じていただいて構いません。")
+            release_single_instance()
             ui.finish(lines, ok=True)
             return
 
@@ -1597,6 +1620,7 @@ def choose_terminal() -> int:
         if shown:
             lines.append(f"{shown} を気配値表示に出しました。")
         lines.append("このアプリは閉じていただいて構いません。")
+        release_single_instance()
         ui.finish(lines, ok=True)
     return 0
 
@@ -1784,6 +1808,7 @@ def connect_all(room: str = "", show: bool = False) -> int:
         # ブリッジは同じ exe をもう一度展開して起きるので、名乗り出るまで 6〜15 秒かかる。
         seen = relay_sees_us()
         lines = connect_result_lines(session, seen)
+        release_single_instance()  # 窓を開いたままでも、次にサイトから呼ばれたら動けるように
         if ui:
             # MT5 につながっていれば設定は済んでいる。中継にまだ届いていないのは
             # 「失敗」ではなく「時間がかかっている」だけなので、見出しは完了にする
@@ -1990,6 +2015,19 @@ def main() -> int:
             return connect_all("")
         return code
 
+    # 同じアプリがもう開いていれば、そちらに任せる（二つ同時に置きに行かない）。
+    # 合図（使い捨て）を確かめる前に見る。あとで見ると、合図だけ消えて何も起きない。
+    if not hold_single_instance():
+        log("すでに開いているので、こちらは何もしない")
+        if connect_token:
+            installer_ui.message_box(
+                "パスポートの画面が開いたままです。\n\n"
+                "その画面を閉じてから、サイトの「設置が終わった（つなぐ）」をもう一度押してください。"
+            )
+        else:
+            installer_ui.message_box("パスポートは、すでに開いています。\n開いている画面をご覧ください。")
+        return 0
+
     # サイトの「MT5と連携する」から呼ばれたとき。
     # 合図が正しいときだけ連携する（アプリ単体では連携できない）。
     if connect_token:
@@ -2013,12 +2051,6 @@ def main() -> int:
     # ログインのたびに画面が開いてしまう（古い版が登録した自動起動が残っている PC）。
     if "--startup" in args and not connect_state.is_connected():
         log("自動起動で呼ばれたが、まだ連携していないので何もしない")
-        return 0
-
-    # 同じアプリがもう開いていれば、そちらに任せる（二つ同時に置きに行かない）
-    if not hold_single_instance():
-        log("すでに開いているので、こちらは何もしない")
-        installer_ui.message_box("パスポートは、すでに開いています。\n開いている画面をご覧ください。")
         return 0
 
     # 部屋が渡されていない（＝サイトからではなく、自分で開いた）とき。
