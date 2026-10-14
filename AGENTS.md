@@ -483,6 +483,19 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   （ロイヤルの人がファーストへ、ファーストの人がロイヤルへ行けない）。決まったプランは `localStorage` の
   `dreamland.plan`、合言葉そのものは登録に要るので `sessionStorage`（タブを閉じるまで）に置く。
   `supabase/migrations/20261013_plan_passwords.sql`（`members.plan` もここで足す。`phase2_test.py` 8-7 が schema.sql と見比べる）。
+- **パスポートは「ダウンロードして開くだけ」で口座に紐づく（2026-10-14 から。Windows）。**
+  ロビーは Windows 用を同じドメイン（`/download/…` を `dreamland/vercel.json` の rewrite で本体サイトへ）から
+  **「DreamlandPassport-<合図>.exe」** という名前で配る（`startDownload`。押した瞬間に `connect_token` を発行して
+  ダウンロード名に付ける）。パスポートは引数なしで開かれ、まだ連携していなければ、自分のファイル名の合図で
+  連携する（`connect.py` の `connect_token_from_exe_name`。連携済み・`--startup` などの引数ありでは見ない）。
+  だからロビーの「設置が終わった（つなぐ）」は **呼び出さずに名乗りを待つだけ**（`startConnect(idx, "wait")` →
+  `waiting`）。`aitrader://` で呼ぶ（ブラウザに「開きますか？」が出る）のは、「それでもつながらない（呼び出す）」と
+  「もう入れてある（呼び出す）」（`"launch"`）、Mac、以前つないだことのある端末だけ。戻ってきたときに勝手に呼び出さない。
+  合図の期限は 60 分（`supabase/migrations/20261014_connect_token_ttl.sql`。流すまでは 5 分）。
+  同じ口座で「登録直後」は、この端末で一度もつないでいなければダウンロードの案内から始める（お客様は最初は持っていない）。
+- **お客様はサイトのパスワードを持たない。** パスポートの発行（口座をつなぐ）で聞くのは口座番号とお名前だけ。
+  会員のパスワードはロビーが口座番号と合言葉から同じものを作って使う（`derivedPassword`。別の端末でも同じ会員に入れる）。
+  サーバー（`auth_register` / `auth_login`）は変えていない。以前にパスワード付きで登録した口座だけ `loginpw`（入力）に回す。
 - **接続ツールの設置は、サービスカウンターの中で本物の連携をする。** 本体サイトの初期設定（ユイ）と同じ仕組みを
   ロビーの JS に移したもの：合言葉 → 口座をつなぐ（`/api/lobby` の `register`。会員 ＝ 口座番号なので、
   口座ごとに会員ができる。登録済みなら `login`）→ 合図を発行（`connect_token`）して `aitrader://connect?token=`
