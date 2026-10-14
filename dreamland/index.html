@@ -61,8 +61,8 @@ a{color:inherit}
 .staff--yui{left:12.2%;top:69%;width:6.4%;animation-delay:-1.4s}
 .staff--minato{left:50%;top:60.5%;width:5.2%}
 .staff--sora{left:87%;top:67.5%;width:5.2%;animation-delay:-2.7s}
-.staff--haru{left:31%;top:77%;width:5%;animation-delay:-3.6s}
-@media (max-width:760px){.staff--yui{left:14%;top:70%;width:13%}.staff--minato{left:50%;top:61%;width:11%}.staff--sora{left:86%;top:69%;width:11%}.staff--haru{left:34%;top:76%;width:10%}}
+
+@media (max-width:760px){.staff--yui{left:14%;top:70%;width:13%}.staff--minato{left:50%;top:61%;width:11%}.staff--sora{left:86%;top:69%;width:11%}}
 @keyframes bob{0%,100%{transform:translate(-50%,-100%)}50%{transform:translate(-50%,calc(-100% - 5px))}}
 
 /* ── ヘッダー：参考サイトの brand / main-nav ── */
@@ -134,7 +134,6 @@ a{color:inherit}
 .pin:hover .pin__hint,.pin:focus-visible .pin__hint,.pin.is-here .pin__hint{opacity:1}
 .pin--goal .pin__symbol{color:#fff;background:linear-gradient(120deg,var(--teal-a),var(--teal-b));border-color:#faf8df;box-shadow:0 0 18px rgba(118,184,190,.6)}
 .pin--info{left:16%;top:40%}
-.pin--tool{left:35%;top:44%}
 .pin--service{left:80%;top:44%}
 .pin--gate{left:50%;top:25%}
 .pin.is-mine .pin__hint{opacity:1;color:var(--teal-b);background:rgba(230,243,238,.95)}
@@ -144,8 +143,7 @@ a{color:inherit}
   .pin__text small{font-size:9px;letter-spacing:.18em}
   .pin__hint{display:none}
   .pin--info{left:17%;top:41%}
-  .pin--tool{left:32%;top:55%}
-  .pin--service{left:83%;top:41%}
+    .pin--service{left:83%;top:41%}
   .pin--gate{top:25%}
 }
 .travel{position:absolute;z-index:7;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:12px;padding:12px 26px 12px 20px;border-radius:30px;
@@ -165,7 +163,7 @@ a{color:inherit}
 .dock{position:absolute;z-index:5;left:50%;bottom:22px;transform:translateX(-50%);width:min(1120px,100% - 48px);padding:17px;border-radius:24px;
   background:rgba(255,255,255,.44);border:1px solid rgba(255,255,255,.85);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
   box-shadow:0 10px 40px rgba(139,122,154,.07)}
-.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .card{display:grid;grid-template-columns:52px minmax(0,1fr) 12px;align-items:center;gap:9px;min-height:88px;padding:8px 10px 8px 8px;text-align:left;
   background:rgba(255,255,255,.7);border:1px solid #fff;border-radius:15px;transition:transform .2s,box-shadow .2s}
 .card:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(133,116,172,.18)}
@@ -446,7 +444,6 @@ a.enter{text-decoration:none}
     <div class="staff staff--yui"><img src="assets/staff-yui.webp" width="459" height="1012" alt="" decoding="async"></div>
     <div class="staff staff--minato"><img src="assets/staff-minato.webp" width="372" height="1028" alt="" decoding="async"></div>
     <div class="staff staff--sora"><img src="assets/staff-sora.webp" width="342" height="1022" alt="" decoding="async"></div>
-    <div class="staff staff--haru"><img src="assets/staff-haru.webp" width="335" height="1041" alt="" decoding="async"></div>
   </div>
 
   <header class="top">
@@ -460,7 +457,6 @@ a.enter{text-decoration:none}
     <nav class="nav" aria-label="ロビーの場所">
       <button type="button" class="is-active" data-spot="info">インフォメーション</button>
       <button type="button" data-spot="service">サービスカウンター</button>
-      <button type="button" data-spot="tool">パスポートカウンター</button>
       <button type="button" data-spot="gate">搭乗ゲート</button>
     </nav>
     <div class="top__end">
@@ -485,11 +481,8 @@ a.enter{text-decoration:none}
   <button class="pin pin--service" type="button" data-spot="service" aria-label="2 サービスカウンター：口座開設の案内・MT5 口座の登録・パスポートの発行">
     <span class="pin__symbol">2</span><span class="pin__text"><small>SERVICE COUNTER</small>サービスカウンター</span><span class="pin__hint">受付 ソラ</span>
   </button>
-  <button class="pin pin--tool" type="button" data-spot="tool" aria-label="3 パスポートカウンター：ドリームランド・パスポート（接続ツール）の受け取りと、手順の説明">
-    <span class="pin__symbol">3</span><span class="pin__text"><small>PASSPORT COUNTER</small>パスポートカウンター</span><span class="pin__hint">パスポート係 ハル</span>
-  </button>
-  <button class="pin pin--gate pin--goal" type="button" data-spot="gate" aria-label="4 搭乗ゲート：搭乗口を選んで、搭乗券を受け取り、ドリームランドへ出発">
-    <span class="pin__symbol">4</span><span class="pin__text"><small>BOARDING GATES</small>搭乗ゲート</span><span class="pin__hint" id="gate-hint">搭乗係 ミナト</span>
+  <button class="pin pin--gate pin--goal" type="button" data-spot="gate" aria-label="3 搭乗ゲート：搭乗口を選んで、搭乗券を受け取り、ドリームランドへ出発">
+    <span class="pin__symbol">3</span><span class="pin__text"><small>BOARDING GATES</small>搭乗ゲート</span><span class="pin__hint" id="gate-hint">搭乗係 ミナト</span>
   </button>
   </div>
 
@@ -500,8 +493,7 @@ a.enter{text-decoration:none}
     <div class="cards">
       <button class="card" type="button" data-spot="info"><span class="card__no">1</span><span><span class="card__name">インフォメーション</span><span class="card__spec">はじめての方はここから</span><span class="card__who">案内係 ユイ</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
       <button class="card" type="button" data-spot="service"><span class="card__no">2</span><span><span class="card__name">サービスカウンター</span><span class="card__spec">口座の登録・パスポートの発行</span><span class="card__who">受付 ソラ</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
-      <button class="card" type="button" data-spot="tool"><span class="card__no">3</span><span><span class="card__name">パスポートカウンター</span><span class="card__spec">パスポートの受け取り・手順の説明</span><span class="card__who">パスポート係 ハル</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
-      <button class="card card--goal" type="button" data-spot="gate"><span class="card__no">4</span><span><span class="card__name">搭乗ゲート</span><span class="card__spec">搭乗口を選んで、搭乗券を受け取る</span><span class="card__who">搭乗係 ミナト</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
+      <button class="card card--goal" type="button" data-spot="gate"><span class="card__no">3</span><span><span class="card__name">搭乗ゲート</span><span class="card__spec">搭乗口を選んで、搭乗券を受け取る</span><span class="card__who">搭乗係 ミナト</span></span><span class="card__arrow" aria-hidden="true">›</span></button>
     </div>
   </nav>
 
@@ -603,7 +595,6 @@ const tail2 = (a) => (a == null ? "" : "…" + String(a).slice(-2));
 const STAFF = {
   info:    { name: "ユイ",   en: "YUI",    role: "インフォメーション 案内係", img: "assets/staff-yui.webp",    light: "#efe9f7" },
   service: { name: "ソラ",   en: "SORA",   role: "サービスカウンター 受付",   img: "assets/staff-sora.webp",   light: "#e8edf6" },
-  tool:    { name: "ハル",   en: "HARU",   role: "パスポートカウンター パスポート係",     img: "assets/staff-haru.webp",   light: "#e6f3ee" },
   gate:    { name: "ミナト", en: "MINATO", role: "搭乗ゲート 搭乗係",         img: "assets/staff-minato.webp", light: "#e4f1f1" },
 };
 
@@ -700,19 +691,6 @@ const SCRIPT = {
       choices: [["ほかのもの", "start"]] },
     members: { say: () => `${PLAN().name}の、つないでいる口座です。${needSecond() ? "2つ目の口座は、まだ発行していません。" : ""}`, docs: "members",
       choices: () => [...(needSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), [`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""], ["ほかのもの", "start"]] },
-  },
-  tool: {
-    start: { say: "パスポートカウンターのハルです。\nドリームランド・パスポートは、お手元の MT5 に渡航の許可を与える接続ツールです。設置そのものは、サービスカウンターのソラが合言葉を確かめてから進めます。こちらでは、ツールの受け取りと手順のご説明をしています。",
-      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["パスポートのファイルだけ受け取る", "os"], ["発行の手順を知りたい", "ea"], ["どんな仕組み？", "how"], ["ありがとう", "close"]] },
-    os: { say: "お使いのパソコンはどちらですか？（パスポートは Windows が基本です。Mac の方は Mac 用をお渡しします）", choices: "os:win,mac" },
-    win: { say: "Windows 用のパスポートです。\nダウンロードして、一度ひらいてください。お使いの MT5 を見つけて、ドリームランドの運用システム（EA）を置くところまで自動で進みます。", docs: "winTool",
-      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["ほかのこと", "start"]] },
-    mac: { say: "Mac 用のパスポートです。\n初めてひらくときに「開けません」と出たら「完了」を押し、システム設定 →「プライバシーとセキュリティ」の「このまま開く」で通せます（初回だけ）。", docs: "macTool",
-      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["ほかのこと", "start"]] },
-    ea: { say: "パスポートを入れたら、MT5 の画面でこの順に操作してください。一度きりで、次からは要りません。\n設置をサービスカウンターで進めると、この手順が済んだかどうかをパスポートが見ていて、自動で先に進みます。", docs: "ea",
-      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["ほかのこと", "start"]] },
-    how: { say: "パスポートは、すでにログインしている MT5 に横からつながる仕組みです。ツールに MT5 のパスワードを入力する場面はありません。\nつながったあとは、ドリームランドから運用システムの稼働・停止ができるようになります。",
-      choices: [["パスポートの発行をはじめる（サービスカウンターへ）", "@service:connect", "go"], ["ほかのこと", "start"]] },
   },
   gate: {
     start: { say: () => planKey()
@@ -1467,7 +1445,7 @@ const SCRIPT = {
     if (first) first.focus({ preventScroll: true });
   };
 
-  const PLACE = { info: "インフォメーション", service: "サービスカウンター", tool: "パスポートカウンター", gate: "搭乗ゲート" };
+  const PLACE = { info: "インフォメーション", service: "サービスカウンター", gate: "搭乗ゲート" };
   const appEl = $("app"), world = $("world"), travel = $("travel");
   const focusSpot = (spot) => {
     const pin = pins.find((p) => p.dataset.spot === spot);
@@ -1566,7 +1544,7 @@ const SCRIPT = {
   }); });
 
   /* ロビーに入ったら、まずインフォメーションのユイが声をかける。
-     URL の末尾が #service / #connect / #tool / #gate / #first / #crystal なら、そこから始める（LINE で直接送る用） */
+     URL の末尾が #service / #connect / #gate / #first / #crystal なら、そこから始める（LINE で直接送る用） */
   const startAt = location.hash.slice(1);
   const first = PLANS[startAt] ? ["gate", "door:" + startAt] : startAt === "connect" ? ["service", "connect"] : STAFF[startAt] ? [startAt, "start"] : ["info", "start"];
   setTimeout(() => goTo(first[0], first[1]), reduced ? 0 : 500);
