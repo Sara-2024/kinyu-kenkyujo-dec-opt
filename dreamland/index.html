@@ -673,15 +673,13 @@ const SCRIPT = {
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
     loginpw: { say: "この口座は、以前にパスワード付きで登録されています。そのときのパスワードを入力してください。分からないときはサポート LINE へご連絡ください。", docs: "loginpw",
       choices: [["サポート LINE", "support"], ["ほかのもの", "start"]] },
-    launch: { say: "パスポートを呼び出しています。ブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。", docs: "launch",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ダウンロードの手順を見る", "download"], ["ほかのもの", "start"]] },
     waiting: { say: "パスポートがこの口座につながっているか、確かめています。そのままお待ちください（20 秒ほど）。", docs: "progress", choices: [] },
-    notyet: { say: "パスポートは、まだこの口座につながっていません。\nダウンロードしたファイル（DreamlandPassport-…）を開いて、設置を終えてから、もう一度「設置が終わった（つなぐ）」を押してください。\n以前にこのパソコンで別の口座をつないだことがある場合や、何度押してもつながらない場合は「呼び出す」を押してください。", docs: "launch",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["呼び出す（「開きますか？」が出ます）", "relaunch"], ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
+    notyet: { say: () => `パスポートは、まだこの口座につながっていません。\nダウンロードしたファイル（${osNow() === "mac" ? "ドリームランド・パスポート" : "DreamlandPassport-…"}）を開いて、設置を終えてから、もう一度「設置が終わった（つなぐ）」を押してください。${osNow() === "mac" ? "\nMac で設置が済んでいるのにつながらないときは「パスポートを呼び出す」を押してください。" : ""}`, docs: "launch",
+      choices: () => [["設置が終わった（つなぐ）", "launch", "go"], ...(osNow() === "mac" ? [["パスポートを呼び出す", "relaunch"]] : []), ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     stuck: { say: "パスポートはこの口座につながっていますが、この画面が中継に入れていません。ページを再読み込み（F5）して、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "progress",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
-    download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、このパソコンに入れます。下のボタンからダウンロードして、ダウンロードしたファイルを一度だけ開いてください。開くと、この口座に自動で紐づきます。\n開き終わったら、この画面に戻って「設置が終わった（つなぐ）」を押してください。\n以前から入れてある方は「もう入れてある（呼び出す）」を押してください。", docs: "download",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["もう入れてある（呼び出す）", "relaunch"], ["ほかのもの", "start"]] },
+    download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、下のボタンからダウンロードして、手順どおりに設置してください。マニュアルも下にあります。\n設置が終わったら、この画面に戻って「設置が終わった（つなぐ）」を押してください。つながっているかを確かめて、次の案内に進みます。", docs: "download",
+      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
       choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
@@ -945,7 +943,7 @@ const SCRIPT = {
     },
     progress: () => `<ul class="prog" id="prog">${flow.lines.length
         ? flow.lines.map((l) => `<li class="${l.ok === true ? "is-ok" : l.ok === false ? "is-ng" : "is-wait"}">${esc(l.text)}</li>`).join("")
-        : `<li class="is-wait">${esc(flow.note || "パスポートを呼び出しています")}</li>`}</ul>`,
+        : `<li class="is-wait">${esc(flow.note || "確かめています…")}</li>`}</ul>`,
     download: () => {
       const link = osNow() === "mac" ? "macFile" : "winFile";
       const steps = osNow() === "mac" ? [
@@ -1229,7 +1227,7 @@ const SCRIPT = {
   /* ── 設置の流れ（サービスカウンターの中だけで進む） ── */
   let consented = false;   // このページを開いているあいだに、注意事項を読んでチェックしたか
   const flow = { idx: -1, phase: null, lines: [], note: "", mt5Index: 0, problem: "", timers: [], retryAccount: "", relaunched: false, startedAt: 0 };
-  const FLOW_NODES = new Set(["launch", "waiting", "notyet", "stuck", "download", "connecting", "mt5", "failed"]);
+  const FLOW_NODES = new Set(["waiting", "notyet", "stuck", "download", "connecting", "mt5", "failed"]);
   const clearFlowTimers = () => { flow.timers.forEach(clearTimeout); flow.timers = []; };
   const later = (fn, ms) => { const id = setTimeout(fn, ms); flow.timers.push(id); return id; };
   const member = () => members[flow.idx] || null;
@@ -1246,9 +1244,9 @@ const SCRIPT = {
     return true;
   };
 
-  /* force=true は「お客様が『設置が終わった／もう入れてある』を押した」「設置から戻ってきた」とき。
-     それ以外（登録直後など）は、この端末で一度もつないだことが無ければ、呼び出さずにダウンロードの案内から始める。
-     お客様は最初はパスポートを持っていないので、「呼び出しています」から始めると何も起きないまま待たせてしまう */
+  /* mode: "auto"（登録直後）＝ダウンロードの案内を出す。"wait"（「設置が終わった」）＝つながっているか確かめる。
+     "launch"（Mac の「パスポートを呼び出す」）＝aitrader:// で呼んでから確かめる。
+     お客様は最初はパスポートを持っていないので、呼び出しから始めない */
   function startConnect(idx, mode = "auto") {
     const m = members[idx];
     if (!m) return;
@@ -1257,25 +1255,12 @@ const SCRIPT = {
     api({ action: "platform", session: m.token, platform: platformName() });
     Bridge.onChange = onBridgeChange;
     Bridge.open(m.id, m.token);
-    const installedHere = !!(checks.tool || members.some((x) => x.done));
-    if (mode === "auto") {
-      if (!installedHere) { show("service", "download"); return; }   // 最初はパスポートを持っていない
-      mode = "launch";                                                // 以前つないだことがある端末は呼び出す
-    }
-    if (mode === "launch") {
-      setPhase("launch");
-      issueAndLaunch();
-    } else {
-      // 開いたパスポートが自分で紐づいて名乗っているかを、その場で確かめて結果を出す（「開きますか？」は出さない）
-      setPhase("waiting");
-      verifyInstalled();
-      return;
-    }
-    later(() => {
-      if (flow.phase !== "launch" || Bridge.live) return;
-      flow.note = "まだ応答がありません。パスポートが開いていれば、そのままお待ちください。入っていなければ「ダウンロードの手順を見る」から入れてください";
-      const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
-    }, CONNECTOR_WAIT_MS);
+    if (mode === "auto") { show("service", "download"); return; }   // 案内はダウンロードのページ 1 枚だけ
+    // 「設置が終わった」：開いたパスポートがこの口座に紐づいて名乗っているかを、その場で確かめて結果を出す。
+    // "launch"（Mac の「パスポートを呼び出す」）だけ、確かめる前に aitrader:// で呼ぶ
+    setPhase("waiting");
+    if (mode === "launch") issueAndLaunch();
+    verifyInstalled();
   }
 
   /* 「設置が終わった（つなぐ）」：中継に「この口座の部屋にパスポートが来ているか」を 20 秒ほど聞き続け、
@@ -1326,27 +1311,10 @@ const SCRIPT = {
   // 戻ってきたときに勝手に呼び出さない（ダウンロードしたファイルを開いた直後に、サイト側でも
   // 「開きますか？」が出てしまう）。呼び出すのは「設置が終わった（つなぐ）」を押したときだけ。
 
-  /* 古いツールを「開くだけ」の初回は、部屋を知らないまま既定の部屋に来る。来たら合図を付けて呼び直す */
-  const watchDefaultRoom = () => {
-    if (flow.phase !== "download" || flow.relaunched) return;
-    const http = RELAY.replace(/^wss:/, "https:").replace(/^ws:/, "http:").replace(/\/app(\?.*)?$/, "");
-    fetch(`${http}/health?room=${encodeURIComponent(DEFAULT_ROOM)}`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body) => {
-        if (!body || !body.room || !body.room.bridge || flow.phase !== "download" || flow.relaunched) return;
-        if (typeof body.room.since === "number" && body.room.since < flow.startedAt - DEFAULT_ROOM_FRESH_MS) return;
-        flow.relaunched = true;
-        flow.note = "パスポートが起動しました。ブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください";
-        const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
-        issueAndLaunch();
-      })
-      .catch(() => {})
-      .finally(() => { if (flow.phase === "download") later(watchDefaultRoom, DEFAULT_ROOM_POLL_MS); });
-  };
 
   function onBridgeChange(liveChanged) {
     if (flow.idx < 0) return;
-    if (Bridge.live && (flow.phase === "launch" || flow.phase === "waiting" || flow.phase === "notyet" || flow.phase === "stuck" || flow.phase === "download" || flow.phase === "failed")) return checkStatus();
+    if (Bridge.live && (flow.phase === "waiting" || flow.phase === "notyet" || flow.phase === "stuck" || flow.phase === "failed")) return checkStatus();
     if (flow.phase === "mt5" && Bridge.live) return watchMt5();
     if (!Bridge.live && liveChanged && flow.phase === "mt5") { flow.note = "パスポートとの通信が切れました。ツールが動いているか確かめてください"; }
   }
@@ -1471,7 +1439,7 @@ const SCRIPT = {
     if (nodeKey === "board!") nodeKey = boardNode(true);
     if (nodeKey === "connect" && planKey() && plan) nodeKey = "who";   // 合言葉が済んでいれば、プランの案内から
     if (staffKey === "service" && (nodeKey === "signup" || nodeKey === "login") && !consented) nodeKey = "terms";   // 注意事項は必ず通る
-    if (staffKey === "service" && isPhone && (nodeKey === "terms" || nodeKey === "signup" || nodeKey === "login" || nodeKey === "loginpw" || nodeKey === "launch" || nodeKey === "waiting" || nodeKey === "notyet" || nodeKey === "stuck" || nodeKey === "download")) nodeKey = "pc";   // スマホでは発行できない
+    if (staffKey === "service" && isPhone && (nodeKey === "terms" || nodeKey === "signup" || nodeKey === "login" || nodeKey === "loginpw" || nodeKey === "waiting" || nodeKey === "notyet" || nodeKey === "stuck" || nodeKey === "download")) nodeKey = "pc";   // スマホでは発行できない
     if (nodeKey.startsWith("door:")) {
       gatePlan = nodeKey.slice(5);
       markHere("gate", gatePlan);
@@ -1526,12 +1494,12 @@ const SCRIPT = {
         trm.addEventListener("submit", (e) => { e.preventDefault(); if (!boxes.every((x) => x.checked)) return; consented = true; show("service", "signup"); });
         const firstBox = boxes[0]; if (firstBox) firstBox.focus({ preventScroll: true });
       }
-      docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect), "launch")));
+      docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect), "wait")));
       docs.querySelectorAll("[data-door]").forEach((b) => b.addEventListener("click", () => show("gate", "door:" + b.dataset.door)));
       docs.querySelectorAll("[data-os]").forEach((b) => b.addEventListener("click", () => { osChoice = b.dataset.os; show(staffKey, nodeKey); }));
       const dl = docs.querySelector("[data-download]");
       if (dl) { dl.removeAttribute("target"); dl.setAttribute("download", ""); dl.addEventListener("click", (e) => startDownload(e, dl)); }
-      if (nodeKey === "download" && staffKey === "service") { flow.phase = "download"; flow.downloadShownAt = flow.downloadShownAt || Date.now(); later(watchDefaultRoom, DEFAULT_ROOM_POLL_MS); }
+      if (nodeKey === "download" && staffKey === "service") { flow.phase = "download"; flow.downloadShownAt = flow.downloadShownAt || Date.now(); }
     }
     choiceList(node).forEach(([label, to, flag], i) => {
       const b = document.createElement("button");
@@ -1604,11 +1572,11 @@ const SCRIPT = {
     if (to === "next") to = nextStep();
     if (to === "entry!") { plan = null; savePlan(); entryPw.set(""); renderGates(); return show("service", "connect"); }
     if (to === "later") { second = "later"; saveSecond(); return show("service", "later"); }
-    // 「設置が終わった（つなぐ）」：Windows は開いたパスポートが自分で紐づくので待つだけ。Mac は呼び出す
-    if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, osNow() === "mac" ? "launch" : "wait") : show("service", "connect"); }
+    // 「設置が終わった（つなぐ）」：つながっているかを確かめて、次へ（呼び出さない）
+    if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, "wait") : show("service", "connect"); }
     if (to === "relaunch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, "launch") : show("service", "connect"); }
     if (to === "download" && staffKey === "service") { if (flow.idx < 0 && members.length) flow.idx = members.length - 1; return show("service", "download"); }
-    if (to.startsWith("reconnect:")) return startConnect(Number(to.slice(10)), "launch");
+    if (to.startsWith("reconnect:")) return startConnect(Number(to.slice(10)), "wait");
     if (to.startsWith("@")) {
       const [target, node] = to.slice(1).split(":");
       return goTo(target, node || "start");   // 別の窓口へ移動してから話す
