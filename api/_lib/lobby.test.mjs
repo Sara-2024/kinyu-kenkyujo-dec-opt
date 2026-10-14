@@ -150,6 +150,13 @@ const ngRes = (text, status = 400) => ({ ok: false, status, text: async () => te
   check('同じ端末から叩きすぎたら 429', last.status === 429 && last.body.error === 'BUSY')
   const other = await handleLobby({ action: 'plan', entry: 'x' }, env, 'ip-other', fakeSupabase(okRes({ plan: 'first' })))
   check('別の端末には効かない', other.status === 200)
+  // つなぐ操作（合図の発行など）は別に数える。設置をやり直すたびに呼ぶので、多めに通す
+  resetRate()
+  let tok = null
+  for (let i = 0; i < 150; i += 1) tok = await handleLobby({ action: 'connect_token', session: 's' }, env, 'ip-burst2', fakeSupabase(okRes({ token: 'a'.repeat(64), expires_in: 300 })))
+  check('合図の発行は 150 回でも止めない', tok.status === 200, String(tok.status))
+  const guess = await handleLobby({ action: 'plan', entry: 'x' }, env, 'ip-burst2', fakeSupabase(okRes({ plan: 'first' })))
+  check('合図を何度も出しても、合言葉はまだ打てる', guess.status === 200, String(guess.status))
 }
 
 // ── 小さな道具 ─────────────────────────────────

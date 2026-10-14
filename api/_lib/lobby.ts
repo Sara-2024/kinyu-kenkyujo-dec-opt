@@ -13,8 +13,14 @@
 //   ・1台あたりの回数を数えて、合言葉やパスワードの総当たりを止める（サーバーレスなので目安）
 //   ・パスワード・合言葉・セッション・合図は、ログにも応答の記録にも出さない
 
-const RATE_LIMIT = 30
+// 回数の上限は「当てにいく操作」と「つなぐ操作」で分ける。
+//   合言葉・パスワードの確認（plan / register / login）… 総当たり対策で少なめ
+//   会員の確認・合図の発行・OS の記録（me / connect_token / platform）… 設置をやり直すたびに何度も呼ぶので多め
+//   （一緒に数えていたら、ダウンロードとやり直しを繰り返したお客様が合言葉を打てなくなった）
+const RATE_LIMIT_GUESS = 20
+const RATE_LIMIT_SESSION = 200
 const RATE_WINDOW_MS = 10 * 60_000
+const GUESS_ACTIONS = new Set(['plan', 'register', 'login'])
 const ACTIONS = ['plan', 'register', 'login', 'me', 'connect_token', 'platform'] as const
 const PLATFORMS = ['windows', 'mac'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -52,11 +58,13 @@ export function envFrom(source: Record<string, string | undefined>): LobbyEnv {
 
 const hits = new Map<string, number[]>()
 
-export function tooMany(key: string, now = Date.now()): boolean {
-  const list = (hits.get(key) ?? []).filter((t) => now - t < RATE_WINDOW_MS)
+export function tooMany(key: string, now = Date.now(), action = 'plan'): boolean {
+  const guess = GUESS_ACTIONS.has(action)
+  const bucket = `${key}:${guess ? 'guess' : 'session'}`
+  const list = (hits.get(bucket) ?? []).filter((t) => now - t < RATE_WINDOW_MS)
   list.push(now)
-  hits.set(key, list)
-  return list.length > RATE_LIMIT
+  hits.set(bucket, list)
+  return list.length > (guess ? RATE_LIMIT_GUESS : RATE_LIMIT_SESSION)
 }
 
 /** 試験用。回数の記録を消す */
@@ -162,7 +170,7 @@ export async function handleLobby(
   }
   const input = clean(req)
   if (!input.ok) return { status: 400, body: { error: input.error } }
-  if (tooMany(clientKey)) return { status: 429, body: { error: 'BUSY' } }
+  if (tooMany(clientKey, Date.now(), input.action)) return { status: 429, body: { error: 'BUSY' } }
 
   let res: Response
   try {
