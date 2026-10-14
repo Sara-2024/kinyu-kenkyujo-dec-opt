@@ -1372,6 +1372,9 @@ def bridge_env(session: dict | None) -> dict[str, str]:
     # そこは親の終了と同時に消えるので MetaTrader5 の DLL を読めずに落ちる。
     for key in ("_MEIPASS2", "_PYI_APPLICATION_HOME_DIR", "_PYI_ARCHIVE_FILE", "_PYI_PARENT_PROCESS_LEVEL"):
         env.pop(key, None)
+    # 証明書の場所も持ち越さない（親の一時展開フォルダを指していて、親が終わると消える。Mac）。子が自分で決める
+    for key in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
+        env.pop(key, None)
     if session:
         exe = resolve_terminal_exe(session)
         if exe is not None:

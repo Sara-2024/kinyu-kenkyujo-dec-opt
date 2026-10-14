@@ -48,8 +48,11 @@ sys.path.insert(0, str(ASSETS / "bridge"))
 try:
     import certifi
 
-    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
-    os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
+    # setdefault ではなく必ず上書きする。親（接続ツール）から引き継いだ値は親の一時展開フォルダを
+    # 指していて、親が終わると消える。裏のブリッジが再接続のたびに「証明書を確認できない」で
+    # 中継につなげなくなった（実機で起きた）。各プロセスが自分の展開フォルダの証明書を使う
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 except ImportError:  # pragma: no cover - 部品を入れ忘れたとき
     pass
 
