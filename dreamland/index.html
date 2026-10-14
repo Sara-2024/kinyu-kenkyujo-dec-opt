@@ -567,7 +567,7 @@ const PLANS = {
 const VALID_NOTE = "有効期間は原則1年。半年プランの方は半年で、期限の前にもう一度 AI の紐付け手続きが必要です。";
 
 /* パスポートを呼び出してから、名乗り出るのを待つ時間（EA の準備と MT5 の初期化を挟むので長め） */
-const CONNECTOR_WAIT_MS = 30000;
+const CONNECTOR_WAIT_MS = 60000;
 /* 初回はダウンロードした exe を「開くだけ」なので、ツールは部屋を知らないまま既定の部屋に来る */
 const DEFAULT_ROOM = "vps-01";
 const DEFAULT_ROOM_POLL_MS = 3000;
@@ -680,7 +680,7 @@ const SCRIPT = {
       choices: [["登録済みの口座でログインする", "login"], ["ほかのもの", "start"]] },
     login: { say: "すでに登録した口座ですね。口座番号と、サイトに入るパスワードを入力してください。", docs: "login",
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
-    launch: { say: "パスポートを呼び出しています。お使いのパソコンにパスポートが入っていれば、このまま数秒でつながります。\nブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。", docs: "progress",
+    launch: { say: "パスポートを呼び出しています。お使いのパソコンにパスポートが入っていれば、このままつながります（初回は 1〜2 分かかることがあります。この画面はそのままお待ちください）。\nブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。\nまだ入れていない方は、下の「まだ入れていない（ダウンロードへ）」を押してください。", docs: "progress",
       choices: [["まだ入れていない（ダウンロードへ）", "download"], ["ほかのもの", "start"]] },
     download: { say: "このパソコンには、まだパスポートが入っていないようです。下のボタンからダウンロードして、一度だけ開いてください。\n設置が終わってこの画面に戻ってくると、自動でつなぎにいきます。進まないときは「設置が終わった（つなぐ）」を押してください。", docs: "download",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ほかのもの", "start"]] },
@@ -1240,7 +1240,13 @@ const SCRIPT = {
     Bridge.open(m.id, m.token);
     setPhase("launch");
     issueAndLaunch();
-    later(() => { if (flow.phase === "launch" && !Bridge.live) setPhase("download"); }, CONNECTOR_WAIT_MS);
+    // 勝手にダウンロードの画面へは切り替えない（つなぎ中に出ると、何度もダウンロードさせてしまう）。
+    // 時間が経ったら、案内の文だけ変える。ダウンロードへ行くのは、お客様が「まだ入れていない」を押したときだけ
+    later(() => {
+      if (flow.phase !== "launch" || Bridge.live) return;
+      flow.note = "まだ応答がありません。パスポートが開いていれば、そのままお待ちください（初回は 1〜2 分かかることがあります）。入っていなければ「まだ入れていない（ダウンロードへ）」を押してください";
+      const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
+    }, CONNECTOR_WAIT_MS);
   }
 
   /* いまのツールは、ダウンロードして開いただけでは設置だけして終わり、サイトにも中継にも名乗り出ない。
@@ -1249,7 +1255,7 @@ const SCRIPT = {
   let autoRelaunchAt = 0;
   const relaunchOnReturn = () => {
     if (document.visibilityState !== "visible" || flow.phase !== "download" || flow.idx < 0 || flow.relaunched) return;
-    const since = flow.downloadedAt || flow.downloadShownAt || 0;
+    const since = flow.downloadedAt || 0;   // 案内を見ただけでは呼び出し直さない（押していないのに「開きますか？」が出るのを防ぐ）
     if (!since || Date.now() - since < DOWNLOAD_SETTLE_MS) return;
     if (Date.now() - autoRelaunchAt < RELAUNCH_COOLDOWN_MS) return;
     autoRelaunchAt = Date.now();
