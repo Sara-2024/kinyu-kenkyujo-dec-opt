@@ -673,8 +673,8 @@ const SCRIPT = {
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
     launch: { say: "パスポートを呼び出しています。お使いのパソコンにパスポートが入っていれば、このままつながります（初回は 1〜2 分かかることがあります。この画面はそのままお待ちください）。\nブラウザに「ドリームランド・パスポート を開きますか？」と出たら「開く」を押してください。\nまだ入れていない方は、下の「まだ入れていない（ダウンロードへ）」を押してください。", docs: "progress",
       choices: [["まだ入れていない（ダウンロードへ）", "download"], ["ほかのもの", "start"]] },
-    download: { say: "このパソコンには、まだパスポートが入っていないようです。下のボタンからダウンロードして、一度だけ開いてください。\n設置が終わってこの画面に戻ってくると、自動でつなぎにいきます。進まないときは「設置が終わった（つなぐ）」を押してください。", docs: "download",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ほかのもの", "start"]] },
+    download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、このパソコンに入れます。下のボタンからダウンロードして、一度だけ開いてください。\n設置が終わってこの画面に戻ってくると、自動でつなぎにいきます。進まないときは「設置が終わった（つなぐ）」を押してください。\nすでに入れてある方は「もう入れてある（呼び出す）」を押してください。", docs: "download",
+      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["もう入れてある（呼び出す）", "launch"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
       choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
@@ -1210,7 +1210,10 @@ const SCRIPT = {
     return true;
   };
 
-  function startConnect(idx) {
+  /* force=true は「お客様が『設置が終わった／もう入れてある』を押した」「設置から戻ってきた」とき。
+     それ以外（登録直後など）は、この端末で一度もつないだことが無ければ、呼び出さずにダウンロードの案内から始める。
+     お客様は最初はパスポートを持っていないので、「呼び出しています」から始めると何も起きないまま待たせてしまう */
+  function startConnect(idx, force = false) {
     const m = members[idx];
     if (!m) return;
     clearFlowTimers();
@@ -1218,9 +1221,10 @@ const SCRIPT = {
     api({ action: "platform", session: m.token, platform: platformName() });
     Bridge.onChange = onBridgeChange;
     Bridge.open(m.id, m.token);
+    const installedHere = !!(checks.tool || members.some((x) => x.done));
+    if (!force && !installedHere) { show("service", "download"); return; }
     setPhase("launch");
     issueAndLaunch();
-    watchMyRoom();
     // 勝手にダウンロードの画面へは切り替えない（つなぎ中に出ると、何度もダウンロードさせてしまう）。
     // 時間が経ったら、案内の文だけ変える。ダウンロードへ行くのは、お客様が「まだ入れていない」を押したときだけ
     later(() => {
@@ -1228,30 +1232,6 @@ const SCRIPT = {
       flow.note = "まだ応答がありません。パスポートが開いていれば、そのままお待ちください（初回は 1〜2 分かかることがあります）。入っていなければ「まだ入れていない（ダウンロードへ）」を押してください";
       const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
     }, CONNECTOR_WAIT_MS);
-  }
-
-  /* ［確認用］呼び出し中は、中継が見ている事実をそのまま出す。
-     「この会員の部屋にパスポートが来ているか」「この画面と中継がつながっているか」の 2 つで、
-     止まっている理由（パスポートが別の部屋／画面側が中継に入れていない）を、推測ではなく値で切り分ける */
-  const diag = { room: null, since: null };
-  function watchMyRoom() {
-    if (flow.phase !== "launch") return;
-    const m = member(); if (!m) return;
-    const http = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
-    fetch(`${http}/health?room=${encodeURIComponent(m.id)}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((body) => { if (body && body.room) { diag.room = !!body.room.bridge; diag.since = body.room.since; } else { diag.room = null; } })
-      .catch(() => { diag.room = null; })
-      .finally(() => { renderDiag(); if (flow.phase === "launch") later(watchMyRoom, 3000); });
-  }
-  function renderDiag() {
-    const el = $("prog"); if (!el || flow.phase !== "launch") return;
-    const m = member(); if (!m) return;
-    const open = Bridge.ws && Bridge.ws.readyState === 1;
-    const wsTxt = open ? (Bridge.welcomed ? "つながっています" : "応答待ち") : `切れています${Bridge.closeCode ? `（code ${Bridge.closeCode}）` : ""}`;
-    const roomTxt = diag.room === true ? `来ています（${diag.since ? new Date(diag.since).toLocaleTimeString("ja-JP") : "時刻不明"} から）` : diag.room === false ? "まだ来ていません" : "確認できません";
-    let li = $("diag"); if (!li) { li = document.createElement("li"); li.id = "diag"; li.className = "is-wait"; el.appendChild(li); }
-    li.textContent = `［確認用］会員 ${String(m.id).slice(0, 8)}… ／ この部屋へのパスポート: ${roomTxt} ／ 画面と中継: ${wsTxt}`;
   }
 
   /* いまのツールは、ダウンロードして開いただけでは設置だけして終わり、サイトにも中継にも名乗り出ない。
@@ -1264,7 +1244,7 @@ const SCRIPT = {
     if (!since || Date.now() - since < DOWNLOAD_SETTLE_MS) return;
     if (Date.now() - autoRelaunchAt < RELAUNCH_COOLDOWN_MS) return;
     autoRelaunchAt = Date.now();
-    startConnect(flow.idx);
+    startConnect(flow.idx, true);
   };
   document.addEventListener("visibilitychange", relaunchOnReturn);
   window.addEventListener("focus", relaunchOnReturn);
@@ -1468,7 +1448,7 @@ const SCRIPT = {
         trm.addEventListener("submit", (e) => { e.preventDefault(); if (!boxes.every((x) => x.checked)) return; consented = true; show("service", "signup"); });
         const firstBox = boxes[0]; if (firstBox) firstBox.focus({ preventScroll: true });
       }
-      docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect))));
+      docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect), true)));
       docs.querySelectorAll("[data-door]").forEach((b) => b.addEventListener("click", () => show("gate", "door:" + b.dataset.door)));
       docs.querySelectorAll("[data-os]").forEach((b) => b.addEventListener("click", () => { osChoice = b.dataset.os; show(staffKey, nodeKey); }));
       const dl = docs.querySelector("[data-download]");
@@ -1546,9 +1526,9 @@ const SCRIPT = {
     if (to === "next") to = nextStep();
     if (to === "entry!") { plan = null; savePlan(); entryPw.set(""); renderGates(); return show("service", "connect"); }
     if (to === "later") { second = "later"; saveSecond(); return show("service", "later"); }
-    if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i) : show("service", "connect"); }
+    if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, true) : show("service", "connect"); }
     if (to === "download" && staffKey === "service") { if (flow.idx < 0 && members.length) flow.idx = members.length - 1; return show("service", "download"); }
-    if (to.startsWith("reconnect:")) return startConnect(Number(to.slice(10)));
+    if (to.startsWith("reconnect:")) return startConnect(Number(to.slice(10)), true);
     if (to.startsWith("@")) {
       const [target, node] = to.slice(1).split(":");
       return goTo(target, node || "start");   // 別の窓口へ移動してから話す
