@@ -199,7 +199,86 @@ function roomIdFrom(req, url, isBridge) {
   return normalizeRoom(url.searchParams.get('room') || url.searchParams.get('id'))
 }
 
+/**
+ * 「設置が終わった（つなぐ）」の合図の受け渡し。
+ *   ロビー → POST /claim {session, token}   … 会員本人の合図（connect_token）を、その口座番号で預かる（10 分）
+ *   パスポート → GET /claim?account=<口座番号> … 自分の MT5 の口座番号で取りに来る。一度渡したら消す
+ * これでお客様は「設置が終わった」を押すだけでよく、サイトから aitrader:// で呼び出し直さなくてよい
+ * （ブラウザの「開きますか？」が出ない）。口座番号を知っているだけの相手が 10 分の窓で
+ * 取っていける余地はあるが、合図は使い捨てで、本人が押した直後だけ。
+ */
+const CLAIM_TTL_MS = 10 * 60 * 1000
+const claims = new Map() // 口座番号 → { token, room, expires }
+const CLAIM_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Cache-Control': 'no-store',
+}
+
 const server = createServer((req, res) => {
+  if (req.url?.startsWith('/claim')) {
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, CLAIM_HEADERS)
+      res.end()
+      return
+    }
+    if (req.method === 'GET') {
+      const account = String(url.searchParams.get('account') || '').replace(/\D/g, '')
+      const c = account ? claims.get(account) : null
+      if (!c || c.expires < Date.now()) {
+        if (c) claims.delete(account)
+        res.writeHead(200, CLAIM_HEADERS)
+        res.end(JSON.stringify({ ok: false }))
+        return
+      }
+      claims.delete(account)
+      log(`合図を渡しました: 口座 …${account.slice(-4)} → 部屋 ${short(c.room)}`)
+      res.writeHead(200, CLAIM_HEADERS)
+      res.end(JSON.stringify({ ok: true, token: c.token, room: c.room }))
+      return
+    }
+    if (req.method === 'POST') {
+      let body = ''
+      req.on('data', (chunk) => {
+        body += chunk
+        if (body.length > 4096) req.destroy()
+      })
+      req.on('end', () => {
+        let payload = {}
+        try {
+          payload = JSON.parse(body || '{}')
+        } catch {
+          payload = {}
+        }
+        const token = String(payload.token || '')
+        const session = String(payload.session || '')
+        if (!/^[0-9a-f]{64}$/i.test(token) || !session) {
+          res.writeHead(400, CLAIM_HEADERS)
+          res.end(JSON.stringify({ ok: false }))
+          return
+        }
+        void memberOf(session).then((member) => {
+          const account = member ? String(member.account ?? payload.account ?? '').replace(/\D/g, '') : ''
+          if (!member || !account) {
+            res.writeHead(401, CLAIM_HEADERS)
+            res.end(JSON.stringify({ ok: false }))
+            return
+          }
+          claims.set(account, { token, room: String(member.id), expires: Date.now() + CLAIM_TTL_MS })
+          log(`合図を預かりました: 口座 …${account.slice(-4)}（部屋 ${short(member.id)}）`)
+          res.writeHead(200, CLAIM_HEADERS)
+          res.end(JSON.stringify({ ok: true }))
+        })
+      })
+      return
+    }
+    res.writeHead(405, CLAIM_HEADERS)
+    res.end()
+    return
+  }
   if (req.url?.startsWith('/health')) {
     // 部屋の一覧（＝会員ID）は外に出さない。知っている部屋についてだけ答える。
     const url = new URL(req.url, `http://${req.headers.host}`)

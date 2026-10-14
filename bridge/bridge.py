@@ -299,6 +299,22 @@ def _list_bridge_processes() -> list[int]:
                 pids.append(pid)
     return pids
 
+def _hand_over_to_link_waiter() -> None:
+    """会員が消された・止められたとき、接続ツールの「合図を待つ係」を起こしてから終わる。
+
+    お客様がロビーで登録し直して「設置が終わった」を押せば、その係が合図を受け取って
+    新しい会員の部屋に紐づけ直す（接続ツールを開き直してもらわなくてよい）。exe 版だけ。
+    """
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) if os.name == "nt" else 0
+        subprocess.Popen([sys.executable, "--wait-link"], creationflags=flags, close_fds=True)
+        log.info("接続ツールに「設置が終わった」待ちを引き継ぎました")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("「設置が終わった」待ちを起こせませんでした: %s", exc)
+
+
 def takeover_old_bridges() -> None:
     """自分より古い版のブリッジが残っていたら終わらせる。
 
@@ -2161,6 +2177,7 @@ class Bridge:
                         continue
                     if getattr(ws, "close_code", None) == 4003:
                         log.error("この会員は利用を止められています。ブリッジを終了します")
+                        _hand_over_to_link_waiter()
                         self.request_stop()
                         break
                     # 切れた理由が後から分かるように、必ず番号と理由を残す。
@@ -2191,6 +2208,7 @@ class Bridge:
                     continue
                 if code == 4003:
                     log.error("この会員は利用を止められています。ブリッジを終了します")
+                    _hand_over_to_link_waiter()
                     self.request_stop()
                     break
                 log.warning("中継サーバーに接続できません (%s): %s", type(exc).__name__, exc)

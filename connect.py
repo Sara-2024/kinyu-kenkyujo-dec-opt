@@ -681,6 +681,76 @@ def connect_token_from_args(argv: list[str]) -> str:
 TOKEN_IN_TEXT = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{64})(?![0-9a-fA-F])")
 
 
+LINK_WAIT_MIN = 60          # 設置のあと、合図を取りに行き続ける時間（分）
+LINK_POLL_SEC = 5
+
+
+def relay_claim(account: str) -> str:
+    """中継に預けられた合図（この口座番号あて）を取りに行く。無ければ空。"""
+    url = relay_url()
+    origin = "http://127.0.0.1:8080" if relay_is_local(url) else relay_http_origin(url)
+    if not origin or not account:
+        return ""
+    try:
+        with urllib.request.urlopen(f"{origin}/claim?account={urllib.parse.quote(account)}", timeout=6) as res:
+            data = json.loads(res.read().decode("utf-8", errors="replace"))
+    except Exception:  # noqa: BLE001
+        return ""
+    token = str(data.get("token") or "") if isinstance(data, dict) and data.get("ok") else ""
+    return token if TOKEN_RE.match(token) else ""
+
+
+def wait_for_link() -> int:
+    """設置のあと、サイトで「設置が終わった（つなぐ）」が押されるのを裏で待つ。
+
+    ロビーは押された合図を中継に預ける。ここは、ログイン中の MT5 の口座番号で
+    数秒おきに取りに行き、来たら aitrader://connect?token=… と同じ道で連携する
+    （サイトからブラウザ経由で呼び出さなくてよい＝「開きますか？」が出ない）。
+    """
+    import ctypes
+
+    if os.name == "nt":
+        try:
+            handle = ctypes.windll.kernel32.CreateMutexW(None, False, "Local\\AITraderConnect.waitlink")
+            if handle and ctypes.windll.kernel32.GetLastError() == 183:
+                log("合図を待つ係はもう動いています")
+                return 0
+        except Exception:  # noqa: BLE001
+            pass
+    log(f"サイトの「設置が終わった」を待ちます（最長 {LINK_WAIT_MIN} 分）")
+    deadline = time.time() + LINK_WAIT_MIN * 60
+    while time.time() < deadline:
+        accounts: list[str] = []
+        try:
+            for t in mt5_detect.list_terminals():
+                acct = str(account_of(t) or "").strip()
+                if acct.isdigit() and acct not in accounts:
+                    accounts.append(acct)
+        except Exception as exc:  # noqa: BLE001
+            log(f"MT5 の口座を読めませんでした: {exc}")
+        for acct in accounts:
+            token = relay_claim(acct)
+            if token:
+                log(f"合図を受け取りました（口座 …{acct[-4:]}）。連携します")
+                if FROZEN:
+                    spawn_hidden([sys.executable, f"{PROTOCOL}://connect?token={token}"], cwd=str(CONFIG_DIR))
+                else:
+                    spawn_hidden([sys.executable, str(ROOT / "connect.py"), f"{PROTOCOL}://connect?token={token}"], cwd=str(ROOT))
+                return 0
+        time.sleep(LINK_POLL_SEC)
+    log("合図は来なかったので、待つのをやめます")
+    return 0
+
+
+def start_link_waiter() -> None:
+    """合図を待つ係を裏で起こす（exe 版だけ。手元の Python では起こさない）。"""
+    if not FROZEN:
+        log("合図を待つ係は exe 版だけで起こします（手元では省略）")
+        return
+    spawn_hidden([sys.executable, "--wait-link"], cwd=str(CONFIG_DIR))
+    log("サイトの「設置が終わった」を裏で待ちます")
+
+
 def connect_token_from_zone(exe: str | None = None) -> str:
     """ダウンロード元の URL から合図を読む。
 
@@ -1438,6 +1508,8 @@ def setup_phase1() -> int:
         ui.mark("ea", True)
 
     connect_state.write(connect_state.INSTALL_ONLY, terminal=str(target.data_path), ea=after.state)
+    # ここから先はサイトで「設置が終わった（つなぐ）」が押されるのを裏で待つ（押されたら自分で紐づく）
+    start_link_waiter()
 
     # その MT5 が動いているかは、プロセス一覧で見る。
     # mt5.initialize() で確かめてはいけない（動いていなければ MT5 を起こしてしまうし、
@@ -2082,6 +2154,8 @@ def main() -> int:
             log(f"中継の接続先: {target}")
         del args[idx : idx + 2]
 
+    if "--wait-link" in args:  # 設置のあと、サイトの「設置が終わった」を裏で待つ係
+        return wait_for_link()
     if "--run-bridge" in args:  # exe 版が自分自身をブリッジとして動かすとき
         sys.argv = [sys.argv[0]]
         import bridge
@@ -2154,7 +2228,8 @@ def main() -> int:
     # 戻すものが無いので、何もしないで終わる。ここで初回の設定を始めると、
     # ログインのたびに画面が開いてしまう（古い版が登録した自動起動が残っている PC）。
     if "--startup" in args and not connect_state.is_connected():
-        log("自動起動で呼ばれたが、まだ連携していないので何もしない")
+        log("自動起動で呼ばれたが、まだ連携していないので、合図を待つだけにする")
+        start_link_waiter()
         return 0
 
     # 部屋が渡されていない（＝サイトからではなく、自分で開いた）とき。
