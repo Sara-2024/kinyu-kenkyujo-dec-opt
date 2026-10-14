@@ -248,6 +248,9 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
     ソース（`.mq5`）はどちらの OS でも消さない（`cleanup_other_versions` は `.ex5` だけ）。
     Mac の Python は HTTPS の証明書を持たないので certifi を同梱し `SSL_CERT_FILE` で使う
     （無いと中継にもサイトにもつながらない）。
+    **`SSL_CERT_FILE` は各プロセスが自分で決める（`setdefault` ではなく上書き。`bridge_env` でも持ち越さない）。**
+    親の一時展開フォルダを指したまま裏のブリッジに渡すと、親が終わった時点で消え、再接続のたびに
+    「証明書を確認できない」で中継につなげなくなる（2026-10-15 に実機で起きた）。
   - 試験：`bridge/tests/mt5_files_test.py`（EA のふりをして往復）、`bridge/tests/connect_mac_test.py`
     （差し替え・MT5 探し・自動起動・配布の定義）。どちらも Mac も MT5 も要らない。
 - **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。
