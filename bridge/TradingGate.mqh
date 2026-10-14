@@ -24,6 +24,8 @@ input bool   InpAllowWhenMissing = false;              // 指令が無いとき�
 // 接続ツールは 30 秒ごとに書くので、数回落としても持つ長さにしてある
 #define GATE_ALIVE_SEC 180
 
+// EA の設定「ユメックAIの制御を受ける」。false のとき、サイトの稼働/停止は見ない（EA が OnInit で入れる）
+bool     GateSiteControl = true;
 bool     g_gate_file_ok = false;
 datetime g_gate_mtime   = 0;
 // 指令ファイルが「前に読んだときから変わった」のを最後に見た時刻（この PC の時計）。
@@ -84,10 +86,12 @@ double GateNumber(const string name, const double fallback)
 
 bool IsTradingAllowedRaw()
   {
-   if(!GlobalVariableCheck(InpGateVariable))
-      return InpAllowWhenMissing;
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED) || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
       return false;
+   if(!GateSiteControl)
+      return true;                       // 制御を受けない：自動売買ボタンだけで決まる
+   if(!GlobalVariableCheck(InpGateVariable))
+      return InpAllowWhenMissing;
    return(GlobalVariableGet(InpGateVariable) >= 0.5);
   }
 
@@ -209,7 +213,7 @@ void DrawGateStatus()
       fill   = C'6,42,28';
       border = clrLime;
       statec = clrLime;
-      state  = "稼働中";
+      state  = GateSiteControl ? "稼働中" : "稼働中（ユメックAIの制御なし）";
      }
    else
      {
