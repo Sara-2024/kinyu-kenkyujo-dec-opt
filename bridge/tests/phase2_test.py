@@ -316,15 +316,15 @@ if mig_path.is_file():
     schema = schema_path.read_text(encoding="utf-8")
     body = mig[mig.index("create table if not exists public.connect_tokens") :]
     # 合図の期限は 20261014_connect_token_ttl.sql で 5 分 → 60 分にした。schema.sql は新しいほう
-    body = body.replace("now() + interval '5 minutes'", "now() + interval '60 minutes'").replace("'expires_in', 300", "'expires_in', 3600")
-    check("migration の中身が schema.sql と同じ（期限だけ 60 分）", body.strip() in schema)
+    body = body.replace("now() + interval '5 minutes'", "now() + interval '24 hours'").replace("'expires_in', 300", "'expires_in', 86400")
+    check("migration の中身が schema.sql と同じ（期限だけ 24 時間）", body.strip() in schema)
     ttl_path = ROOT / "supabase" / "migrations" / "20261014_connect_token_ttl.sql"
     check("期限を延ばす migration がある", ttl_path.is_file())
     if ttl_path.is_file():
         ttl = ttl_path.read_text(encoding="utf-8")
         fn = ttl[ttl.index("create or replace function public.connect_token_issue") :]
         check("期限を延ばす migration の関数が schema.sql と同じ", fn.strip() in schema)
-        check("期限は 60 分", "interval '60 minutes'" in ttl and "'expires_in', 3600" in ttl)
+        check("期限は 24 時間", "interval '24 hours'" in ttl and "'expires_in', 86400" in ttl)
     for name in ("connect_tokens", "connect_token_issue", "connect_token_redeem"):
         check(f"migration に {name} が入っている", name in mig)
     check("索引も入っている", "connect_tokens_member_idx" in mig and "connect_tokens_expires_idx" in mig)

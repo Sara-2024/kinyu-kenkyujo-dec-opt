@@ -1,7 +1,7 @@
--- 合図（connect_tokens）の期限を 5 分 → 60 分にする。
+-- 合図（connect_tokens）の期限を 5 分 → 24 時間にする。
 -- ロビーは Windows 用パスポートを「DreamlandPassport-<合図>.exe」という名前で配り、
 -- お客様が「開くだけ」で連携できるようにした。ダウンロードしてから開くまでに
--- 5 分以上かかることがふつうにあるので、期限を延ばす（合図は 32 バイトの乱数・使い捨てのまま）。
+-- 時間が空くことがふつうにあるので、期限を延ばす（合図は 32 バイトの乱数・使い捨てのまま）。
 -- Supabase ダッシュボード → SQL Editor に貼り付けて実行。
 create or replace function public.connect_token_issue(p_token uuid)
 returns jsonb
@@ -23,8 +23,8 @@ begin
 
   v_token := encode(extensions.gen_random_bytes(32), 'hex');
   insert into public.connect_tokens (token, member_id, expires_at)
-  values (v_token, v_member.id, now() + interval '60 minutes');
+  values (v_token, v_member.id, now() + interval '24 hours');
 
-  return jsonb_build_object('token', v_token, 'expires_in', 3600);
+  return jsonb_build_object('token', v_token, 'expires_in', 86400);
 end;
 $$;
