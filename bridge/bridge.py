@@ -2211,6 +2211,14 @@ class Bridge:
                     _hand_over_to_link_waiter()
                     self.request_stop()
                     break
+                # 中継は、止めた会員のブリッジを最初の 1 回だけ 4003 で閉じ、そのあと 1 時間は HTTP 403 で
+                # 黙って断る。403 を「つながらない」と読んで叩き直し続けると、会員が消えたことに
+                # 気づけず、ロビーで登録し直しても紐づき直らない（実機で起きた）。403 も同じ扱いにする
+                if "403" in str(exc):
+                    log.error("中継に断られています（会員が消えた・止められた）。ブリッジを終了します")
+                    _hand_over_to_link_waiter()
+                    self.request_stop()
+                    break
                 log.warning("中継サーバーに接続できません (%s): %s", type(exc).__name__, exc)
                 log.warning("→ server フォルダで npm start が動いているか確認（ポート 8080）")
             except Exception as exc:  # noqa: BLE001
