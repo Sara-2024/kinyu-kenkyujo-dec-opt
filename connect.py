@@ -1541,8 +1541,11 @@ def setup_phase1() -> int:
         ui.mark("ea", True)
 
     connect_state.write(connect_state.INSTALL_ONLY, terminal=str(target.data_path), ea=after.state)
-    # ここから先はサイトで「設置が終わった（つなぐ）」が押されるのを裏で待つ（押されたら自分で紐づく）
+    # ここから先はサイトで「設置が終わった（つなぐ）」が押されるのを裏で待つ（押されたら自分で紐づく）。
+    # 置く作業は終わったので、二重起動の防止もここで外す。外さないと、案内の窓を閉じるまで
+    # 合図を受け取っても連携に進めない（VPS で実際に止まった）
     start_link_waiter()
+    release_single_instance()
 
     # その MT5 が動いているかは、プロセス一覧で見る。
     # mt5.initialize() で確かめてはいけない（動いていなければ MT5 を起こしてしまうし、
