@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MT5 ログインマニュアル｜ドリームランド渡航手続き</title>
+<meta name="description" content="Windows 版の MT5 を入れて、リアル口座にログインするまでの手順です。ログインできたら、パスポートと EA の設置マニュアルへ進みます。">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#d1e4ee">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23789ea7'/%3E%3Cpath d='M32 12l4.4 13.6L50 30l-13.6 4.4L32 48l-4.4-13.6L14 30l13.6-4.4z' fill='%23fff6dc'/%3E%3C/svg%3E">
+<style>
+:root{--ink:#30384f;--muted:#68718a;--soft:#787787;--plaque:#665e5b;--gold:#cbbb98;--gold-deep:#aa9461;--cream:#fffaf0;--cream-2:#fffdf2;--lav:#7665a9;--lav-text:#594986;--lav-soft:#eeeaf6;--teal:#69b4bc;--teal-a:#76b8be;--teal-b:#578d9a;--slate:#789ea7;--line:#e4e5ee;
+--serif-en:Georgia,"Times New Roman",serif;--serif:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;--sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","YuGothic",Meiryo,"Noto Sans JP",sans-serif}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;font-family:var(--sans);font-size:16px;line-height:1.85;color:var(--ink);background:linear-gradient(165deg,#d1e4ee 0%,#dae2f4 30%,#eee6f6 65%,#fbf4e8 100%) fixed}
+a{color:inherit}
+.wrap{width:min(100% - 32px,1080px);margin-inline:auto}
+/* ── 表紙 ── */
+.cover{position:relative;overflow:hidden;color:#fffaf0;min-height:420px;display:grid;align-items:end;background:#8fb0c9}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 55%}
+.cover::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(72,101,119,.15),rgba(48,56,79,.55) 100%)}
+.cover__in{position:relative;z-index:1;padding:48px 0 44px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:end}
+.brand{font-family:var(--serif-en);letter-spacing:.24em;font-size:14px;color:#fff6dc;text-shadow:0 1px 10px rgba(72,101,119,.5)}
+.cover h1{margin:10px 0 0;font-family:var(--serif);font-weight:600;font-size:clamp(28px,4.2vw,46px);letter-spacing:.12em;line-height:1.35;text-shadow:0 2px 24px rgba(48,56,79,.45)}
+.cover h1 small{display:block;font-size:.5em;letter-spacing:.2em;margin-bottom:8px;color:#fff6dc}
+.cover p{margin:14px 0 0;max-width:46ch;color:#fffaf0;text-shadow:0 1px 10px rgba(72,101,119,.5)}
+.spec{background:rgba(255,253,245,.92);color:var(--ink);border:1px solid var(--gold);border-radius:14px;padding:16px 20px;min-width:250px;box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27),0 14px 40px rgba(48,56,79,.25)}
+.spec__title{font-family:var(--serif-en);letter-spacing:.24em;font-size:11px;color:var(--gold-deep)}
+.spec dl{margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:14px}
+.spec dt{color:var(--muted)}.spec dd{margin:0;text-align:right;font-family:var(--serif);font-size:16px;color:var(--lav-text)}
+@media (max-width:720px){.cover__in{grid-template-columns:1fr}.spec{min-width:0}}
+/* ── 全体の流れ ── */
+.intro{padding:40px 0 10px}
+.card{background:rgba(255,255,255,.72);border:1px solid #fff;border-radius:18px;padding:22px 26px;box-shadow:0 10px 40px rgba(139,122,154,.1);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.card h2{margin:0;font-family:var(--serif);font-weight:600;font-size:22px;letter-spacing:.08em}
+.card .lead{margin:6px 0 0;color:var(--muted);font-size:15px}
+.flow{list-style:none;margin:18px 0 0;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.flow a{display:block;text-decoration:none;padding:12px 10px;border-radius:12px;background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold);box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27);transition:transform .2s}
+.flow a:hover{transform:translateY(-3px)}
+.flow small{display:block;font-family:var(--serif-en);letter-spacing:.24em;font-size:10px;color:var(--gold-deep)}
+.flow b{display:block;font-family:var(--serif);font-size:15px;letter-spacing:.04em;margin-top:2px}
+.flow span{display:block;font-size:12px;color:var(--soft);line-height:1.5;margin-top:4px}
+@media (max-width:760px){.flow{grid-template-columns:1fr 1fr}}
+.tip{margin:16px 0 0;padding:12px 16px;border-radius:12px;background:#fff7ec;border:1px solid #efd9b4;font-size:14px;color:#6a5640}
+.tip b{color:#a4532f}
+.specs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.specs div{text-align:center;padding:14px 8px;border-radius:12px;background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold)}
+.specs span{display:block;font-size:12px;color:var(--muted)}
+.specs b{display:block;font-family:var(--serif-en);font-size:26px;letter-spacing:.04em;color:var(--lav-text);font-weight:400}
+@media (max-width:600px){.specs{grid-template-columns:1fr 1fr}}
+.cta{display:grid;gap:2px;text-decoration:none;margin:14px 0;padding:16px 22px;border-radius:34px;color:#fcfff7;text-shadow:0 1px 3px #486472;background:linear-gradient(120deg,var(--teal-a),var(--teal-b));border:2px solid #faf8df;box-shadow:0 0 0 4px rgba(216,232,222,.45),inset 0 0 0 2px rgba(202,233,220,.49),0 7px 20px rgba(92,113,129,.3);transition:transform .2s,filter .2s}
+.cta:hover{transform:translateY(-3px);filter:brightness(1.08)}
+.cta span{font-family:var(--serif);font-size:18px;letter-spacing:.14em}
+.cta small{font-size:11px;opacity:.85;word-break:break-all;font-family:var(--serif-en)}
+.twin{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.twin__card{padding:16px 18px;border-radius:14px;background:#fff;border:1px solid var(--line)}
+.twin__card b{display:block;font-family:var(--serif);font-size:17px;letter-spacing:.04em;margin:4px 0 6px}
+.twin__card p{margin:0;font-size:14px;color:#444a5e}
+@media (max-width:640px){.twin{grid-template-columns:1fr}}
+.needs{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.needs li{padding:14px;border-radius:14px;background:#fff;border:1px solid var(--line)}
+.needs i{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--lav-soft);color:var(--lav);font-style:normal;font-size:15px}
+.needs b{display:block;margin-top:8px;font-size:15px}.needs span{display:block;font-size:12.5px;color:var(--soft);line-height:1.6}
+@media (max-width:760px){.needs{grid-template-columns:1fr 1fr}}
+/* ── 吊り看板 ── */
+.part{padding:34px 0 6px}
+.sign{position:relative;display:flex;justify-content:center;padding-top:40px;margin-bottom:8px}
+.sign__wire{position:absolute;top:0;width:1px;height:40px;background:linear-gradient(180deg,rgba(72,101,119,0),rgba(72,101,119,.6))}
+.sign__wire:nth-child(1){left:calc(50% - 90px)}.sign__wire:nth-child(2){left:calc(50% + 90px)}
+.sign__panel{display:flex;align-items:center;gap:16px;padding:12px 26px;border-radius:6px;background:linear-gradient(145deg,#fffff9,#f3ede2);border:1px solid var(--gold);box-shadow:inset 0 0 0 3px var(--cream-2),inset 0 0 0 4px rgba(214,202,176,.27),0 10px 30px rgba(99,130,147,.18)}
+.sign__code{font-family:var(--serif-en);letter-spacing:.3em;font-size:14px;color:var(--gold-deep);padding-right:16px;border-right:1px solid rgba(170,148,97,.4)}
+.sign__jp{font-family:var(--serif);font-size:20px;letter-spacing:.14em;color:var(--ink)}
+.part__desc{text-align:center;color:var(--muted);font-size:14px;margin:0 0 18px}
+/* ── 手順 ── */
+.step{background:rgba(255,255,255,.78);border:1px solid #fff;border-radius:18px;padding:22px 26px 24px;margin:0 0 16px;box-shadow:0 10px 40px rgba(139,122,154,.1)}
+.step__head{display:flex;gap:16px;align-items:flex-start}
+.step__no{flex:0 0 auto;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:linear-gradient(120deg,var(--teal-a),var(--teal-b));color:#fff;font-family:var(--serif-en);font-size:20px;border:2px solid #faf8df;box-shadow:0 0 0 3px rgba(216,232,222,.5)}
+.step__head h3{margin:4px 0 0;font-family:var(--serif);font-weight:600;font-size:21px;letter-spacing:.06em;line-height:1.4}
+.step__head p{margin:2px 0 0;color:var(--muted);font-size:14.5px}
+.step__body{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(240px,1fr);gap:18px;margin-top:16px;align-items:start}
+.shot{margin:0;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#f4f4f8}
+.shot img{display:block;width:100%;height:auto}
+.step__side{display:grid;gap:8px;padding:14px 16px;border-radius:14px;background:linear-gradient(145deg,#fffff9,#f7f3ea);border:1px solid var(--gold)}
+.side__label{font-family:var(--serif-en);letter-spacing:.22em;font-size:10.5px;color:var(--gold-deep)}
+.crop{display:block;width:100%;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff}
+.side__title{font-family:var(--serif);font-size:18px;letter-spacing:.04em;line-height:1.4;color:var(--lav-text)}
+.side__text{margin:0;font-size:14px;color:#444a5e}
+.note{margin-top:4px;padding:10px 12px;border-radius:10px;background:var(--lav-soft);font-size:13px;color:#4a4560}
+.note__label{display:block;font-size:11px;letter-spacing:.14em;color:var(--lav);font-weight:600}
+.note p{margin:2px 0 0}
+.note--care{background:#fff4e2;color:#6a5640}.note--care .note__label{color:#a4532f}
+.note--phone{background:#e6f3f3;color:#3f5d63}.note--phone .note__label{color:var(--teal-b)}
+.plain{margin:14px 0 0;padding:12px 16px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:14.5px}
+.checks{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.checks li{padding:10px 14px 10px 42px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:14.5px;position:relative}
+.checks li::before{content:"";position:absolute;left:12px;top:12px;width:20px;height:20px;border-radius:50%;border:1px solid var(--gold);background:var(--cream)}
+.deposit{display:grid;grid-template-columns:260px minmax(0,1fr);gap:18px;margin-top:14px;align-items:start}
+.deposit__hero{display:grid;gap:2px;padding:20px 22px;border-radius:16px;color:#fff6dc;background:linear-gradient(145deg,#3a3166,#201b40);border:1px solid #e3cf94;box-shadow:inset 0 0 0 3px rgba(255,255,255,.06),inset 0 0 0 4px rgba(227,207,148,.4)}
+.deposit__hero span{font-size:13px;letter-spacing:.14em;color:#cfc6e6}.deposit__hero .rec{margin-top:10px;color:#e8d8a8}
+.deposit__hero b{font-family:var(--serif-en);font-size:42px;line-height:1.1;font-weight:400}.deposit__hero small{font-size:16px;margin-left:4px;font-family:var(--serif)}
+.deposit__hero em{font-style:normal;font-size:11.5px;color:#cfc6e6;margin-top:8px}
+.deposit p{margin:0 0 8px;font-size:14.5px}
+.lots{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.lots th{font-weight:500;color:var(--muted);font-size:12.5px;text-align:left;padding:8px 12px;background:#f7f5fb}
+.lots td{padding:9px 12px;border-top:1px solid var(--line)}.lots td:last-child{color:var(--lav-text);font-weight:600}
+@media (max-width:720px){.step__body,.deposit{grid-template-columns:1fr}.step{padding:18px 16px 20px}}
+/* ── 最後 ── */
+.done{margin:30px 0 50px;text-align:center}
+.done .card{padding:28px 26px}
+.done ul{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left}
+.done li{padding:10px 14px 10px 44px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:14.5px;position:relative}
+.done li::before{content:"✓";position:absolute;left:12px;top:9px;width:22px;height:22px;border-radius:50%;background:var(--teal);color:#fff;font-size:13px;line-height:22px;text-align:center}
+@media (max-width:640px){.done ul{grid-template-columns:1fr}}
+.done .fin{margin:18px 0 0;font-family:var(--serif);font-size:19px;letter-spacing:.1em}
+.back{display:inline-flex;align-items:center;gap:10px;margin-top:18px;text-decoration:none;padding:12px 26px;border-radius:30px;background:rgba(248,249,241,.9);border:1px solid rgba(255,247,236,.9);color:#61667c;font-size:14px;box-shadow:0 3px 18px rgba(85,109,134,.13)}
+.foot{text-align:center;padding:0 0 40px;font-family:var(--serif-en);letter-spacing:.24em;font-size:12px;color:var(--muted)}
+/* ── 目次（追従） ── */
+.toc{position:sticky;top:0;z-index:5;padding:10px 0;background:rgba(238,243,248,.85);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.8)}
+.toc .wrap{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.toc a{flex:0 0 auto;text-decoration:none;font-size:13px;padding:7px 14px;border-radius:22px;color:#61667c;background:rgba(248,249,241,.84);border:1px solid rgba(255,247,236,.8)}
+.toc a.is-on{color:#f9ffff;background:var(--slate)}
+@media print{.toc,.back{display:none}.step{break-inside:avoid;box-shadow:none}body{background:#fff}}
+
+.slide{background:rgba(255,255,255,.78);border:1px solid #fff;border-radius:18px;padding:18px 20px 20px;margin:0 0 16px;box-shadow:0 10px 40px rgba(139,122,154,.1)}
+.slide__head{display:flex;gap:14px;align-items:center;margin-bottom:12px}
+.slide__head h3{margin:0;font-family:var(--serif);font-weight:600;font-size:20px;letter-spacing:.06em;line-height:1.4}
+.slide__head .chip{margin-left:auto;flex:0 0 auto;font-size:12px;color:var(--teal-b);background:#e6f3f3;border-radius:20px;padding:4px 12px;white-space:nowrap}
+.slide__img{margin:0;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#dbe5f2}
+.slide__img img{display:block;width:100%;height:auto}
+.flow--auto{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+@media (max-width:720px){.slide{padding:12px 12px 14px}.slide__head h3{font-size:17px}.slide__head .chip{display:none}}
+</style>
+</head>
+<body>
+<header class="cover">
+  <img src="../assets/clouds.webp" alt="" decoding="async">
+  <div class="wrap cover__in">
+    <div><span class="brand">DREAMLAND · MT5 LOGIN MANUAL</span>
+      <h1>MT5 ログインマニュアル</h1>
+      <p>Windows 版の MT5 を入れて、リアル口座にログインするまでの手順です。ログインできたら、パスポートと EA の設置マニュアルへ進みます。</p></div>
+  </div>
+</header>
+<nav class="toc" aria-label="目次"><div class="wrap">
+  <a href="#top">はじめに</a><a href="#part-1" data-part="1">PART 1　MT5 をダウンロード</a><a href="#part-2" data-part="2">PART 2　MT5 をインストール</a><a href="#part-3" data-part="3">PART 3　リアル口座にログイン</a><a href="#done">最後に</a>
+</div></nav>
+<main class="wrap">
+<section class="intro" id="top">
+  <div class="card">
+    <h2>全体の流れ</h2><p class="lead">画面の写真を見ながら、1ページずつ同じように進めてください。</p>
+    <ol class="flow flow--auto"><li><a href="#part-1"><small>PART 1</small><b>MT5 をダウンロード</b><span>HFM の Windows 版 MT5 を手に入れる</span></a></li><li><a href="#part-2"><small>PART 2</small><b>MT5 をインストール</b><span>セットアップを開いて「次へ」→「完了」</span></a></li><li><a href="#part-3"><small>PART 3</small><b>リアル口座にログイン</b><span>会社を選び、口座番号・パスワード・サーバーを入れる</span></a></li></ol>
+  </div>
+  <div class="slide" style="margin-top:16px"><div class="slide__head"><span class="step__no">02</span><h3>ログインに必要な3つを用意します</h3></div>
+    <figure class="slide__img"><img src="img/p02.webp" alt="ログインに必要な3つを用意します" width="1600" height="900" decoding="async"></figure></div>
+</section>
+<div class="part" id="part-1"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">PART 1</span><span class="sign__jp">MT5 をダウンロード</span></div></div><p class="part__desc">HFM の Windows 版 MT5 を手に入れる</p><section class="slide" id="p03">
+  <div class="slide__head"><span class="step__no">03</span><h3>Windows 版の MT5 をダウンロード</h3><span class="chip">MT5 をダウンロード</span></div>
+  <figure class="slide__img"><img src="img/p03.webp" alt="Windows 版の MT5 をダウンロード" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section></div>
+<div class="part" id="part-2"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">PART 2</span><span class="sign__jp">MT5 をインストール</span></div></div><p class="part__desc">セットアップを開いて「次へ」→「完了」</p><section class="slide" id="p04">
+  <div class="slide__head"><span class="step__no">04</span><h3>ダウンロードしたセットアップを開く</h3><span class="chip">MT5 をインストール</span></div>
+  <figure class="slide__img"><img src="img/p04.webp" alt="ダウンロードしたセットアップを開く" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section><section class="slide" id="p05">
+  <div class="slide__head"><span class="step__no">05</span><h3>内容を確認し、「次へ」を押す</h3><span class="chip">MT5 をインストール</span></div>
+  <figure class="slide__img"><img src="img/p05.webp" alt="内容を確認し、「次へ」を押す" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section><section class="slide" id="p06">
+  <div class="slide__head"><span class="step__no">06</span><h3>終わったら、「完了」を押す</h3><span class="chip">MT5 をインストール</span></div>
+  <figure class="slide__img"><img src="img/p06.webp" alt="終わったら、「完了」を押す" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section></div>
+<div class="part" id="part-3"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">PART 3</span><span class="sign__jp">リアル口座にログイン</span></div></div><p class="part__desc">会社を選び、口座番号・パスワード・サーバーを入れる</p><section class="slide" id="p07">
+  <div class="slide__head"><span class="step__no">07</span><h3>利用する会社を選ぶ</h3><span class="chip">リアル口座にログイン</span></div>
+  <figure class="slide__img"><img src="img/p07.webp" alt="利用する会社を選ぶ" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section><section class="slide" id="p08">
+  <div class="slide__head"><span class="step__no">08</span><h3>会社を選べたら、「次へ」</h3><span class="chip">リアル口座にログイン</span></div>
+  <figure class="slide__img"><img src="img/p08.webp" alt="会社を選べたら、「次へ」" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section><section class="slide" id="p09">
+  <div class="slide__head"><span class="step__no">09</span><h3>「既存の取引口座」を選ぶ</h3><span class="chip">リアル口座にログイン</span></div>
+  <figure class="slide__img"><img src="img/p09.webp" alt="「既存の取引口座」を選ぶ" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section><section class="slide" id="p10">
+  <div class="slide__head"><span class="step__no">10</span><h3>リアル口座の口座番号を入力する</h3><span class="chip">リアル口座にログイン</span></div>
+  <figure class="slide__img"><img src="img/p10.webp" alt="リアル口座の口座番号を入力する" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section><section class="slide" id="p11">
+  <div class="slide__head"><span class="step__no">11</span><h3>リアル口座の取引用パスワードを入力する</h3><span class="chip">リアル口座にログイン</span></div>
+  <figure class="slide__img"><img src="img/p11.webp" alt="リアル口座の取引用パスワードを入力する" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section><section class="slide" id="p12">
+  <div class="slide__head"><span class="step__no">12</span><h3>リアル口座のサーバーを選ぶ</h3><span class="chip">リアル口座にログイン</span></div>
+  <figure class="slide__img"><img src="img/p12.webp" alt="リアル口座のサーバーを選ぶ" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section><section class="slide" id="p13">
+  <div class="slide__head"><span class="step__no">13</span><h3>入力できたら、「完了」を押す</h3><span class="chip">リアル口座にログイン</span></div>
+  <figure class="slide__img"><img src="img/p13.webp" alt="入力できたら、「完了」を押す" width="1600" height="900" loading="lazy" decoding="async"></figure>
+</section></div>
+<section class="done" id="done">
+  <div class="card">
+    <h2>最後に、チェックしましょう</h2>
+    <ul><li>Windows 版の MT5 を入れた</li><li>リアル口座の口座番号・取引用パスワード・サーバー名でログインできた</li><li>口座番号とサーバー名を、ロビーの「口座の登録」と同じものにそろえた</li></ul>
+    <p class="fin">ログインできたら、次はパスポートと EA の設置です。</p><a class="cta" href="../manual-setup/"><span>パスポートと EA の設置マニュアルへ</span><small>DREAMLAND · PASSPORT &amp; EA SETUP MANUAL</small></a>
+    <a class="back" href="../#service">‹ 渡航手続きロビーにもどる（パスポートの発行へ）</a>
+  </div>
+</section>
+</main>
+<footer class="foot">DREAMLAND INTERNATIONAL · MT5 LOGIN MANUAL</footer>
+<script>
+(() => {
+  const links=[...document.querySelectorAll('.toc a[data-part]')];
+  const parts=[...document.querySelectorAll('.part')];
+  const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(!e.isIntersecting)return;const k=e.target.id.slice(5);links.forEach(a=>a.classList.toggle('is-on',a.dataset.part===k));});},{rootMargin:'-30% 0px -60% 0px'});
+  parts.forEach(p=>io.observe(p));
+})();
+</script>
+</body>
+</html>

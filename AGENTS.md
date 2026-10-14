@@ -514,6 +514,13 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   搭乗券の有効期間の注記は `VALID_NOTE`（原則 1 年、半年プランは半年で AI の紐付けをやり直す）。
 - **窓口が使えないときも「準備中」を出さない。** `LINKS.register` が `#TODO` のとき・サーバーが 5xx のときは
   「窓口が立て込んでいる」と言ってサポート LINE を出す（`service.busy`）。
+- **MT5 ログインマニュアルと、パスポート＋EA の設置マニュアルもロビーの中**（`dreamland/manual-login/`、
+  `dreamland/manual-setup/`。どちらも Windows 向け）。依頼者が作った PDF（スライド 1600×900、ロビーと同じ装い）を
+  1 ページ 1 枚の WebP（`img/pNN.webp`）にして、ロビーの見た目のページに並べたもの。文面は PDF のまま。
+  作り直すときは、新しい PDF を `~/Downloads` に置いて `scratchpad/make_manual.py` 相当の手順（PyMuPDF で描画 →
+  `make_manual.py` のページ一覧を直す）。ロビーからの入口は `LINKS.loginManual` / `LINKS.winPdf`
+  （ソラの「口座開設の案内」「設置マニュアル」、ハルの「設置の手順」、ダウンロード画面の下）。Mac 用の設置マニュアルは無い。
+  動画の置き場は 2026-10-14 に外した。
 - **口座開設マニュアルはロビーの中（`dreamland/manual/`）。** HFM 配布の PDF（42 ページ）を、ロビーと同じ装いの
   1 枚のウェブページに組み直したもの（画面写真は `manual/img/`、PDF から取り出した WebP）。文面は PDF と同じ。
   HFM 側の画面が変わって作り直すときは、新しい PDF から文章と画像を取り出して `manual/index.html` を組み直す

@@ -542,7 +542,8 @@ const SITE  = "https://kinyu-kenkyujo-dec-opt.vercel.app";   // 本体のサイ�
 const RELAY = "wss://kinyu-relay.onrender.com/app";          // 中継（パスポートの様子はここから届く）
 const LINKS = {
   accountManual: "manual/",                // 口座開設マニュアル（ロビーと同じ世界観で作ったウェブ版。dreamland/manual/）
-  winPdf:        "#TODO_WIN_PDF",          // Windows PDFマニュアル
+  loginManual:   "manual-login/",          // MT5 ログインマニュアル（Windows。dreamland/manual-login/）
+  winPdf:        "manual-setup/",          // パスポートと EA の設置マニュアル（Windows。dreamland/manual-setup/）
   winFile:       SITE + "/download/DreamlandPassport.exe",      // Windows用ファイル
   macPdf:        "#TODO_MAC_PDF",          // Mac PDFマニュアル
   macFile:       SITE + "/download/DreamlandPassport-mac.zip",  // Mac用ファイル
@@ -857,7 +858,8 @@ const SCRIPT = {
         <li><span><b>ご契約時の合言葉</b>　サービスカウンターの「パスポートの発行」で打ちます</span></li>
         <li><span><b>ゴールド（XAUUSD）のチャート</b>　ここに EA を載せます</span></li>
       </ol>`,
-    account: () => doc("PDF", "口座開設マニュアル", "申し込みから入金まで、画面のとおりに", "accountManual", "ひらく"),
+    account: () => doc("PDF", "口座開設マニュアル", "申し込みから入金まで、画面のとおりに", "accountManual", "ひらく")
+      + doc("MT5", "MT5 ログインマニュアル", "口座ができたら、MT5 を入れてログインするまで", "loginManual", "ひらく"),
     register: () => {
       const fixed = planKey();
       return `<form class="form" id="reg" novalidate autocomplete="off">
@@ -875,10 +877,11 @@ const SCRIPT = {
         <div><span>APPLICATION NO.</span><b>${esc(app.no)}</b><span class="d">口座 ${esc(tail2(app.accountFull || app.account))}　${esc(app.server)}</span></div>
         <div class="receipt__plan">${esc(PLANS[app.plan].name)}<br><small>搭乗口 ${esc(PLANS[app.plan].gate)}</small></div>
       </div>`,
-    winManual: () => doc("PDF", "Windows 設置マニュアル", "画面の写真つき。印刷もできます", "winPdf", "ひらく"),
+    winManual: () => doc("MT5", "MT5 ログインマニュアル", "MT5 を入れて、リアル口座にログインするまで", "loginManual", "ひらく")
+      + doc("EA", "パスポートと EA の設置マニュアル", "パスポートで EA を配置して、チャートに載せるまで", "winPdf", "ひらく"),
     macManual: () => doc("PDF", "Mac 設置マニュアル", "画面の写真つき。印刷もできます", "macPdf", "ひらく"),
     winTool: () => doc("↓", "パスポート（Windows 用）", "ダウンロードして一度ひらく", "winFile", "受け取る")
-      + doc("PDF", "Windows 設置マニュアル", "手順を見ながら進めたい方はこちら", "winPdf", "ひらく"),
+      + doc("EA", "パスポートと EA の設置マニュアル", "手順を見ながら進めたい方はこちら", "winPdf", "ひらく"),
     macTool: () => doc("↓", "パスポート（Mac 用）", "Apple シリコン・Intel どちらも同じファイル", "macFile", "受け取る")
       + doc("PDF", "Mac 設置マニュアル", "手順を見ながら進めたい方はこちら", "macPdf", "ひらく"),
     ea: () => `<ol class="steps">
@@ -886,7 +889,7 @@ const SCRIPT = {
         <li><span>左の「ナビゲーター」にある <b>YumekkuEA-1年版</b> を、<b>ゴールド（XAUUSD）のチャート</b>へドラッグ</span></li>
         <li><span>出てきた画面で<b>「アルゴ取引を許可」</b>にチェックを入れて OK</span></li>
         <li><span>MT5 の上のほうにある<b>「アルゴ取引」ボタン</b>を押して、緑にする</span></li>
-      </ol><p class="note">Windows も Mac も同じ名前です。</p>`,
+      </ol><p class="note">Windows も Mac も同じ名前です。</p>${osNow() === "mac" ? "" : doc("EA", "パスポートと EA の設置マニュアル", "画面の写真を見ながら、1ページずつ", "winPdf", "ひらく")}`,
     support: () => doc("LINE", "サポート LINE", "係員が、止まったところから続きをご案内します", "support", "ひらく", "doc--line"),
     gates: () => `<div class="gates">` + Object.values(PLANS).map((p) => {
       const mine = planKey() === p.key, locked = !!planKey() && !mine;
@@ -965,7 +968,8 @@ const SCRIPT = {
       return `<a class="enter" data-link="${link}" data-download>パスポートをダウンロード（${osNow() === "mac" ? "Mac" : "Windows"} 用） <span aria-hidden="true">↓</span></a>
         <p class="note">お使いのパソコンが違うときは <button type="button" class="linklike" data-os="${osNow() === "mac" ? "win" : "mac"}">${osNow() === "mac" ? "Windows" : "Mac"} 用に切り替える</button></p>
         <ol class="steps">${steps.map(([t, d]) => `<li><span><b>${esc(t)}</b><br>${esc(d)}</span></li>`).join("")}</ol>
-        <ul class="prog" id="prog"><li class="is-wait">${esc(flow.note || "設置が終わって、この画面に戻るのを待っています")}</li></ul>`;
+        <ul class="prog" id="prog"><li class="is-wait">${esc(flow.note || "設置が終わって、この画面に戻るのを待っています")}</li></ul>
+        ${osNow() === "mac" ? "" : doc("EA", "パスポートと EA の設置マニュアル", "画面の写真を見ながら、1ページずつ", "winPdf", "ひらく")}`;
     },
     mt5steps: () => {
       const idx = flow.mt5Index;
