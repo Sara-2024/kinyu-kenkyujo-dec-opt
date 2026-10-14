@@ -678,7 +678,7 @@ const SCRIPT = {
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["パスポートを呼び出す", "relaunch"], ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     stuck: { say: "パスポートはこの口座につながっていますが、この画面が中継に入れていません。ページを再読み込み（F5）して、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "progress",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
-    download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、下のボタンからダウンロードして、手順どおりに設置してください。マニュアルも下にあります。\n設置が終わったら、この画面に戻って「設置が終わった（つなぐ）」を押してください。つながっているかを確かめて、次の案内に進みます。", docs: "download",
+    download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、下のボタンからダウンロードして、手順どおりに設置してください。マニュアルも下にあります。\n設置が終わると、この画面が自動で次の案内に進みます。進まないときは「設置が終わった（つなぐ）」を押してください。", docs: "download",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
@@ -1261,22 +1261,37 @@ const SCRIPT = {
     // 「開きますか？」は出ない）。そのうえで、名乗ってきたかをその場で確かめて結果を出す。
     // "launch"（「パスポートを呼び出す」）だけ、従来どおり aitrader:// で呼ぶ
     setPhase("waiting");
-    if (mode === "launch") issueAndLaunch(); else handOverClaim();
+    if (mode === "launch") issueAndLaunch(); else { handOverClaim(); keepClaimFresh(); }
     verifyInstalled();
   }
 
-  /* 合図を発行して、中継に「この口座番号のパスポートに渡して」と預ける */
+  /* 合図を発行して、中継に「この口座番号のパスポートに渡して」と預ける。
+     ダウンロードを押した時点でも預けるので、お客様は開くだけで紐づく（ボタンを押さなくてよい）。
+     合図には期限があるので、ダウンロードの案内や確認の画面にいるあいだは数分おきに預け直す */
+  const CLAIM_REFRESH_MS = 4 * 60000;
+  const postClaim = async (m, token) => {
+    const http = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
+    try {
+      await fetch(`${http}/claim`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: m.token, token, account: m.account }) });
+    } catch (_) {}
+  };
   const handOverClaim = async () => {
     const m = member();
     if (!m) return false;
     const { status, data } = await api({ action: "connect_token", session: m.token });
     if (status === 401) { flow.retryAccount = String(m.account || ""); setPhase("expired"); return false; }
     if (status !== 200 || !data.token) return false;
-    const http = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
-    try {
-      await fetch(`${http}/claim`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: m.token, token: data.token, account: m.account }) });
-    } catch (_) {}
+    await postClaim(m, data.token);
     return true;
+  };
+  let claimTimer = null;
+  const keepClaimFresh = () => {
+    if (claimTimer) clearTimeout(claimTimer);
+    claimTimer = setTimeout(async () => {
+      if (!(flow.phase === "download" || flow.phase === "waiting" || flow.phase === "notyet")) return;
+      await handOverClaim();
+      keepClaimFresh();
+    }, CLAIM_REFRESH_MS);
   };
 
   /* 「設置が終わった（つなぐ）」：中継に「この口座の部屋にパスポートが来ているか」を 20 秒ほど聞き続け、
@@ -1322,6 +1337,10 @@ const SCRIPT = {
       const href = status === 200 && data.token ? `${LINKS.winFile}?k=${data.token}` : LINKS.winFile;
       const tmp = document.createElement("a"); tmp.href = href; tmp.download = "DreamlandPassport.exe"; tmp.style.display = "none";
       document.body.appendChild(tmp); tmp.click(); tmp.remove();
+      // 開いたパスポートが自分の口座番号で取りに来る合図を、この時点で預けておく
+      if (status === 200 && data.token) { await postClaim(m, data.token); keepClaimFresh(); }
+    } else if (m) {
+      await handOverClaim(); keepClaimFresh();
     }
     flow.note = "ダウンロードが始まりました。ダウンロードしたファイルを開いて、上の手順どおりに進めてください。開き終わったら「設置が終わった（つなぐ）」を押してください";
     const el = $("prog"); if (el) el.innerHTML = `<li class="is-wait">${esc(flow.note)}</li>`;
@@ -1332,7 +1351,7 @@ const SCRIPT = {
 
   function onBridgeChange(liveChanged) {
     if (flow.idx < 0) return;
-    if (Bridge.live && (flow.phase === "waiting" || flow.phase === "notyet" || flow.phase === "stuck" || flow.phase === "failed")) return checkStatus();
+    if (Bridge.live && (flow.phase === "download" || flow.phase === "waiting" || flow.phase === "notyet" || flow.phase === "stuck" || flow.phase === "failed")) return checkStatus();
     if (flow.phase === "mt5" && Bridge.live) return watchMt5();
     if (!Bridge.live && liveChanged && flow.phase === "mt5") { flow.note = "パスポートとの通信が切れました。ツールが動いているか確かめてください"; }
   }

@@ -732,6 +732,11 @@ def wait_for_link() -> int:
             token = relay_claim(acct)
             if token:
                 log(f"合図を受け取りました（口座 …{acct[-4:]}）。連携します")
+                # 初回の設定の窓が開いたままだと、二重起動の防止に当たって何もできない。閉じるまで待つ
+                for _ in range(360):
+                    if not setup_window_open():
+                        break
+                    time.sleep(5)
                 if FROZEN:
                     spawn_hidden([sys.executable, f"{PROTOCOL}://connect?token={token}"], cwd=str(CONFIG_DIR))
                 else:
@@ -740,6 +745,23 @@ def wait_for_link() -> int:
         time.sleep(LINK_POLL_SEC)
     log("合図は来なかったので、待つのをやめます")
     return 0
+
+
+def setup_window_open() -> bool:
+    """初回の設定／接続の窓（二重起動の防止を持っている）が開いているか。"""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+
+        SYNCHRONIZE = 0x00100000
+        handle = ctypes.windll.kernel32.OpenMutexW(SYNCHRONIZE, False, "Local\\AITraderConnect.setup")
+        if handle:
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    return False
 
 
 def start_link_waiter() -> None:
