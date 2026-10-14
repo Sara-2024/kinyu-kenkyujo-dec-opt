@@ -1986,6 +1986,8 @@ class Bridge:
         self.connected_since = time.time()
         self._failsafe_fired = False
         self._active_ws = ws
+        # サイトとつながった合図を、見張り（30 秒後）を待たずに EA へ書く → パネルが「連携済み」になる
+        await self.mt.touch_gate()
         status = self._with_risk(await self.mt.status(include_today=True))
         self._status_key = self._status_fingerprint(status)
         await self._send(
@@ -2222,11 +2224,13 @@ class Bridge:
                     if self.mt.ready:
                         # 再接続後も、記録してある指示に合わせるだけ
                         await self.mt.adopt_current_state()
-                        await self.mt.touch_gate()
                     continue
 
-                # 30 秒ごとの合図（EA のパネルが「連携済み／未接続」を出す材料）
-                await self.mt.touch_gate()
+                # 30 秒ごとの合図（EA のパネルが「ユメックAIと連携済み／未接続」を出す材料）。
+                # サイト（中継）とつながっているときだけ書く。中継に断られている・届いていないのに
+                # 「連携済み」と出すと、一斉制御もロビーも効かないのに正常に見えてしまう（実機で起きた）
+                if self._active_ws is not None:
+                    await self.mt.touch_gate()
 
                 if self.cfg.reassert:
                     # サイトでの指示だけが正。MT5 側がそれと違っていたら、
@@ -2284,9 +2288,6 @@ class Bridge:
             await self.mt.adopt_current_state()
         except Exception as exc:  # noqa: BLE001
             log.exception("起動時の状態引き継ぎに失敗しました（中継への接続は続けます）: %s", exc)
-        # EA のパネルが「ユメックAIと連携済み」になる合図。最初の見張り（30 秒後）を待たずに書く
-        await self.mt.touch_gate()
-
         watchdog = asyncio.create_task(self.watchdog(), name="watchdog")
         pusher = asyncio.create_task(self.status_pusher(), name="pusher")
         tasks = [watchdog, pusher]
