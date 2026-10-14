@@ -728,6 +728,17 @@ def wait_for_link() -> int:
                     accounts.append(acct)
         except Exception as exc:  # noqa: BLE001
             log(f"MT5 の口座を読めませんでした: {exc}")
+        if not accounts:
+            # 入れたばかりの MT5 は表示名に口座番号が出ないことがある。ログイン中の MT5 から直接読む
+            try:
+                session = find_logged_in_terminal()
+                acct = str((session or {}).get("account") or "").strip()
+                if acct.isdigit():
+                    accounts.append(acct)
+            except Exception as exc:  # noqa: BLE001
+                log(f"ログイン中の MT5 を読めませんでした: {exc}")
+        if not accounts:
+            log("ログイン中の MT5 が見つからないので、合図はまだ取りに行けません（MT5 にログインしてください）")
         for acct in accounts:
             token = relay_claim(acct)
             if token:
@@ -2232,6 +2243,12 @@ def main() -> int:
             # 同じファイルを後で開き直した（合図は使い終わっている）。連携済みなので、
             # 失敗と言わずに、ふつうに開いたときと同じ動きにする
             log("ファイル名の合図は使えませんでしたが、連携済みなのでそのまま続けます")
+            connect_token = ""
+        elif not room and exe_token:
+            # ダウンロードしたファイルの合図が切れている（時間が経ってから開いた）。
+            # 失敗と言わずに初回の設定へ進む。設置のあとは「設置が終わった」の合図を裏で待つので、
+            # ロビーで押してもらえば紐づく
+            log("ファイル名／ダウンロード元の合図は切れていました。初回の設定へ進みます")
             connect_token = ""
         elif not room:
             # ここで黙って終わると、サイトのボタンを押しても何も起きないように見える
