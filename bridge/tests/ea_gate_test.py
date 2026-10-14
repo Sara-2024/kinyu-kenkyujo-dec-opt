@@ -152,6 +152,7 @@ check("「判定が期限切れ」は出さない", "判定が期限切れ" not 
 check("AI 判定（廃止済み）が残っていない", "AiAllowsEntry" not in GATE and "AI_GATE_MODE" not in GATE)
 check("接続ツールの合図（AI_BRIDGE_AT）で生きているかを見る", "AI_BRIDGE_AT" in GATE and "GateBridgeAlive" in GATE)
 check("合図は読むたびに 0 へ戻す（古い合図が居座らない）", 'GlobalVariableSet("AI_BRIDGE_AT", 0.0)' in GATE)
+check("生きているかは「変化を最後に見た時刻」で決める（PC の時計と更新時刻を直接比べない）", "g_gate_changed_at" in GATE and "now - beat" not in GATE and "now - g_gate_mtime" not in GATE)
 
 if not SOURCES:
     print("  --   EA のソース（.mq5）が無いので省略します（配るのは .ex5 だけ）")

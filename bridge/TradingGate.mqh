@@ -26,6 +26,11 @@ input bool   InpAllowWhenMissing = false;              // 指令が無いとき�
 
 bool     g_gate_file_ok = false;
 datetime g_gate_mtime   = 0;
+// 指令ファイルが「前に読んだときから変わった」のを最後に見た時刻（この PC の時計）。
+// 更新時刻や合図の値を PC の時計と直接比べない（MT5 がどの時間基準で返すかに依らない）。
+datetime g_gate_prev_mtime = 0;
+double   g_gate_prev_beat  = -1.0;
+datetime g_gate_changed_at = 0;
 
 void SyncGateFileToGlobals()
   {
@@ -38,6 +43,11 @@ void SyncGateFileToGlobals()
      }
    g_gate_file_ok = true;
    g_gate_mtime   = (datetime)FileGetInteger(handle, FILE_MODIFY_DATE);
+   if(g_gate_mtime != g_gate_prev_mtime)
+     {
+      g_gate_prev_mtime = g_gate_mtime;
+      g_gate_changed_at = TimeLocal();
+     }
 
    // 合図は毎回 0 に戻してから読み直す。MT5 のグローバル変数は消えずに残るので、
    // 指令ファイルから行が消えても古い合図が居座り、「連携済み」のままになるため
@@ -56,6 +66,12 @@ void SyncGateFileToGlobals()
       GlobalVariableSet(StringSubstr(line, 0, eq), StringToDouble(StringSubstr(line, eq + 1)));
      }
    FileClose(handle);
+   const double beat = GateNumber("AI_BRIDGE_AT", 0.0);
+   if(beat != g_gate_prev_beat)
+     {
+      g_gate_prev_beat  = beat;
+      if(beat > 0) g_gate_changed_at = TimeLocal();
+     }
    DrawGateStatus();
   }
 
@@ -77,21 +93,18 @@ bool IsTradingAllowedRaw()
 
 //+------------------------------------------------------------------+
 //| 接続ツール（パスポート）が生きているか。                            |
-//|   接続ツールは 30 秒ごとに指令ファイルへ AI_BRIDGE_AT（PC の時計の   |
-//|   UNIX 秒）を書く。それが新しければ「連携済み」。                    |
-//|   古い接続ツールは合図を書かないので、指令ファイルの更新時刻でも見る。 |
+//|   接続ツールは 30 秒ごとに指令ファイルへ AI_BRIDGE_AT（合図）を書く。 |
+//|   この EA は 1 秒ごとにファイルを読み、「合図の値」か「更新時刻」が    |
+//|   前回と変わっていれば、そのとき（PC の時計）を覚える。              |
+//|   最後に変わってから GATE_ALIVE_SEC 以内なら「連携済み」。            |
+//|   古い接続ツールは合図を書かないが、指令ファイルを書き直すので         |
+//|   更新時刻の変化で拾える。                                           |
 //+------------------------------------------------------------------+
 bool GateBridgeAlive()
   {
-   if(!g_gate_file_ok)
+   if(!g_gate_file_ok || g_gate_changed_at <= 0)
       return(false);
-   const datetime now  = TimeLocal();
-   const datetime beat = (datetime)GateNumber("AI_BRIDGE_AT", 0.0);
-   if(beat > 0 && MathAbs((double)(now - beat)) <= GATE_ALIVE_SEC)
-      return(true);
-   if(g_gate_mtime > 0 && MathAbs((double)(now - g_gate_mtime)) <= GATE_ALIVE_SEC)
-      return(true);
-   return(false);
+   return((TimeLocal() - g_gate_changed_at) <= GATE_ALIVE_SEC);
   }
 
 //--- パネルに出す1行（サイトと連携しているか）

@@ -2222,6 +2222,7 @@ class Bridge:
                     if self.mt.ready:
                         # 再接続後も、記録してある指示に合わせるだけ
                         await self.mt.adopt_current_state()
+                        await self.mt.touch_gate()
                     continue
 
                 # 30 秒ごとの合図（EA のパネルが「連携済み／未接続」を出す材料）
@@ -2283,6 +2284,8 @@ class Bridge:
             await self.mt.adopt_current_state()
         except Exception as exc:  # noqa: BLE001
             log.exception("起動時の状態引き継ぎに失敗しました（中継への接続は続けます）: %s", exc)
+        # EA のパネルが「ユメックAIと連携済み」になる合図。最初の見張り（30 秒後）を待たずに書く
+        await self.mt.touch_gate()
 
         watchdog = asyncio.create_task(self.watchdog(), name="watchdog")
         pusher = asyncio.create_task(self.status_pusher(), name="pusher")
