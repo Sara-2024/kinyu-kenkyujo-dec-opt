@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """配る EA（コンパイル済み .ex5）の控えを作る。
 
-Windows で MetaEditor を使って YumekkuEA_win.mq5 をコンパイルしたあと、
+Windows で MetaEditor を使って YumekkuEA-1年版.mq5 をコンパイルしたあと、
 できた .ex5 を bridge/ に置いてから、これを一度実行する。
 
     py -3 tools\\make-ea-manifest.py
 
 やること:
-  1. bridge/YumekkuEA_win.ex5 の SHA-256 を取る
-  2. bridge/YumekkuEA_win.mq5 から版（#property version）を読む
+  1. bridge/YumekkuEA-1年版.ex5 の SHA-256 を取る
+  2. bridge/YumekkuEA-1年版.mq5 から版（#property version）を読む
   3. bridge/ea_manifest.json に書く
 
 この manifest は exe に同梱され、お客様の PC で

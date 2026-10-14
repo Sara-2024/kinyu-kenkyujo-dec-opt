@@ -269,7 +269,7 @@ export const MT5_STEPS: UserStep[] = [
   {
     no: 1,
     title: 'システムをチャートに載せる',
-    detail: 'ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA_win（Mac は YumekkuEA_mac）をゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK',
+    detail: 'ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA-1年版をゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK',
   },
   {
     no: 2,

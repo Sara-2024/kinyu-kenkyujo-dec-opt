@@ -119,10 +119,10 @@ check("ログイン済みの判定が Mac 版になっている", connect.find_l
 check("ブリッジの起動が Mac 版になっている", connect.start_bridge is connect_mac.start_bridge)
 check("MetaTrader5 として mt5_files が入っている", sys.modules["MetaTrader5"] is connect_mac.mt5_files)
 check("設定の置き場が ~/Library/Application Support の下", str(connect.CONFIG_DIR).startswith(str(HOME / "Library")), str(connect.CONFIG_DIR))
-check("「ログインしていません」の案内が Mac 用（EA を載せる手順）になっている", "YumekkuEA_mac" in " ".join(connect.LOGIN_MISSING_LINES) and "ナビゲーター" in " ".join(connect.LOGIN_MISSING_LINES))
+check("「ログインしていません」の案内が Mac 用（EA を載せる手順）になっている", "YumekkuEA-1年版" in " ".join(connect.LOGIN_MISSING_LINES) and "ナビゲーター" in " ".join(connect.LOGIN_MISSING_LINES))
 check("見出しも「ログインしていない」ではなく「読み取れない」", "読み取れません" in connect.LOGIN_MISSING_TITLE)
 check("確かめ直すボタンがある（載せると自動で進む）", bool(connect.LOGIN_RETRY_LABEL))
-check("時間切れの案内も EA を載せる手順", "YumekkuEA_mac" in connect.LOGIN_TIMEOUT_MESSAGE[1])
+check("時間切れの案内も EA を載せる手順", "YumekkuEA-1年版" in connect.LOGIN_TIMEOUT_MESSAGE[1])
 check("ログインを読む前に EA を置く", connect.PREPARE_TERMINAL is connect_mac.install_ea_for)
 
 # ── 2) MT5 を探す ──
@@ -217,7 +217,7 @@ check("build-mac.sh は bridge/mac/ の EA を同梱する", 'MAC_EA_DIR="$ROOT/
 check("build-mac.sh は Windows 用の .ex5 を同梱しない", '"$ROOT"/bridge/*.ex5' not in build)
 check("build-mac.sh は Windows 用の控え（ea_manifest.json）を同梱しない", '"$ROOT"/bridge/ea_manifest.json' not in build)
 check("build-mac.sh は Mac 用の控えを毎回作り直す", "make-ea-manifest.py\" --dir \"$MAC_EA_DIR\"" in build)
-check("Mac 用の .ex5 がリポジトリにある", (ROOT / "bridge" / "mac" / "YumekkuEA_mac.ex5").is_file())
+check("Mac 用の .ex5 がリポジトリにある", (ROOT / "bridge" / "mac" / "YumekkuEA-1年版.ex5").is_file())
 check("Mac 用のソースはコミットしない（.gitignore）", "bridge/mac/*.mq5" in (ROOT / ".gitignore").read_text(encoding="utf-8"))
 check("コンパイルの手順がある（tools/mac/compile-ea.sh）", (ROOT / "tools" / "mac" / "compile-ea.sh").is_file())
 
@@ -229,7 +229,7 @@ _hand_placed = _experts / "YumekkuEA_mac.ex5"
 _hand_placed.write_bytes(b"EX5")
 _source = _experts / "YumekkuEA_Lot005_Mac.mq5"
 _source.write_text("// source", encoding="utf-8")
-_removed = _ea.cleanup_other_versions(_experts, "YumekkuEA_win.ex5")
+_removed = _ea.cleanup_other_versions(_experts, "YumekkuEA-1年版.ex5")
 check("Mac では別名の Yumekku .ex5 を消さない", _hand_placed.is_file() and _removed == [], str(_removed))
 check("ソース（.mq5）は Mac でも消さない", _source.is_file())
 workflow = (ROOT / ".github" / "workflows" / "build-mac.yml").read_text(encoding="utf-8")

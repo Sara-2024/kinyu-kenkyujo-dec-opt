@@ -18,7 +18,7 @@ except ImportError as exc:  # DLL が読めない等もここに来る。理由�
 # 名前の後半（版など）は変わることがあるので、見つけるときは EA_MATCH で探す。
 # EA_NAMES は「いま配っているもの」で、同梱の .ex5 から決まる（無ければこの既定値）。
 EA_MATCH = "Yumekku"
-EA_NAMES = ("YumekkuEA_win",)
+EA_NAMES = ("YumekkuEA-1年版",)   # Windows・Mac とも同じ名前
 
 
 def is_our_ea(stem: str) -> bool:

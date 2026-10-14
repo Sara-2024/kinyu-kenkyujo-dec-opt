@@ -259,8 +259,8 @@ def main() -> int:
         st = ea_manager.status(t.data_path, source)
         good = st.state in (ea_manager.LATEST, ea_manager.NOT_INSTALLED)
         row(f"{t.label}", f"{st.state}（入っている版 {st.installed_version or '不明'}）", "✓" if good else "△")
-        ex5 = t.data_path / "MQL5" / "Experts" / "YumekkuEA_win.ex5"
-        mq5 = t.data_path / "MQL5" / "Experts" / "YumekkuEA_win.mq5"
+        ex5 = t.data_path / "MQL5" / "Experts" / "YumekkuEA-1年版.ex5"
+        mq5 = t.data_path / "MQL5" / "Experts" / "YumekkuEA-1年版.mq5"
         inc = t.data_path / "MQL5" / "Include" / "TradingGate.mqh"
         row("  .ex5", "ある" if ex5.is_file() else "無い", "✓" if ex5.is_file() else "✕")
         # 前は .mq5 を配って現地でコンパイルさせていた。その残りがあれば知らせる

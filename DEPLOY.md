@@ -92,7 +92,7 @@ TRELAB_WS_URL=wss://kinyu-relay.onrender.com/bridge
    - 黒い画面は出ない。中では EA 配置 → ブリッジ起動まで進む（EA はコンパイル済みを配るので、お客様のPCではコンパイルしない）
    - あわせて `aitrader://` とスタートアップを登録するので、
      次回からは**サイトのボタン1つ**、PC再起動後は**自動**でつながる
-3. ゴールド（XAUUSD）のチャートに YumekkuEA_win を載せ、自動売買 ON
+3. ゴールド（XAUUSD）のチャートに YumekkuEA-1年版 を載せ、自動売買 ON
 4. うまくいかないときは `%LOCALAPPDATA%\AITrader\connect.log` と `bridge.log` を見る
    （画面付きで追うなら `はじめる.bat` か `tools\start-connect.bat`）
 

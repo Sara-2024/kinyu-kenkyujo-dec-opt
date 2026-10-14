@@ -355,16 +355,16 @@ def _patch() -> None:
     # Mac は「EA が控えを書いているか」でログインを判定する。文言もそれに合わせる
     connect.LOGIN_MISSING_TITLE = "{label} の口座をまだ読み取れません。"
     connect.LOGIN_MISSING_LINES = (
-        "Mac では、ゴールドのチャートに YumekkuEA_mac が載って動いているときだけ、口座を読み取れます。",
-        "MT5 の画面で：ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA_mac を、ゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK。",
+        "Mac では、ゴールドのチャートに YumekkuEA-1年版 が載って動いているときだけ、口座を読み取れます。",
+        "MT5 の画面で：ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA-1年版 を、ゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK。",
         "MT5 の上のほうにある「アルゴ取引」ボタンも押して、緑にしてください。",
         "載せると、この画面は自動で先へ進みます（数秒かかります）。",
     )
     connect.LOGIN_RETRY_LABEL = "載せたので、もう一度確かめる"
-    connect.LOGIN_WAIT_TEXT = "ゴールドのチャートに YumekkuEA_mac が載るのを待っています"
+    connect.LOGIN_WAIT_TEXT = "ゴールドのチャートに YumekkuEA-1年版 が載るのを待っています"
     connect.LOGIN_TIMEOUT_MESSAGE = (
         "MT5 の口座を読み取れませんでした。",
-        "ゴールドのチャートに YumekkuEA_mac を載せて「アルゴ取引」を ON にしてから、もう一度このアプリを開いてください。",
+        "ゴールドのチャートに YumekkuEA-1年版 を載せて「アルゴ取引」を ON にしてから、もう一度このアプリを開いてください。",
     )
     connect.PREPARE_TERMINAL = install_ea_for
     connect.mt5_detect.list_terminals = list_terminals
@@ -389,7 +389,7 @@ def _patch() -> None:
     connect.start_bridge = start_bridge
     # Mac では「別名の Yumekku」を片づけない。手で置いた検証用の EA を「前の版」として
     # 消してしまった（実機で起きた）。Mac は台数が少なく、並んでいても案内文の名前
-    #（YumekkuEA_mac）で見分けられるので、消さずに残す
+    #（YumekkuEA-1年版）で見分けられるので、消さずに残す
     import ea_manager
 
     def _keep_other_versions(experts, keep, *, log=lambda _m: None):
@@ -398,9 +398,9 @@ def _patch() -> None:
 
     ea_manager.cleanup_other_versions = _keep_other_versions
 
-    # 同梱している EA は Mac 用（YumekkuEA_mac）。connect.py は読み込み時に Windows 用の名前
+    # 同梱している EA は Mac 用（YumekkuEA-1年版）。connect.py は読み込み時に Windows 用の名前
     #（EA_NAMES[0]）で EA_NAME / EA_FILES を決めるので、同梱の .ex5 の名前に差し替える。
-    # 差し替えないと、自己確認が「YumekkuEA_win.ex5 が無い」で止まり、案内文も Windows の名前になる。
+    # 差し替えないと、自己確認が「YumekkuEA-1年版.ex5 が無い」で止まり、案内文も Windows の名前になる。
     # .app では bridge/ に Mac 用だけが入っている。手元（frozen でない）では bridge/mac/ を見る
     import mt5_terminal
 

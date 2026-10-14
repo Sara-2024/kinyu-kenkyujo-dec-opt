@@ -39,7 +39,7 @@ def _current_ea_name() -> str:
     for q in found:
         if "yumekku" in q.stem.lower():
             return q.stem
-    return "YumekkuEA_win"  # 無いときの既定。ここで止まるのではなく、あとの案内に使う
+    return "YumekkuEA-1年版"  # 無いときの既定。ここで止まるのではなく、あとの案内に使う
 
 
 EA_NAME = _current_ea_name()
@@ -275,7 +275,7 @@ def make_manifest(ex5: Path) -> dict:
                 pass
 
     # ③ それでも分からなければ聞く
-    # ③ 最後は EA の名前から起こす（YumekkuEA_win → 11）。
+    # ③ 最後は EA の名前から起こす（YumekkuEA-1年版 → 不明）。
     #    版はサイトに出す札でしかないので、ここで止めない。
     if not version:
         found = re.search(r"_v(\d+)$", EA_NAME)

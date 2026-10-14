@@ -86,6 +86,8 @@ OLD_EA_NAMES = (
     "OrbitGoldEA_v11",
     "YumekkuEA_v11",
     "3YumekkuEA_win",
+    "YumekkuEA_win",   # 2026-10-14 まで配っていた Windows 用（v1.00。サイト連携なし・有効期限 2026-10-15）
+    "YumekkuEA_mac",   # 同じく Mac 用（Mac では片づけない。connect_mac._patch）
 )
 INCLUDE_FILES = ("TradingGate.mqh",)
 

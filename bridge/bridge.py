@@ -81,7 +81,7 @@ try:
         resolve_terminal_exe,
     )
 except ImportError:
-    EA_NAMES = ("YumekkuEA_win",)
+    EA_NAMES = ("YumekkuEA-1年版",)
 
     def _is_our_ea(stem: str) -> bool:
         return "yumekku" in str(stem).lower()

@@ -91,7 +91,7 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 
 - **止めるのは新規注文だけ。** 決済・SL/TP・トレーリング・ロットには一切触らない。
   停止中も `ManageM1Basket()` の決済管理は動き続ける。ナンピンの追加も新規注文として
-  同じゲートを通す（`bridge/YumekkuEA_win.mq5` の `OpenTrade` と ナンピン追加の2か所）。
+  同じゲートを通す（`bridge/YumekkuEA-1年版.mq5` の `OpenTrade` と ナンピン追加の2か所）。
 - **買いと売りは別々に止める。** 高値が近いことを理由に売りを止めない。逆も同じ。
 - **原則は許可。** 「レンジっぽい」「自信がない」では止めない。止めるときは、
   入力に実在する数値と理由コード（`api/_lib/risk.ts` の `REASON_CODES`）が必ず要る。
@@ -190,8 +190,8 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
     閉じる・取り消すは `trelab_cmd.ini` → `trelab_cmd_ack.ini` の往復（`docs/mac-ea-files.md`）。
     `sys.modules["MetaTrader5"] = mt5_files` と差し込むので `bridge.py` は変えない。
     EA が控えを書いていなければ「ログインしていない」扱いになる（`initialize()` が False）。
-  - **Mac 用の EA は `bridge/mac/YumekkuEA_mac.mq5` → `bridge/mac/YumekkuEA_mac.ex5`。**
-    Windows 用（`bridge/YumekkuEA_win`）と売買の判断は同じで、違いは「接続ツールとのファイルの
+  - **Mac 用の EA は `bridge/mac/YumekkuEA-1年版.mq5` → `bridge/mac/YumekkuEA-1年版.ex5`。**
+    Windows 用（`bridge/YumekkuEA-1年版`。同じ名前）と売買の判断は同じで、違いは「接続ツールとのファイルの
     やり取り（`Tb*` の関数。`docs/mac-ea-files.md` の形式）」と、ロットが入力（固定／残高％・上限）
     になっていること。**bridge/ 直下に置かない**：Windows の `3_リリースする.bat` が直下の
     「別名の Yumekku .ex5」を片づけるので消される。ソース（`.mq5`）は `.gitignore`（配らない・
@@ -206,7 +206,7 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
     `TodayRealizedPnL` は M30 軸も数える。
     **Windows 用の EA は、この Mac 版から起こしたもの**（2026-10-14 から。それまでの Windows 版 v1.00 は
     サイト連携が無く、ロット 0.01 固定・有効期限 2026-10-15 だった）。Mac 版を直したら Windows 版
-    （`bridge/YumekkuEA_win.mq5`）も同じように直し、`bash tools/mac/compile-ea.sh --all` で両方作る。
+    （`bridge/YumekkuEA-1年版.mq5`）も同じように直し、`bash tools/mac/compile-ea.sh all` で両方作る。
     違いは `Tb*`（ファイルのやり取り）と `OnTradeTransaction` が無いことと、`GateProfile` の名前だけ。
   - **配るのは `ドリームランド・パスポート.app` を ZIP にしたもの**（`public/download/DreamlandPassport-mac.zip`）。
     **Apple シリコン用（arm64）と Intel 用（x86_64）の本体を両方同梱**し、
@@ -234,7 +234,7 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   - **Mac では別名の Yumekku EA を片づけない**（`connect_mac._patch` が `cleanup_other_versions` を
     無効にする）。手で置いた Mac 用の EA を「前の版」として消してしまった実機の事故から。
     Mac は台数が少なく、手で置いた検証用の EA が並んでいることがあるので、消さずに残す
-    （どれを載せるかは案内文の名前 `YumekkuEA_mac` で分かる）。
+    （どれを載せるかは案内文の名前 `YumekkuEA-1年版` で分かる）。
     ソース（`.mq5`）はどちらの OS でも消さない（`cleanup_other_versions` は `.ex5` だけ）。
     Mac の Python は HTTPS の証明書を持たないので certifi を同梱し `SSL_CERT_FILE` で使う
     （無いと中継にもサイトにもつながらない）。
@@ -278,15 +278,17 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   （`bridge/mt5_detect.py` が AppData のデータフォルダを数えるだけ）。
   選択画面は MT5 が1台でも出す（口座番号を見て「どこに入れるか」を確かめてもらう）。
   画面を出せないときだけ、最後に使った MT5 を自動で選ぶ。
-- **EA の置き場と名前は変えない。** `MQL5/Experts/YumekkuEA_win.mq5` のまま。
-  すでに使っているお客様のチャート設定を動かさないため。
+- **EA の置き場と名前は、軽々しく変えない。** いまは `MQL5/Experts/YumekkuEA-1年版.ex5`
+  （Windows・Mac とも同じ名前。2026-10-14 に `YumekkuEA_win` / `YumekkuEA_mac` から改名）。
+  変えると、すでに使っているお客様はチャートに新しい名前の EA を載せ直すことになる
+  （旧名は `OLD_EA_NAMES` で片づける。Mac は片づけない）。
   状態判定と配置は `bridge/ea_manager.py` に集約し、`NOT_INSTALLED` /
   `INSTALLED` / `UPDATE_AVAILABLE` / `LATEST` / `ERROR` を返す。
   **無条件に上書き・削除しない。** 中身（SHA-256）が同じなら触らない。
 - **配るのはコンパイル済み（`.ex5`）だけ。** お客様の PC で MetaEditor を起動しない、
   コンパイルもしない、ソース（`.mq5`）も配らない。
   `.ex5` から版は読めないので、同梱の `ea_manifest.json` に版と SHA-256 を書く。
-  作り方は **この Mac で `bash tools/mac/compile-ea.sh --all`**（Windows 用・Mac 用の両方。
+  作り方は **この Mac で `bash tools/mac/compile-ea.sh all`**（Windows 用・Mac 用の両方。
   `.ex5` は OS に依らないので Windows は要らない）→ `.ex5` をコミット（`ea_manifest.json` は
   自動ビルドが作り直す）。Windows で MetaEditor コンパイル → `py -3 tools\make-ea-manifest.py` でもよい。
   `tools\build-windows.bat` は、この2つが無ければ exe を作らずに止まる。
@@ -373,11 +375,11 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   Python 版の ZIP は `tools/pack-connector.sh` で作り、`VITE_CONNECTOR_URL=/download/DreamlandPassport.zip`
   で差し替えられる。`connect.py` や `bridge/` を変えたら exe を作り直して置き直すこと。
   メールで送る導線は廃止した。
-- **MT5 に送る EA は `bridge/YumekkuEA_win.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、
+- **MT5 に送る EA は `bridge/YumekkuEA-1年版.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、
   XAUUSD 専用）。v6 はトレンド方向を UP/DOWN の二択にし、ナンピンを既定 OFF にしたもの。
-  配るのはコンパイル済みの `bridge/YumekkuEA_win.ex5` だけ。ソース（`.mq5`）は
+  配るのはコンパイル済みの `bridge/YumekkuEA-1年版.ex5` だけ。ソース（`.mq5`）は
   配らないし、リポジトリにも入れない（`.gitignore`）。**ソースはこの Mac にしか無い**
-  （`bridge/YumekkuEA_win.mq5` と `bridge/mac/YumekkuEA_mac.mq5`）。消さないこと。
+  （`bridge/YumekkuEA-1年版.mq5` と `bridge/mac/YumekkuEA-1年版.mq5`）。消さないこと。
   - **設定画面の一番上は「ロット」。** `#include <TradingGate.mqh>` は入力の**後ろ**に置く
     （この中にも `input` があり、先頭に置くとそれが一番上に出る）。
   - **使用期限は 1 年。起算日は 2026-11-01**（`EXPIRY_TIME` = 2027-10-31 23:59:59）。過ぎると新規だけ止め、
