@@ -203,7 +203,11 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
     `bridge/ea_manifest.json` は入れない（入れると `ea_manager` が Windows 用を優先して置く）。
     連携の配線（`SiteAllowsEntry` / `AiAllowsEntry` / `SiteLot` / `OnTimer`）と Mac のファイル
     書き出しが揃っているかは `bridge/tests/ea_gate_test.py` が見る（ソースがある手元だけ）。
-    `TodayRealizedPnL` は M30 軸も数える（Windows 用の元ソースは M1/H1 だけ数えていた）。
+    `TodayRealizedPnL` は M30 軸も数える。
+    **Windows 用の EA は、この Mac 版から起こしたもの**（2026-10-14 から。それまでの Windows 版 v1.00 は
+    サイト連携が無く、ロット 0.01 固定・有効期限 2026-10-15 だった）。Mac 版を直したら Windows 版
+    （`bridge/YumekkuEA_win.mq5`）も同じように直し、`bash tools/mac/compile-ea.sh --all` で両方作る。
+    違いは `Tb*`（ファイルのやり取り）と `OnTradeTransaction` が無いことと、`GateProfile` の名前だけ。
   - **配るのは `ドリームランド・パスポート.app` を ZIP にしたもの**（`public/download/DreamlandPassport-mac.zip`）。
     **Apple シリコン用（arm64）と Intel 用（x86_64）の本体を両方同梱**し、
     `tools/mac/launcher.applescript` が `uname -m` で使い分ける（お客様はどちらでも同じ ZIP）。
@@ -282,8 +286,9 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
 - **配るのはコンパイル済み（`.ex5`）だけ。** お客様の PC で MetaEditor を起動しない、
   コンパイルもしない、ソース（`.mq5`）も配らない。
   `.ex5` から版は読めないので、同梱の `ea_manifest.json` に版と SHA-256 を書く。
-  作り方は Windows で MetaEditor コンパイル →
-  `py -3 tools\make-ea-manifest.py` → `.ex5` と `ea_manifest.json` をコミット。
+  作り方は **この Mac で `bash tools/mac/compile-ea.sh --all`**（Windows 用・Mac 用の両方。
+  `.ex5` は OS に依らないので Windows は要らない）→ `.ex5` をコミット（`ea_manifest.json` は
+  自動ビルドが作り直す）。Windows で MetaEditor コンパイル → `py -3 tools\make-ea-manifest.py` でもよい。
   `tools\build-windows.bat` は、この2つが無ければ exe を作らずに止まる。
 - **同梱物の SHA-256 は置く前に確かめる。** manifest と食い違っていたら置かない
   （`Source.ok`）。置いたあとも、置いたファイルを取り直して確かめる。
@@ -371,7 +376,14 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
 - **MT5 に送る EA は `bridge/YumekkuEA_win.mq5` の1つだけ**（Orbit GOLD 2軸エンジン、
   XAUUSD 専用）。v6 はトレンド方向を UP/DOWN の二択にし、ナンピンを既定 OFF にしたもの。
   配るのはコンパイル済みの `bridge/YumekkuEA_win.ex5` だけ。ソース（`.mq5`）は
-  配らないし、リポジトリにも入れない（`.gitignore`）。
+  配らないし、リポジトリにも入れない（`.gitignore`）。**ソースはこの Mac にしか無い**
+  （`bridge/YumekkuEA_win.mq5` と `bridge/mac/YumekkuEA_mac.mq5`）。消さないこと。
+  - **設定画面の一番上は「ロット」。** `#include <TradingGate.mqh>` は入力の**後ろ**に置く
+    （この中にも `input` があり、先頭に置くとそれが一番上に出る）。
+  - **使用期限は 1 年**（`EXPIRY_TIME`。いまは 2027-10-14）。過ぎると新規だけ止め、保有分は通常どおり決済。
+    作り直すたびに「作った日の 1 年後」へ書き換える。切れる前に配り直すこと。
+  - **ロットの上限は既定で無し**（`InpMaxLot = 0` ＝ 口座の上限まで）。サイトの管理画面で決めた
+    ロット（`AI_LOT`、ブリッジの `ALLOWED_VARIABLES` で 0.01〜5.0）がそのまま効く。
   `bridge/OrbitGoldEA_v6.mq5` は**検証用に残してある**（トレンドを UP/DOWN の
   二択にして、中間で止まらないようにした版）。配りも読み込みもしない。
   消さないこと。`EA_NAMES` に入っていないので、お客様には届かない。
