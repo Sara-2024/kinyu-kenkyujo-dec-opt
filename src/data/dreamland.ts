@@ -10,7 +10,7 @@ export type DreamlandPlan = 'first' | 'crystal' | 'premium'
 export const DREAMLAND_PLAN_NAMES: Record<DreamlandPlan, string> = {
   first: 'ファーストクラス',
   crystal: 'ロイヤルファーストクラス',
-  premium: 'プレミアムプラン',
+  premium: 'プレミアム',
 }
 
 export interface DreamlandApplication {
