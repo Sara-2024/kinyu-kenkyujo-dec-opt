@@ -24,7 +24,10 @@ input bool   InpAllowWhenMissing = false;              // 指令が無いとき�
 // 接続ツールは 30 秒ごとに書くので、数回落としても持つ長さにしてある
 #define GATE_ALIVE_SEC 180
 
-// EA の設定「ユメックAIの制御を受ける」。false のとき、サイトの稼働/停止は見ない（EA が OnInit で入れる）
+// EA の設定「ユメックAIの制御を受ける」。false のとき、サイトの稼働/停止は見ない（EA が OnInit で入れる）。
+// 古い TradingGate.mqh が MT5 の Include に残っていると EA が「undeclared identifier」で通らないので、
+// EA 側は #ifdef TRADINGGATE_SITE_CONTROL で囲む（この印が無い古い版でもコンパイルは通る。表示だけ「稼働中」になる）
+#define TRADINGGATE_SITE_CONTROL
 bool     GateSiteControl = true;
 // 指令・控えのファイル名。同じ PC に口座が 2 つ以上あるとき（ロイヤルファーストクラス）、
 // 接続ツールは口座番号付きの名前（trelab_gate_<口座番号>.ini）も書く。あればそちらを読み、
