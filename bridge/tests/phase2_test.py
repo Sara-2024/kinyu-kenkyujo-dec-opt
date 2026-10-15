@@ -326,6 +326,18 @@ if adm_mig.is_file():
     check("合言葉を変えられるのは管理者だけ", "_require_admin(p_token)" in adm_sql)
     check("管理サイトの migration は既存のテーブルを落とさない", "drop table" not in adm_sql.lower())
 
+
+# ── 8-9) プレミアムプラン（渡航なし）の migration も schema.sql とずれていないか ──
+pm_mig = ROOT / "supabase" / "migrations" / "20261015_premium_plan.sql"
+check("プレミアムプランの migration がある", pm_mig.is_file())
+if pm_mig.is_file():
+    pm_sql = pm_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("プレミアムプランの migration の中身が schema.sql と同じ", pm_sql.strip() in schema_all)
+    check("会員・合言葉・申込の 3 つの制約に premium が入る", pm_sql.count("('first', 'crystal', 'premium')") >= 5)
+    check("合言葉を決めるのは管理者だけ", "_require_admin(p_token)" in pm_sql[pm_sql.index("admin_set_plan_password") :])
+    check("プレミアムプランの migration は既存のテーブルを落とさない", "drop table" not in pm_sql.lower())
+
 # ── 8) DB の追加分（migration）と schema.sql がずれていないか ──
 mig_path = ROOT / "supabase" / "migrations" / "20260912_add_connect_tokens.sql"
 schema_path = ROOT / "supabase" / "schema.sql"

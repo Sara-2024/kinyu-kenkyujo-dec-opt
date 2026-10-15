@@ -10,7 +10,7 @@ export interface Member {
   /** 登録した MT5 の口座番号。会員 ＝ 口座番号 */
   account: number | null
   /** 契約プラン（ロビーの合言葉で決まる）。古い会員は null */
-  plan?: 'first' | 'crystal' | null
+  plan?: 'first' | 'crystal' | 'premium' | null
   /** 旧: メール。いまは使わない（空のまま） */
   email?: string | null
   role: MemberRole
@@ -189,7 +189,7 @@ export async function adminSetOperatorPassword(token: string, password: string):
 }
 
 /** プランごとの合言葉（ロビーの「パスポートの設置」で打つもの）を決める */
-export async function adminSetPlanPassword(token: string, plan: 'first' | 'crystal', password: string): Promise<void> {
+export async function adminSetPlanPassword(token: string, plan: 'first' | 'crystal' | 'premium', password: string): Promise<void> {
   await rpc('admin_set_plan_password', { p_token: token, p_plan: plan, p_password: password })
 }
 

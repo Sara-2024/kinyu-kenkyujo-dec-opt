@@ -13,7 +13,7 @@
 /** 1台あたりの申込回数の上限（連打・いたずら対策） */
 const RATE_LIMIT = 6
 const RATE_WINDOW_MS = 10 * 60_000
-const PLANS = ['first', 'crystal'] as const
+const PLANS = ['first', 'crystal', 'premium'] as const
 const PLATFORMS = ['windows', 'mac'] as const
 
 export type DreamlandPlan = (typeof PLANS)[number]

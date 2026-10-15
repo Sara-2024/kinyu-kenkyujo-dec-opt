@@ -89,7 +89,7 @@ export function publicMember(raw: unknown): Record<string, unknown> | null {
     id: m.id,
     account: m.account ?? null,
     name: typeof m.name === 'string' ? m.name : '',
-    plan: m.plan === 'first' || m.plan === 'crystal' ? m.plan : null,
+    plan: m.plan === 'first' || m.plan === 'crystal' || m.plan === 'premium' ? m.plan : null,
     status: m.status ?? 'active',
   }
 }
@@ -194,7 +194,7 @@ export async function handleLobby(
 
   if (input.action === 'plan') {
     const plan = data?.plan
-    if (plan !== 'first' && plan !== 'crystal') return { status: 401, body: { error: 'BAD_ENTRY' } }
+    if (plan !== 'first' && plan !== 'crystal' && plan !== 'premium') return { status: 401, body: { error: 'BAD_ENTRY' } }
     return { status: 200, body: { ok: true, plan } }
   }
   if (input.action === 'register' || input.action === 'login') {

@@ -554,11 +554,13 @@ const LINKS = {
    ═══════════════════════════════════════════════ */
 // ドリームランド本体への出発を止めるとき true。搭乗券は出すが「メンテナンス中」と案内し、本体へは移動しない
 const DREAMLAND_MAINTENANCE = false;   // 出発ボタンは出す（行き先がメンテナンス中のページ）
-const MAINTENANCE_NOTE = "ドリームランドは現在メンテナンス中です。再開しだい、この搭乗券でそのままご案内します。";
+const MAINTENANCE_NOTE = "ドリームランドは現在、渡航準備中です。準備が完了次第お知らせいたします。";
 
 const PLANS = {
   first:   { key: "first",   name: "ファーストクラス",       en: "FIRST CLASS",       gate: "1", flight: "DL-001", seat: "1A", link: "dreamlandFirst",   desc: "標準プラン",  links: 1 },
   crystal: { key: "crystal", name: "ロイヤルファーストクラス", en: "ROYAL FIRST CLASS", gate: "2", flight: "DL-002", seat: "1A", link: "dreamlandCrystal", desc: "上位プラン",  links: 2 },
+  // プレミアムプラン：中身はファーストクラスと同じ（口座 1 つ・パスポート 1 つ）だが、ドリームランドへの渡航の案内が無い（搭乗口なし）
+  premium: { key: "premium", name: "プレミアムプラン",        en: "PREMIUM",           gate: "",  flight: "",       seat: "",   link: "",                 desc: "渡航なし",    links: 1 },
 };
 /* 搭乗券の有効期間。半年プランの方は半年（期限の前にもう一度、AI の紐付けの手続きが要る） */
 const VALID_NOTE = "有効期間は原則1年。半年プランの方は半年で、期限の前にもう一度 AI の紐付け手続きが必要です。";
@@ -691,10 +693,10 @@ const SCRIPT = {
       choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
     done: { say: () => needSecond()
         ? `口座（${tail2(members[members.length - 1].account)}）のパスポートが発行できました。お使いの MT5 とドリームランドがつながっています。\nロイヤルファーストクラスは、2つ目の口座もつなげます。まだ設置していない口座は、あとからこのサイトのサービスカウンター（「2つ目の口座をつなぐ」）で手続きしてください。このまま搭乗ゲートへ進めます。${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}`
-        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : ""}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}\n次は搭乗ゲートで、搭乗券を受け取ってください。`,
+        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : ""}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}${PLAN().gate ? "\n次は搭乗ゲートで、搭乗券を受け取ってください。" : "\nお手続きは以上です。"}`,
       choices: () => needSecond()
         ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["2つ目の口座を今から発行する", "terms"], ["ほかのもの", "start"]]
-        : [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
+        : PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] : [["ほかのもの", "start"]] },
     later: { say: () => `承知しました。2つ目の口座は、いつでもこのカウンターの「2つ目の口座をつなぐ」から発行できます。\nまずは1つ目の口座で、搭乗ゲートへどうぞ（搭乗口 ${PLAN().gate}）。`,
       choices: () => [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
     failed: { say: "パスポートからの応答がありません。ツールと MT5 が起動しているか確かめて、もう一度お試しください。", docs: "progress",
@@ -702,17 +704,24 @@ const SCRIPT = {
     expired: { say: "前回のログインが切れています。口座番号をもう一度入力してください。", docs: "login",
       choices: [["ほかのもの", "start"]] },
     members: { say: () => `${PLAN().name}の、つないでいる口座です。${needSecond() ? "2つ目の口座は、まだ発行していません。" : ""}`, docs: "members",
-      choices: () => [...(needSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), [`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""], ["ほかのもの", "start"]] },
+      choices: () => [...(needSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), ...(PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""]] : []), ["ほかのもの", "start"]] },
   },
   gate: {
-    start: { say: () => planKey()
-        ? `搭乗係のミナトです。\nドリームランド行きのご案内です。${PLAN().name}のお客様の搭乗口は ${PLAN().gate} 番です。搭乗口を押してお進みください。`
-        : "搭乗係のミナトです。\nドリームランド行きのご案内です。搭乗口はご契約のプランごとに分かれています。ご契約の搭乗口を押してお進みください。", docs: "gates",
-      choices: [["ロビーにもどる", "close"]] },
-    door: { say: () => `ここは搭乗口 ${PLANS[gatePlan].gate}、${PLANS[gatePlan].name}の搭乗口です。\n出発の前に、準備ができているか一緒に確かめましょう。済んだものにチェックを入れてください。`, docs: "checks",
+    start: { say: () => !planKey()
+        ? "搭乗係のミナトです。\nドリームランド行きのご案内です。搭乗口はご契約のプランごとに分かれていますので、先にご契約時の「合言葉」を入力してください。"
+        : !PLAN().gate
+        ? `搭乗係のミナトです。\n${PLAN().name}のお客様ですね。${PLAN().name}は、ドリームランドへの渡航の対象ではありません。お手続き（口座の登録・パスポートの発行）はサービスカウンターでどうぞ。`
+        : `搭乗係のミナトです。\nドリームランド行きのご案内です。${PLAN().name}のお客様の搭乗口は ${PLAN().gate} 番です。搭乗口を押してお進みください。`,
+      docs: () => (!planKey() ? "entry" : "gates"),
+      choices: () => (!planKey() ? [["合言葉がわからない（サポート LINE）", "support"], ["ロビーにもどる", "close"]] : [["ロビーにもどる", "close"]]) },
+    door: { say: () => !PLANS[gatePlan].gate
+        ? `${PLANS[gatePlan].name}には搭乗口がありません。ドリームランドへの渡航の対象ではないプランです。`
+        : `ここは搭乗口 ${PLANS[gatePlan].gate}、${PLANS[gatePlan].name}の搭乗口です。\n出発の前に、準備ができているか一緒に確かめましょう。済んだものにチェックを入れてください。`, docs: () => (PLANS[gatePlan].gate ? "checks" : null),
       choices: [["搭乗券を受け取る", "board", "go"], ["準備にもどる", "close"]] },
-    wrong: { say: () => `お持ちの搭乗券は${PLANS[planKey()].name}です。こちらは${PLANS[gatePlan].name}の搭乗口なので、搭乗口 ${PLANS[planKey()].gate} へご案内します。`,
-      choices: () => [[`搭乗口 ${PLANS[planKey()].gate}（${PLANS[planKey()].name}）へ`, "door:" + planKey(), "go"], ["ロビーにもどる", "close"]] },
+    wrong: { say: () => PLANS[planKey()].gate
+        ? `お持ちの搭乗券は${PLANS[planKey()].name}です。こちらは${PLANS[gatePlan].name}の搭乗口なので、搭乗口 ${PLANS[planKey()].gate} へご案内します。`
+        : `お客様は${PLANS[planKey()].name}です。${PLANS[planKey()].name}は、ドリームランドへの渡航の対象ではありません。`,
+      choices: () => PLANS[planKey()].gate ? [[`搭乗口 ${PLANS[planKey()].gate}（${PLANS[planKey()].name}）へ`, "door:" + planKey(), "go"], ["ロビーにもどる", "close"]] : [["ロビーにもどる", "close"]] },
     notyet: { say: "まだチェックが付いていない手続きがあります。先にそちらを済ませてからにしますか？",
       choices: () => [[checks.account ? "サービスカウンターでパスポートを発行する" : "サービスカウンターで口座を登録する", checks.account ? "@service:connect" : "@service:register", "go"], ["チェックを見直す", gatePlan ? "door" : "start"], ["確認は済んでいるので、このまま進む", "board!"]] },
     plan: { say: "ご契約のプランは、サービスカウンターの「パスポートの発行」で合言葉を打つと決まります。先にそちらを済ませてください。",
@@ -809,7 +818,7 @@ const SCRIPT = {
     const pin = pins.find((p) => p.dataset.spot === "gate");
     if (!pin) return;
     pin.classList.toggle("is-mine", !!planKey());
-    $("gate-hint").textContent = planKey() ? `あなたの搭乗口：${PLAN().gate} 番` : "搭乗係 ミナト";
+    $("gate-hint").textContent = planKey() ? (PLAN().gate ? `あなたの搭乗口：${PLAN().gate} 番` : "渡航の対象外のプラン") : "搭乗係 ミナト";
   };
   renderReady();
   renderGates();
@@ -856,7 +865,7 @@ const SCRIPT = {
         <label class="field"><span>MT5 の口座番号（ログイン ID）</span><input name="account" inputmode="numeric" pattern="[0-9]*" placeholder="例：12345678" required value="${esc(app && app.accountFull ? app.accountFull : "")}"></label>
         <label class="field"><span>サーバー</span><input name="server" placeholder="例：XMTrading-MT5 3" required value="${esc(app ? app.server : "")}"><small>MT5 のログイン画面に出ている名前をそのまま</small></label>
         ${pwField("password", "MT5 のパスワード", "", "off")}
-        <div class="field"><span>ご契約のプラン${fixed ? "（合言葉で確認済み）" : ""}</span><div class="plans">${fixed ? planCard(PLANS[fixed], true) : planCard(PLANS.first, false) + planCard(PLANS.crystal, false)}</div></div>
+        <div class="field"><span>ご契約のプラン${fixed ? "（合言葉で確認済み）" : ""}</span><div class="plans">${fixed ? planCard(PLANS[fixed], true) : planCard(PLANS.first, false) + planCard(PLANS.crystal, false) + planCard(PLANS.premium, false)}</div></div>
         <label class="field"><span>お名前</span><input name="name" autocomplete="name" required value="${esc(app ? app.name || "" : "")}"></label>
         ${NOTICE}
         <p class="err" id="reg-err" aria-live="polite"></p>
@@ -881,12 +890,12 @@ const SCRIPT = {
         <li><span>MT5 の上のほうにある<b>「アルゴ取引」ボタン</b>を押して、緑にする</span></li>
       </ol><p class="note">Windows も Mac も同じ名前です。</p>${osNow() === "mac" ? "" : doc("EA", "パスポートと EA の設置マニュアル", "画面の写真を見ながら、1ページずつ", "winPdf", "ひらく")}`,
     support: () => doc("LINE", "サポート LINE", "係員が、止まったところから続きをご案内します", "support", "ひらく", "doc--line"),
-    gates: () => `<div class="gates">` + Object.values(PLANS).map((p) => {
+    gates: () => `<div class="gates">` + Object.values(PLANS).filter((p) => p.gate).map((p) => {
       const mine = planKey() === p.key, locked = !!planKey() && !mine;
       return `<button type="button" class="gatecard gatecard--${p.key} ${mine ? "is-mine" : ""}" data-door="${p.key}" ${locked ? "disabled" : ""} aria-label="搭乗口 ${p.gate} ${esc(p.name)}${mine ? "（あなたの搭乗口）" : locked ? "（別のプランの搭乗口）" : ""}">
         <span class="gatecard__no">GATE<b>${esc(p.gate)}</b></span><span class="gatecard__name">${esc(p.name)}</span><span class="gatecard__flight">${esc(p.flight)} · ${esc(p.en)}</span>
         <span class="gatecard__status">${mine ? "YOUR GATE" : locked ? "OTHER PLAN" : "BOARDING"}</span></button>`;
-    }).join("") + `</div>` + (!planKey() ? `<p class="note">ご契約のプランは、サービスカウンターの「パスポートの発行」で合言葉を打つと決まります。</p>` : ""),
+    }).join("") + `</div>` + (!planKey() ? `<p class="note">ご契約のプランは、サービスカウンターの「パスポートの発行」で合言葉を打つと決まります。</p>` : "") + (planKey() && !PLAN().gate ? `<p class="note">${esc(PLAN().name)}は、ドリームランドへの渡航の対象ではありません。</p>` : ""),
     checks: () => `<div class="checks">${CHECKS.map((c) => `
         <label class="check"><input type="checkbox" data-check="${c.id}" ${checks[c.id] ? "checked" : ""}><span class="check__box" aria-hidden="true"></span>
         <span>${esc(c.title)}<small>${esc(c.note)}</small></span></label>`).join("")}</div>`,
@@ -1090,8 +1099,10 @@ const SCRIPT = {
     savePlan();
     entryPw.set(entry);
     renderGates();
-    show("service", "who");
+    const back = entryFrom; entryFrom = "";
+    show(back === "gate" ? "gate" : "service", back === "gate" ? "start" : "who");
   };
+  let entryFrom = "";
 
   /* ── 口座をつなぐ：会員登録（またはログイン）→ パスポートを呼ぶ ──
      サイトのパスワードはお客様に決めさせない。口座番号と合言葉から同じものを作って使う
@@ -1506,8 +1517,9 @@ const SCRIPT = {
     const token = (show.seq = (show.seq || 0) + 1);
     await typeText(val(node.say));
     if (token !== show.seq) return;   // 文字送りの途中で別の台詞に移った
-    if (node.docs) {
-      docs.innerHTML = DOCS[node.docs]();
+    const docsKey = val(node.docs);
+    if (docsKey) {
+      docs.innerHTML = DOCS[docsKey]();
       applyLinks(docs);
       docs.querySelectorAll("[data-check]").forEach((box) => box.addEventListener("change", () => {
         checks[box.dataset.check] = box.checked;
@@ -1517,7 +1529,7 @@ const SCRIPT = {
       const flyBtn = docs.querySelector("[data-fly]");
       if (flyBtn) flyBtn.addEventListener("click", () => fly(flyBtn.dataset.fly));
       const reg = docs.querySelector("form#reg");     if (reg) wireForm(reg, submitRegister);
-      const ent = docs.querySelector("form#entry");   if (ent) wireForm(ent, submitEntry);
+      const ent = docs.querySelector("form#entry");   if (ent) { entryFrom = staffKey === "gate" ? "gate" : ""; wireForm(ent, submitEntry); }
       const sgn = docs.querySelector("form#signup");  if (sgn) wireForm(sgn, submitSignup);
       const lgn = docs.querySelector("form#login");   if (lgn) wireForm(lgn, submitLogin);
       const lpw = docs.querySelector("form#loginpw"); if (lpw) wireForm(lpw, submitLogin);

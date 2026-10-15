@@ -5,11 +5,12 @@
 // EA の納品（設置）のときにパスワードを取り出す。
 import { supabase } from '../lib/supabase'
 
-export type DreamlandPlan = 'first' | 'crystal'
+export type DreamlandPlan = 'first' | 'crystal' | 'premium'
 
 export const DREAMLAND_PLAN_NAMES: Record<DreamlandPlan, string> = {
   first: 'ファーストクラス',
   crystal: 'ロイヤルファーストクラス',
+  premium: 'プレミアムプラン',
 }
 
 export interface DreamlandApplication {

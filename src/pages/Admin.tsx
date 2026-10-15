@@ -427,11 +427,11 @@ function OperatorPasswordSection({ token }: { token: string | null }) {
  * お客様が打ち込むもの。合った合言葉のプランに振り分けられ、会員登録でもそのプランが付く。
  */
 function PlanPasswordsSection({ token }: { token: string | null }) {
-  const [values, setValues] = useState<Record<'first' | 'crystal', string>>({ first: '', crystal: '' })
-  const [busy, setBusy] = useState<'first' | 'crystal' | null>(null)
+  const [values, setValues] = useState<Record<'first' | 'crystal' | 'premium', string>>({ first: '', crystal: '', premium: '' })
+  const [busy, setBusy] = useState<'first' | 'crystal' | 'premium' | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  const save = async (plan: 'first' | 'crystal') => {
+  const save = async (plan: 'first' | 'crystal' | 'premium') => {
     if (!token) return
     const pw = values[plan].trim()
     if (pw.length < 8) {
@@ -463,7 +463,7 @@ function PlanPasswordsSection({ token }: { token: string | null }) {
           {message}
         </p>
       )}
-      {(['first', 'crystal'] as const).map((plan) => (
+      {(['first', 'crystal', 'premium'] as const).map((plan) => (
         <div key={plan} className="mt-3 flex flex-wrap items-end gap-3">
           <label className="text-[14px] text-slate-300">
             <span className="block">{DREAMLAND_PLAN_NAMES[plan]}</span>
