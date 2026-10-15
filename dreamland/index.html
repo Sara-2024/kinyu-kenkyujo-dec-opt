@@ -239,6 +239,7 @@ a.doc:not([aria-disabled="true"]):hover{border-color:var(--gold);transform:trans
 .steps li::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:24px;height:24px;border-radius:50%;color:var(--gold-deep);background:rgba(255,244,219,.9);border:1px solid #f1e4bf;font-family:var(--serif-en);font-size:12px}
 .steps b{font-weight:600}
 .note{margin:0;font-size:12px;color:var(--soft)}
+.prep{margin:14px 0 0;padding:16px 18px;text-align:center;font-family:var(--serif);font-size:17px;line-height:1.7;font-weight:700;color:var(--ink);background:#fffdf4;border:2px solid #d9c27a;border-radius:16px;box-shadow:0 0 0 4px rgba(217,194,122,.18)}
 .checks{display:grid;gap:7px}
 .check{position:relative;display:flex;align-items:center;gap:12px;min-height:54px;padding:9px 12px;background:#fff;border:1px solid var(--line);border-radius:12px;cursor:pointer;font-size:13.5px;line-height:1.45;transition:border-color .2s,background .2s}
 .check input{position:absolute;opacity:0;pointer-events:none}
@@ -910,7 +911,7 @@ const SCRIPT = {
         <div class="pass__stub" aria-hidden="true"><span>SEAT</span><b>${esc(p.seat)}</b><span class="barcode"></span></div>
       </div>
       ${DREAMLAND_MAINTENANCE
-        ? `<p class="note" style="margin-top:14px;font-weight:700">${esc(MAINTENANCE_NOTE)}</p>`
+        ? `<p class="prep">${esc(MAINTENANCE_NOTE)}</p>`
         : `<button class="enter ${p.key === "crystal" ? "enter--crystal" : ""}" type="button" data-fly="${p.key}">${esc(p.name)}で出発 <span aria-hidden="true">›</span></button>`}`;
     },
 
