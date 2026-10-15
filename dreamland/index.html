@@ -550,6 +550,10 @@ const LINKS = {
    プラン（搭乗口はプランごとに1つ）。名前・行き先・つなぐ口座の数はここだけ直せばよい。
    どのプランかは、サービスカウンターで打つ「合言葉」で決まる（合言葉は本体サイトの管理者画面で決める）。
    ═══════════════════════════════════════════════ */
+// ドリームランド本体への出発を止めるとき true。搭乗券は出すが「メンテナンス中」と案内し、本体へは移動しない
+const DREAMLAND_MAINTENANCE = true;
+const MAINTENANCE_NOTE = "ドリームランドは現在メンテナンス中です。再開しだい、この搭乗券でそのままご案内します。";
+
 const PLANS = {
   first:   { key: "first",   name: "ファーストクラス",       en: "FIRST CLASS",       gate: "1", flight: "DL-001", seat: "1A", link: "dreamlandFirst",   desc: "標準プラン",  links: 1 },
   crystal: { key: "crystal", name: "ロイヤルファーストクラス", en: "ROYAL FIRST CLASS", gate: "2", flight: "DL-002", seat: "1A", link: "dreamlandCrystal", desc: "上位プラン",  links: 2 },
@@ -894,7 +898,9 @@ const SCRIPT = {
           <span class="pass__valid">${esc(VALID_NOTE)}</span></div>
         <div class="pass__stub" aria-hidden="true"><span>SEAT</span><b>${esc(p.seat)}</b><span class="barcode"></span></div>
       </div>
-      <button class="enter ${p.key === "crystal" ? "enter--crystal" : ""}" type="button" data-fly="${p.key}">${esc(p.name)}で出発 <span aria-hidden="true">›</span></button>`;
+      ${DREAMLAND_MAINTENANCE
+        ? `<p class="note" style="margin-top:14px;font-weight:700">${esc(MAINTENANCE_NOTE)}</p>`
+        : `<button class="enter ${p.key === "crystal" ? "enter--crystal" : ""}" type="button" data-fly="${p.key}">${esc(p.name)}で出発 <span aria-hidden="true">›</span></button>`}`;
     },
 
     /* ── パスポートの発行 ── */
@@ -1660,6 +1666,7 @@ const SCRIPT = {
   /* ── 出発 ── */
   function fly(planKeyArg) {
     const p = PLANS[planKeyArg] || PLAN();
+    if (DREAMLAND_MAINTENANCE) { alert(MAINTENANCE_NOTE); return; }
     close();
     const url = LINKS[p.link];
     const flyEl = $("fly"), link = $("fly-link");
