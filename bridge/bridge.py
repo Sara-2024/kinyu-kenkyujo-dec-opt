@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
+import urllib.request
 import calendar
 import functools
 import inspect
@@ -110,6 +112,25 @@ if getattr(sys, "frozen", False):
 # 以前の版が使っていたロック名。名前が変わったせいで、
 # 古いブリッジと新しいブリッジが同時に動けてしまっていた。
 LOCK_NAMES = ("aitrader-bridge.lock", "trelab-bridge.lock")
+
+# 追加口座（ロイヤルファーストクラスの 2 つ目）。1 台の PC で MT5 ごとにブリッジを 1 本ずつ動かすとき、
+# 2 本目以降は BRIDGE_SLOT=<口座番号> で起動する。ロック・設定・指令ファイルを口座番号で分け、
+# 1 本目（SLOT 無し＝これまでどおり）とは互いに干渉しない。
+SLOT = os.environ.get("BRIDGE_SLOT", "").strip()
+if not SLOT.isdigit():
+    SLOT = ""
+
+
+def _lock_name() -> str:
+    return f"aitrader-bridge-{SLOT}.lock" if SLOT else LOCK_NAMES[0]
+
+
+def _slot_ok(cmdline: str) -> bool:
+    """そのプロセスが「自分と同じ枠」のブリッジか。1 本目は --slot 付きを触らず、追加口座は自分の口座だけ。"""
+    low = (cmdline or "").lower()
+    if SLOT:
+        return f"--slot {SLOT}" in low
+    return "--slot" not in low
 
 # サイトから書き換えてよい変数と、その範囲（下限, 上限）。
 # 画面の `src/data/eaSettings.ts` と同じ値をここにも置く。
@@ -274,6 +295,8 @@ def _list_bridge_processes() -> list[int]:
         # 「--run-bridge」付きで起動されていれば名前が何であれブリッジ（名前を書き換えられた exe も拾う）。
         # 同じ名前しか見ないと、別名の古いブリッジを「触らない」と判定して止められず、
         # 新しいブリッジは「別のブリッジがすでに動いています」で起動できない（実機・VPS で起きた）
+        if not _slot_ok(cmdline):
+            continue   # 別の枠（1 本目／別の追加口座）のブリッジは触らない
         if "--run-bridge" in cmdline or "python" in image or image == own_exe or any(h in image for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
             pids.append(pid)
     # PowerShell が使えない・コマンドラインを読めない PC への保険①：wmic でコマンドラインから探す
@@ -293,14 +316,14 @@ def _list_bridge_processes() -> list[int]:
                 continue
             pid, name = int(parts[-1]), parts[-2].lower()
             cmdline = ",".join(parts[1:-2]).lower()
-            if pid in skip:
+            if pid in skip or not _slot_ok(cmdline):
                 continue
             if "--run-bridge" in cmdline or "python" in name or any(h in name for h in ("aitrader", "mt5automatic", "dreamlandpassport", "trelab")):
                 pids.append(pid)
     # 保険②：tasklist でパスポートの名前のプロセスを拾う（自分と親は除く）。
     # ロックのファイルがあるのに他に見つからなければ、pythonw.exe（9 月の Python 版）も拾う
     lock_exists = any((_lock_dir() / name).is_file() for name in LOCK_NAMES)
-    if os.name == "nt" and not pids:
+    if os.name == "nt" and not pids and not SLOT and not out.strip():
         try:
             raw = subprocess.run(
                 ["tasklist", "/FO", "CSV", "/NH"],
@@ -352,7 +375,8 @@ def takeover_old_bridges() -> None:
     parent = os.getppid()
     same_version: set[int] = set()
     targets: dict[int, str] = {}
-    for name in LOCK_NAMES:
+    # 追加口座は自分のロックだけを見る。1 本目は古い名前のロックも見る
+    for name in ((_lock_name(),) if SLOT else LOCK_NAMES):
         path = _lock_dir() / name
         if not path.is_file():
             continue
@@ -394,7 +418,7 @@ def acquire_instance_lock() -> None:
     """同じPCで bridge.py を二重起動すると、中継が切断と再接続を繰り返す。"""
     global _LOCK_FH
     takeover_old_bridges()
-    path = _lock_dir() / LOCK_NAMES[0]
+    path = _lock_dir() / _lock_name()
     try:
         path.touch(exist_ok=True)
     except OSError:
@@ -472,6 +496,8 @@ def _config_dir() -> Path:
     """
     base = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP") or "."
     folder = Path(base) / "AITrader"
+    if SLOT:
+        folder = folder / "accounts" / SLOT   # 追加口座は口座番号ごとに分ける
     try:
         folder.mkdir(parents=True, exist_ok=True)
     except OSError:
@@ -709,8 +735,7 @@ class MT5Controller:
     # 売買フラグを動かしてよいのは「サイトからの指示」だけ。
     # 起動しなおしても、ブリッジが増えても、ここに書いてある値に必ず揃える。
     def _intent_path(self) -> Path:
-        base = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP") or "."
-        folder = Path(base) / "AITrader"
+        folder = _config_dir()   # 追加口座は口座番号ごとのフォルダ
         try:
             folder.mkdir(parents=True, exist_ok=True)
         except OSError:
@@ -745,14 +770,30 @@ class MT5Controller:
     # ---------- 指令ファイル（Python API に global_variable_set が無いため） ----------
     GATE_FILE = "trelab_gate.ini"
 
-    def _gate_path(self) -> Path:
+    def _login(self) -> str:
+        """いまつないでいる口座番号（読めなければ空）。指令ファイルを口座ごとに分けるのに使う。"""
+        try:
+            info = mt5.account_info() if (mt5 is not None and self.ready) else None
+            login = int(getattr(info, "login", 0) or 0)
+            return str(login) if login else ""
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _gate_name(self) -> str:
+        # 追加口座は口座番号付きの名前だけを使う。1 本目はこれまでどおりの名前（古い EA も読める）
+        return f"trelab_gate_{SLOT}.ini" if SLOT else self.GATE_FILE
+
+    def _gate_dir(self) -> Path:
         term = mt5.terminal_info() if mt5 is not None else None
         common = getattr(term, "commondata_path", None) if term is not None else None
         if not common:
             common = os.path.join(os.environ.get("APPDATA", ""), "MetaQuotes", "Terminal", "Common")
         folder = Path(str(common)) / "Files"
         folder.mkdir(parents=True, exist_ok=True)
-        return folder / self.GATE_FILE
+        return folder
+
+    def _gate_path(self) -> Path:
+        return self._gate_dir() / self._gate_name()
 
     def _load_gate(self) -> dict[str, float]:
         path = self._gate_path()
@@ -789,6 +830,18 @@ class MT5Controller:
         tmp = path.with_suffix(".tmp")
         tmp.write_text(body, encoding="utf-8")
         tmp.replace(path)
+        # 1 本目は、口座番号付きの名前にも同じ中身を置く。新しい EA は口座番号付きがあればそちらを読むので、
+        # 同じ PC に追加口座（別の MT5）があっても、EA が別口座の指令を読むことがない
+        if not SLOT:
+            login = self._login()
+            if login:
+                try:
+                    mirror = path.with_name(f"trelab_gate_{login}.ini")
+                    tmp2 = mirror.with_suffix(".tmp")
+                    tmp2.write_text(body, encoding="utf-8")
+                    tmp2.replace(mirror)
+                except OSError as exc:
+                    log.debug("口座番号付きの指令ファイルを書けませんでした: %s", exc)
         return path
 
     def _set_gv_blocking(self, name: str, value: float) -> tuple[bool, float | None]:
@@ -1068,7 +1121,15 @@ class MT5Controller:
         サイトの表示と突き合わせるために読む。ここが食い違っていたら、
         EA とブリッジが別のフォルダを見ている（または EA が止まっている）。
         """
-        path = self._gate_path().with_name(self.STATE_FILE)
+        # 追加口座は口座番号付きの控えだけ。1 本目は口座番号付きがあればそちら、無ければこれまでの名前（古い EA）
+        folder = self._gate_dir()
+        if SLOT:
+            path = folder / f"trelab_state_{SLOT}.ini"
+        else:
+            login = self._login()
+            path = folder / f"trelab_state_{login}.ini" if login else folder / self.STATE_FILE
+            if not path.is_file():
+                path = folder / self.STATE_FILE
         out: dict[str, Any] = {}
         try:
             if not path.is_file():
@@ -2284,6 +2345,37 @@ class Bridge:
             except Exception as exc:  # noqa: BLE001
                 log.debug("状態の送信で例外: %s", exc)
 
+    async def _poll_other_claims(self) -> None:
+        """同じ PC にある、自分以外の口座の MT5 あてに預けられた合図を取りに行く（exe 版だけ）。"""
+        if not getattr(sys, "frozen", False) or os.name != "nt":
+            return
+        try:
+            import mt5_detect  # 同梱
+
+            mine = self.mt._login()
+            accounts: list[str] = []
+            for t in mt5_detect.list_terminals():
+                m = re.search(r"口座\s*(\d+)", str(getattr(t, "label", "") or ""))
+                if m and m.group(1) != mine and m.group(1) not in accounts:
+                    accounts.append(m.group(1))
+            if not accounts:
+                return
+            origin = re.sub(r"^wss?://", lambda m: "https://" if m.group(0) == "wss://" else "http://", self.cfg.ws_url)
+            origin = re.sub(r"/bridge.*$", "", origin)
+            for acct in accounts:
+                try:
+                    with urllib.request.urlopen(f"{origin}/claim?account={acct}", timeout=6) as res:
+                        data = json.loads(res.read().decode("utf-8", errors="replace"))
+                except Exception:  # noqa: BLE001
+                    continue
+                token = str(data.get("token") or "") if isinstance(data, dict) and data.get("ok") else ""
+                if re.fullmatch(r"[0-9a-fA-F]{64}", token):
+                    log.info("追加口座（…%s）あての合図を受け取りました。接続ツールに連携させます", acct[-4:])
+                    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+                    subprocess.Popen([sys.executable, f"aitrader://connect?token={token}&account={acct}"], creationflags=flags, close_fds=True)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("追加口座の合図の確認で例外: %s", exc)
+
     async def watchdog(self) -> None:
         """
         定期的に
@@ -2309,6 +2401,11 @@ class Bridge:
                         # 再接続後も、記録してある指示に合わせるだけ
                         await self.mt.adopt_current_state()
                     continue
+
+                # 1 本目だけ：同じ PC の別の MT5（追加口座）あてにサイトが預けた合図を取りに行く。
+                # 来ていれば接続ツールを token 付きで起こし、その口座専用のブリッジを立てさせる
+                if not SLOT and self._active_ws is not None:
+                    await self._poll_other_claims()
 
                 # 30 秒ごとの合図（EA のパネルが「ユメックAIと連携済み／未接続」を出す材料）。
                 # サイト（中継）とつながっているときだけ書く。中継に断られている・届いていないのに
@@ -2442,6 +2539,9 @@ async def _acheck(cfg: Config) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="トレラボ MT5 ブリッジ")
     parser.add_argument("--check", action="store_true", help="MT5への接続と現在値を確認して終了する")
+    # 追加口座の目印（口座番号）。値そのものは環境変数 BRIDGE_SLOT で受け取る。
+    # 命令行に残しておくのは、プロセス一覧で「どの枠のブリッジか」を見分けるため
+    parser.add_argument("--slot", default="", help="追加口座の口座番号（目印）")
     args = parser.parse_args()
 
     cfg = Config()

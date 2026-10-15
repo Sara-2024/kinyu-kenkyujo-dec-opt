@@ -748,10 +748,11 @@ def wait_for_link() -> int:
                     if not setup_window_open():
                         break
                     time.sleep(5)
+                url = f"{PROTOCOL}://connect?token={token}&account={acct}"
                 if FROZEN:
-                    spawn_hidden([sys.executable, f"{PROTOCOL}://connect?token={token}"], cwd=str(CONFIG_DIR))
+                    spawn_hidden([sys.executable, url], cwd=str(CONFIG_DIR))
                 else:
-                    spawn_hidden([sys.executable, str(ROOT / "connect.py"), f"{PROTOCOL}://connect?token={token}"], cwd=str(ROOT))
+                    spawn_hidden([sys.executable, str(ROOT / "connect.py"), url], cwd=str(ROOT))
                 return 0
         time.sleep(LINK_POLL_SEC)
     log("合図は来なかったので、待つのをやめます")
@@ -822,6 +823,127 @@ def connect_token_from_exe_name(exe: str | None = None) -> str:
     name = Path(exe or sys.executable).stem
     found = TOKEN_IN_TEXT.search(name)
     return found.group(1) if found else ""
+
+
+def account_from_args(argv: list[str]) -> str:
+    """aitrader://connect?token=…&account=<口座番号> の口座番号（無ければ空）。
+    どの MT5 を担当させるかを選ぶためだけに使う。部屋（会員）は合図を確かめて決める。"""
+    for raw in argv:
+        if not is_protocol_url(raw):
+            continue
+        try:
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(raw.replace("\\", "/")).query)
+            acct = (query.get("account") or [""])[0].strip()
+            if acct.isdigit():
+                return acct
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
+
+
+# ────────────────────────────────────────────────
+# 追加口座（ロイヤルファーストクラスの 2 つ目）。MT5 ごとにブリッジを 1 本ずつ
+#   1 本目＝これまでどおり（CONFIG_DIR 直下・BRIDGE_ID・aitrader-bridge.lock）。
+#   2 本目以降＝CONFIG_DIR/accounts/<口座番号>/ に設定と記録を持ち、
+#   BRIDGE_SLOT=<口座番号> で起動する。ロックと指令ファイルも口座番号で分かれる。
+# ────────────────────────────────────────────────
+def slot_dir(account: str) -> Path:
+    d = CONFIG_DIR / "accounts" / account
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def list_slots() -> list[dict]:
+    out: list[dict] = []
+    base = CONFIG_DIR / "accounts"
+    if not base.is_dir():
+        return out
+    for d in sorted(base.iterdir()):
+        f = d / "slot.json"
+        if d.is_dir() and f.is_file():
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and str(data.get("account") or "").isdigit():
+                    out.append(data)
+            except (OSError, ValueError):
+                continue
+    return out
+
+
+def primary_account() -> str:
+    """1 本目のブリッジが担当している口座番号（分からなければ空＝これまでどおり扱う）。"""
+    acct = str(connect_state.read().get("account") or "").strip()
+    return acct if acct.isdigit() else ""
+
+
+def terminal_for_account(account: str):
+    """その口座番号でログインしている MT5（表示名の「口座 N」で見る）。無ければ None。"""
+    for t in mt5_detect.list_terminals():
+        if account_of(t) == account:
+            return t
+    return None
+
+
+def list_slot_bridge_processes(account: str) -> list[tuple[int, str]]:
+    return [(pid, img) for pid, img, cmd in list_bridge_processes_with_cmdline() if f"--slot {account}" in cmd.lower()]
+
+
+def connect_slot(room: str, account: str) -> int:
+    """追加口座の連携。その口座の MT5 に EA を置き、口座専用のブリッジを起こす。1 本目は触らない。"""
+    banner(f"追加口座の連携（口座 …{account[-4:]}）")
+    target = terminal_for_account(account)
+    if target is None:
+        log(f"口座 {account} でログインしている MT5 が見つかりません")
+        return show_failure(
+            f"口座 {account} の MT5 が見つかりません。",
+            "その口座で MT5 にログインしてから、サイトの「設置が終わった（つなぐ）」をもう一度押してください。",
+        )
+    source = ea_manager.load_source(BRIDGE_DIR)
+    if source is None:
+        return show_failure("自動売買の設定を取り出せませんでした。", "パスポートをダウンロードし直してください。")
+    after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, log=log)
+    log(f"追加口座の EA: {after.as_dict()}")
+    exe = target.exe
+    data = {"account": account, "room": room, "terminal": str(target.data_path), "exe": str(exe or ""),
+            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    (slot_dir(account) / "slot.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    log(f"追加口座の部屋: {room}（MT5: {target.data_path}）")
+    start_slot_bridge(data)
+    return 0
+
+
+def start_slot_bridge(slot: dict) -> None:
+    """口座専用のブリッジを起こす（同じ口座の古いものが居れば止めてから）。"""
+    account = str(slot.get("account") or "")
+    if not account.isdigit():
+        return
+    for pid, image in list_slot_bridge_processes(account):
+        log(f"追加口座（…{account[-4:]}）の古いブリッジ（PID {pid} / {image}）を終了します")
+        kill_process(pid)
+        wait_gone(pid)
+    env = bridge_env(None)
+    env["BRIDGE_ID"] = str(slot.get("room") or "")
+    env["BRIDGE_SLOT"] = account
+    env["LOG_FILE"] = str(slot_dir(account) / "bridge.log")
+    if slot.get("exe"):
+        env["MT5_PATH"] = str(slot["exe"])
+    else:
+        env.pop("MT5_PATH", None)
+    if FROZEN:
+        cmd = [sys.executable, "--run-bridge", "--slot", account]
+    else:
+        cmd = [pythonw(), str(BRIDGE_DIR / "bridge.py"), "--slot", account]
+    log(f"追加口座（…{account[-4:]}）のブリッジを裏側で起動します")
+    spawn_hidden(cmd, cwd=str(CONFIG_DIR if FROZEN else BRIDGE_DIR), env=env)
+
+
+def start_slot_bridges() -> None:
+    """自動起動のとき、追加口座のブリッジも全部起こす。"""
+    for slot in list_slots():
+        if not Path(str(slot.get("terminal") or "")).is_dir():
+            log(f"追加口座（…{str(slot.get('account'))[-4:]}）の MT5 が見つからないので起こしません")
+            continue
+        start_slot_bridge(slot)
 
 
 def site_url() -> str:
@@ -990,14 +1112,28 @@ BRIDGE_IMAGE_HINTS = tuple(
 )
 
 
-def list_bridge_processes() -> list[tuple[int, str]]:
-    """bridge.py（か exe の --run-bridge）として動いているプロセスを全部挙げる。
+def list_bridge_processes(include_slots: bool = False) -> list[tuple[int, str]]:
+    """bridge.py（か exe の --run-bridge）として動いているプロセスを挙げる。
+
+    既定では 1 本目の枠だけ（追加口座 --slot のブリッジは触らない）。
+    include_slots=True で全部（--stop / --uninstall 用）。
+    """
+    out: list[tuple[int, str]] = []
+    for pid, image, cmd in list_bridge_processes_with_cmdline():
+        if not include_slots and "--slot" in cmd.lower():
+            continue
+        out.append((pid, image))
+    return out
+
+
+def list_bridge_processes_with_cmdline() -> list[tuple[int, str, str]]:
+    """動いているブリッジを (番号, 実行ファイル名, 命令行) で挙げる。
 
     ロックファイルに番号が書かれていない古い版や、ロックが別の場所に
     できてしまった場合でも、これなら見つけられる。
     """
     me = os.getpid()
-    found: list[tuple[int, str]] = []
+    found: list[tuple[int, str, str]] = []
     if os.name == "nt":
         script = (
             "Get-CimInstance Win32_Process | "
@@ -1054,20 +1190,21 @@ def list_bridge_processes() -> list[tuple[int, str]]:
         # bridge.py はエディタで開いているだけのこともあるので、そちらは名前も見る
         if "--run-bridge" not in cmdline and not any(h in image for h in BRIDGE_IMAGE_HINTS):
             continue
-        found.append((pid, image))
+        found.append((pid, image, cmdline))
     # PowerShell が使えない・コマンドラインを読めない PC では何も見つからない。
     # その場合は wmic（コマンドラインで探す）→ tasklist（パスポートの名前）→
     # ロックが取られているなら pythonw.exe（9 月に配った Python 版のブリッジ）の順に拾う。
     # 古いブリッジが残ったまま新しいブリッジが「別のブリッジがすでに動いています」で
     # 起動できず、サイトからは永久に「来ない」ままになった（Windows の実機・VPS で起きた）。
     if os.name == "nt" and not found:
-        for pid, image in list_bridge_processes_wmic():
+        for pid, image, cmdline in list_bridge_processes_wmic():
             if pid not in skip:
-                found.append((pid, image))
-    if os.name == "nt" and not found:
+                found.append((pid, image, cmdline))
+    # 命令行が読めない保険（tasklist）は、枠を判定できないので「命令行の一覧が何も返さなかった」ときだけ
+    if os.name == "nt" and not found and not out.strip():
         for pid, image in list_processes_by_name(include_python=bridge_lock_held()):
             if pid not in skip:
-                found.append((pid, image))
+                found.append((pid, image, ""))
     return found
 
 
@@ -1093,7 +1230,7 @@ def bridge_lock_held() -> bool:
     return False
 
 
-def list_bridge_processes_wmic() -> list[tuple[int, str]]:
+def list_bridge_processes_wmic() -> list[tuple[int, str, str]]:
     """wmic でコマンドラインから探す（PowerShell が使えない PC 向け。古い Windows Server にもある）。"""
     if os.name != "nt":
         return []
@@ -1112,7 +1249,7 @@ def list_bridge_processes_wmic() -> list[tuple[int, str]]:
     except (OSError, subprocess.TimeoutExpired):
         return []
     me, parent = os.getpid(), os.getppid()
-    found: list[tuple[int, str]] = []
+    found: list[tuple[int, str, str]] = []
     for line in out.splitlines():
         parts = [x.strip() for x in line.strip().split(",")]
         if len(parts) < 3 or not parts[-1].isdigit():
@@ -1122,7 +1259,7 @@ def list_bridge_processes_wmic() -> list[tuple[int, str]]:
         if pid in (me, parent):
             continue
         if "--run-bridge" in cmdline or any(h in image for h in BRIDGE_IMAGE_HINTS):
-            found.append((pid, image))
+            found.append((pid, image, cmdline))
     return found
 
 
@@ -1186,11 +1323,12 @@ def wait_gone(pid: int, seconds: float = 10.0, tick=None) -> bool:
     return not process_image(pid)
 
 
-def stop_all_bridges() -> int:
+def stop_all_bridges(include_slots: bool = False) -> int:
     """動いているブリッジを終了する（古い名前・古い版のものも含めて）。
 
     画面を出さずに常駐する作りなので、止める手段をここに用意しておく。
     ロックの番号 → コマンドラインの検索、の順で探す。
+    既定では 1 本目の枠だけ。追加口座のブリッジも止めるのは --stop / --uninstall のときだけ。
     """
     stopped = 0
     targets: list[tuple[int, str]] = []
@@ -1211,7 +1349,7 @@ def stop_all_bridges() -> int:
             log(f"PID {pid} は {image} なので触りません")
             continue
         targets.append((pid, image))
-    for pid, image in list_bridge_processes():
+    for pid, image in list_bridge_processes(include_slots=include_slots):
         if all(pid != t[0] for t in targets):
             targets.append((pid, image))
 
@@ -2060,10 +2198,11 @@ def connect_all(room: str = "", show: bool = False) -> int:
             "MT5を閉じてから、もう一度このアプリを開いてください。",
         )
     write_bridge_env(session)
-    # 使った MT5 を覚える。次からはここが優先され、別の MT5 に入らない
+    # 使った MT5 を覚える。次からはここが優先され、別の MT5 に入らない。
+    # 口座番号も覚える（追加口座＝別の口座番号の合図が来たときに、1 本目と見分けるため）
     used = str(session.get("data_path") or "")
     if used:
-        connect_state.write(connect_state.current(), terminal=used)
+        connect_state.write(connect_state.current(), terminal=used, account=str(session.get("account") or ""))
     run_pumping(lambda: gold_symbol.show_in_market_watch(resolve_terminal_exe(session), log=log))
 
     url = relay_url()
@@ -2282,11 +2421,11 @@ def main() -> int:
         return show_status()
     if "--stop" in args:
         banner("接続をやめる")
-        stop_all_bridges()
+        stop_all_bridges(include_slots=True)
         return 0
     if "--uninstall" in args:
         banner("登録をすべて消す")
-        stop_all_bridges()
+        stop_all_bridges(include_slots=True)
         return unregister()
 
     if "--setup" in args:
@@ -2340,6 +2479,15 @@ def main() -> int:
     if connect_state.adopt_legacy(env_value("BRIDGE_ID")):
         log("これまでの設定から、連携済みとして引き継ぎました")
 
+    # 追加口座（ロイヤルファーストクラスの 2 つ目）：この PC はすでに別の口座で連携済みで、
+    # 合図に付いてきた口座番号が 1 本目と違い、その口座の MT5 がこの PC にある → その MT5 専用の
+    # ブリッジを 1 本足す。1 本目はそのまま。該当しなければ、これまでどおり 1 本目を切り替える
+    if room and os.name == "nt":
+        wanted = account_from_args(raw_args)
+        mine = primary_account()
+        if wanted and mine and wanted != mine and connect_state.is_connected() and terminal_for_account(wanted) is not None:
+            return connect_slot(room, wanted)
+
     # Windows の起動時に呼ばれたとき（--startup）。
     # 自動起動は「つながっていたものを戻す」ためのもの。まだ連携していない PC では
     # 戻すものが無いので、何もしないで終わる。ここで初回の設定を始めると、
@@ -2362,6 +2510,8 @@ def main() -> int:
     # それ以外（手で開く・サイトのボタン）は、必ず結果を画面に出す。
     # 何も出ないと、お客様には「開かない・壊れた」としか見えない。
     code = connect_all(room, show="--startup" not in args and not CONSOLE)
+    if "--startup" in args and os.name == "nt":
+        start_slot_bridges()
     if CONSOLE:
         print()
         input("  続けるには Enter を押してください...")

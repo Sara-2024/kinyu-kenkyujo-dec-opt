@@ -26,6 +26,20 @@ input bool   InpAllowWhenMissing = false;              // 指令が無いとき�
 
 // EA の設定「ユメックAIの制御を受ける」。false のとき、サイトの稼働/停止は見ない（EA が OnInit で入れる）
 bool     GateSiteControl = true;
+// 指令・控えのファイル名。同じ PC に口座が 2 つ以上あるとき（ロイヤルファーストクラス）、
+// 接続ツールは口座番号付きの名前（trelab_gate_<口座番号>.ini）も書く。あればそちらを読み、
+// 控えもその名前で書く。無ければこれまでの名前（1 口座の PC・古い接続ツール）
+string GateFileName()
+  {
+   const string named = "trelab_gate_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + ".ini";
+   return(FileIsExist(named, FILE_COMMON) ? named : "trelab_gate.ini");
+  }
+string StateFileName()
+  {
+   const string named = "trelab_gate_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + ".ini";
+   return(FileIsExist(named, FILE_COMMON) ? "trelab_state_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + ".ini" : "trelab_state.ini");
+  }
+
 bool     g_gate_file_ok = false;
 datetime g_gate_mtime   = 0;
 // 指令ファイルが「前に読んだときから変わった」のを最後に見た時刻（この PC の時計）。
@@ -36,7 +50,7 @@ datetime g_gate_changed_at = 0;
 
 void SyncGateFileToGlobals()
   {
-   int handle = FileOpen("trelab_gate.ini", FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
+   int handle = FileOpen(GateFileName(), FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
    if(handle == INVALID_HANDLE)
      {
       g_gate_file_ok = false;
@@ -119,7 +133,7 @@ string SiteLinkLine()
 
 void WriteStateFile(const string state, const bool allowed)
   {
-   int h = FileOpen("trelab_state.ini",
+   int h = FileOpen(StateFileName(),
                     FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ|FILE_SHARE_WRITE);
    if(h == INVALID_HANDLE)
       return;

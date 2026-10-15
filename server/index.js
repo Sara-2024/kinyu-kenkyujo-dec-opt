@@ -237,7 +237,7 @@ const server = createServer((req, res) => {
       claims.delete(account)
       log(`合図を渡しました: 口座 …${account.slice(-4)} → 部屋 ${short(c.room)}`)
       res.writeHead(200, CLAIM_HEADERS)
-      res.end(JSON.stringify({ ok: true, token: c.token, room: c.room }))
+      res.end(JSON.stringify({ ok: true, token: c.token, room: c.room, account }))
       return
     }
     if (req.method === 'POST') {

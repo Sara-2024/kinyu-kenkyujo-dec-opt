@@ -53,4 +53,21 @@ beat = [l for l in gate.read_text().splitlines() if l.startswith("AI_BRIDGE_AT="
 check("合図は PC の時計（ローカル時刻の UNIX 秒）", bool(beat) and abs(float(beat[0].split("=")[1]) - calendar.timegm(time.localtime())) < 5, str(beat))
 check("合図を書いても設定は消えない", "AI_LOT=0.01" in gate.read_text())
 check("合図は控えに入れない", "AI_BRIDGE_AT" not in json.loads((tmp/"gate_settings.json").read_text()))
+
+# ── 追加口座の枠（BRIDGE_SLOT）：ロック名・設定の置き場・指令ファイル名が口座番号で分かれる ──
+import importlib, os as _os
+_os.environ["BRIDGE_SLOT"] = "135209731"
+try:
+    b2 = importlib.reload(b)
+    check("追加口座のロック名は口座番号付き", b2._lock_name() == "aitrader-bridge-135209731.lock")
+    check("追加口座は --slot 付きのプロセスだけを自分の枠と見る", b2._slot_ok("x.exe --run-bridge --slot 135209731") and not b2._slot_ok("x.exe --run-bridge"))
+    b2._config_dir = lambda: tmp / "accounts" / "135209731"
+    mt2 = b2.MT5Controller(b2.Config())
+    check("追加口座の指令ファイルは口座番号付き", mt2._gate_name() == "trelab_gate_135209731.ini")
+finally:
+    _os.environ.pop("BRIDGE_SLOT", None)
+    b = importlib.reload(b)
+check("1 本目のロック名はこれまでどおり", b._lock_name() == "aitrader-bridge.lock")
+check("1 本目は --slot 付きのプロセスを触らない", b._slot_ok("x.exe --run-bridge") and not b._slot_ok("x.exe --run-bridge --slot 1"))
+
 print(f"\n{P} ok / {F} NG"); sys.exit(1 if F else 0)

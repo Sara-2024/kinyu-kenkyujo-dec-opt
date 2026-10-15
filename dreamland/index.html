@@ -1239,7 +1239,7 @@ const SCRIPT = {
     const { status, data } = await api({ action: "connect_token", session: m.token });
     if (status === 401) { flow.retryAccount = String(m.account || ""); setPhase("expired"); return false; }
     if (status !== 200) return false;
-    const params = new URLSearchParams({ from: SITE, token: data.token });
+    const params = new URLSearchParams({ from: SITE, token: data.token, account: String(m.account || "") });
     try { window.location.href = `aitrader://connect?${params.toString()}`; } catch (_) {}
     return true;
   };

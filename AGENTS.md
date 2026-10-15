@@ -253,6 +253,22 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
     「証明書を確認できない」で中継につなげなくなる（2026-10-15 に実機で起きた）。
   - 試験：`bridge/tests/mt5_files_test.py`（EA のふりをして往復）、`bridge/tests/connect_mac_test.py`
     （差し替え・MT5 探し・自動起動・配布の定義）。どちらも Mac も MT5 も要らない。
+- **追加口座（ロイヤルファーストクラスの 2 つ目）は「MT5 ごとにブリッジ 1 本」（2026-10-15 から。Windows だけ）。**
+  1 本目はこれまでどおり（`CONFIG_DIR` 直下・`BRIDGE_ID`・`aitrader-bridge.lock`・`trelab_gate.ini`）で、
+  ファーストクラス（1 口座）の流れは何も変わらない。
+  合図（`aitrader://connect?token=…&account=<口座番号>`。ロビーの呼び出しと `/claim` の返事が付ける）の口座番号が
+  1 本目の口座（`state.json` の `account`。`connect_all` で覚える）と違い、その口座でログインしている MT5 が
+  この PC にあれば、`connect_slot()`：その MT5 に EA を置き、`CONFIG_DIR/accounts/<口座番号>/slot.json` に
+  部屋と MT5 を書き、`--run-bridge --slot <口座番号>`（環境変数 `BRIDGE_SLOT`）でブリッジを 1 本足す。
+  追加口座のブリッジはロック `aitrader-bridge-<口座番号>.lock`・設定 `accounts/<口座番号>/`・
+  指令 `trelab_gate_<口座番号>.ini`・控え `trelab_state_<口座番号>.ini` を使い、プロセスの一覧でも
+  `--slot` で枠を見分ける（1 本目は `--slot` 付きを触らず、追加口座は自分の口座だけ）。
+  1 本目のブリッジは自分の指令を口座番号付きの名前にも写し（`_save_gate`）、EA は口座番号付きが
+  あればそれを読む（`TradingGate.mqh` の `GateFileName` / `StateFileName`）ので、同じ PC の EA 同士が
+  指令を取り違えない。自動起動（`--startup`）は 1 本目のあと `start_slot_bridges()` で追加口座も起こす。
+  1 本目のブリッジは 30 秒ごとに、同じ PC の別口座あての合図を中継に取りに行き（`_poll_other_claims`）、
+  来ていれば接続ツールを token 付きで起こす（ロビーで「2 つ目の口座をつなぐ」→ 押すだけで足される）。
+  該当しないとき（口座番号が無い・Mac・その口座の MT5 が無い）は、これまでどおり 1 本目を切り替える。
 - **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。
   記録は `%LOCALAPPDATA%\AITrader\state.json`。
   - `INSTALL_ONLY` … MT5 を探して EA を置くところまで。**サイトとは一切通信しない。**

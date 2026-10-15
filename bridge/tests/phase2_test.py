@@ -59,6 +59,17 @@ check("合図が無ければ空", connect.connect_token_from_args(["aitrader://c
 check("ファイル名の合図を読める（ダウンロード名）", connect.connect_token_from_exe_name(f"C:\\Users\\x\\Downloads\\DreamlandPassport-{GOOD}.exe") == GOOD)
 check("ブラウザが (1) を付けても読める", connect.connect_token_from_exe_name(f"/tmp/DreamlandPassport-{GOOD} (1).exe") == GOOD)
 check("合図の無い名前は空", connect.connect_token_from_exe_name("/tmp/DreamlandPassport.exe") == "")
+
+# ── 追加口座（ロイヤルファーストクラスの 2 つ目）──
+check("合図の URL から口座番号を読める", connect.account_from_args([f"aitrader://connect?token={GOOD}&account=135209731"]) == "135209731")
+check("口座番号が無ければ空", connect.account_from_args([f"aitrader://connect?token={GOOD}"]) == "")
+check("数字でない口座番号は読まない", connect.account_from_args([f"aitrader://connect?token={GOOD}&account=abc"]) == "")
+_slot = connect.slot_dir("135209731")
+check("追加口座の設定は accounts/<口座番号>/ に分かれる", _slot.name == "135209731" and _slot.parent.name == "accounts")
+import json as _json
+(_slot / "slot.json").write_text(_json.dumps({"account": "135209731", "room": MEMBER, "terminal": "/nowhere", "exe": ""}), encoding="utf-8")
+check("追加口座の一覧を読める", any(x.get("account") == "135209731" for x in connect.list_slots()))
+check("1 本目の口座番号が無ければ空（これまでどおり扱う）", connect.primary_account() == "" or connect.primary_account().isdigit())
 check("短い・16進でない名前は空", connect.connect_token_from_exe_name("/tmp/DreamlandPassport-abc.exe") == "" and connect.connect_token_from_exe_name(f"/tmp/DreamlandPassport-{'z' * 64}.exe") == "")
 import tempfile as _tf
 _zdir = pathlib.Path(_tf.mkdtemp())
