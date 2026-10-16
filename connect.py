@@ -828,6 +828,40 @@ def stop_link_waiters() -> None:
         kill_process(pid)
 
 
+def try_connect_from_claim(ui, target) -> bool:
+    """設置が済んだその場で、ロビーが預けた合図（この口座あて）を取りに行き、あればつなぐ。
+
+    お客様がロビーで「ダウンロード」を押した時点で合図は預けられているので、
+    exe を開いて設置が終われば、何も押さなくてもここで紐づく。
+    「開きますか？」も「設置が終わった」も要らない（押しても害はない）。
+    exe 版だけ（手元の Python では通信しない）。
+    """
+    if not FROZEN:
+        return False
+    acct = str(account_of(target) or "").strip()
+    if not acct.isdigit():
+        try:
+            session = find_logged_in_terminal(str(target.data_path))
+            acct = str((session or {}).get("account") or "").strip()
+        except Exception:  # noqa: BLE001
+            acct = ""
+    if not acct.isdigit():
+        log("口座番号がまだ読めないので、合図は裏で待ちます")
+        return False
+    token = relay_claim(acct)
+    if not token:
+        log(f"ロビーからの合図はまだ無い（口座 …{acct[-4:]}）。裏で待ちます")
+        return False
+    log(f"ロビーからの合図を受け取りました（口座 …{acct[-4:]}）。このままつなぎます")
+    room = redeem_connect_token(token)
+    if not room:
+        log("合図が古いか、すでに使われていました。裏で待ちます")
+        return False
+    stop_link_waiters()
+    code = connect_all(room, show=True, ui=ui, ask=False)
+    return code == 0
+
+
 def start_link_waiter() -> None:
     """合図を待つ係を裏で起こす（exe 版だけ。手元の Python では起こさない）。"""
     if not FROZEN:
@@ -1765,6 +1799,9 @@ def setup_phase1() -> int:
         log(f"EA の状態: {before.as_dict()}")
         if ui is None or force or before.state != ea_manager.LATEST:
             break
+        if not connect_state.is_connected() and try_connect_from_claim(ui, target):
+            log("開き直しで、サイトとつながりました")
+            return 0
         choice = ask_what_to_do(ui, target, before, can_switch=len(terminals) > 1)
         log(f"選ばれた操作: {choice}")
         if choice is None:
@@ -1807,11 +1844,6 @@ def setup_phase1() -> int:
         ui.mark("ea", True)
 
     connect_state.write(connect_state.INSTALL_ONLY, terminal=str(target.data_path), ea=after.state)
-    # ここから先はサイトで「設置が終わった（つなぐ）」が押されるのを裏で待つ（押されたら自分で紐づく）。
-    # 置く作業は終わったので、二重起動の防止もここで外す。外さないと、案内の窓を閉じるまで
-    # 合図を受け取っても連携に進めない（VPS で実際に止まった）
-    start_link_waiter()
-    release_single_instance()
 
     # その MT5 が動いているかは、プロセス一覧で見る。
     # mt5.initialize() で確かめてはいけない（動いていなければ MT5 を起こしてしまうし、
@@ -1840,6 +1872,16 @@ def setup_phase1() -> int:
             ui.say("MT5を開き直しています…")
             restarted = restart_mt5(target, tick=ui.pump)
             running = not restarted
+
+    # ロビーが預けた合図があれば、この窓のままドリームランドとつなぐ（お客様は何も押さなくてよい）
+    if try_connect_from_claim(ui, target):
+        log("初回の設定のまま、サイトとつながりました")
+        return 0
+    # 合図がまだ無ければ、サイトで「設置が終わった（つなぐ）」が押されるのを裏で待つ（押されたら自分で紐づく）。
+    # 置く作業は終わったので、二重起動の防止もここで外す。外さないと、案内の窓を閉じるまで
+    # 合図を受け取っても連携に進めない（VPS で実際に止まった）
+    start_link_waiter()
+    release_single_instance()
 
     guide_after_install(
         ui,
@@ -1949,7 +1991,12 @@ def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool, acc
             lines = [head]
             where = beat["symbol"] or "チャート"
             lines.append(f"{where} で動いています。準備ができました。")
-            lines.append("このアプリは閉じていただいて構いません。")
+            if connect_state.is_connected():
+                lines.append("このアプリは閉じていただいて構いません。")
+            else:
+                lines.append("")
+                lines.append("最後に、ロビー（ブラウザ）に戻って「設置が終わった（つなぐ）」を押してください。")
+                lines.append("押すと自動でつながります。このアプリは閉じて構いません。")
             release_single_instance()
             ui.finish(lines, ok=True)
             return
@@ -2186,7 +2233,7 @@ LOGIN_TIMEOUT_MESSAGE = ("MT5にログインできていません。", "MT5で�
 PREPARE_TERMINAL = None
 
 
-def connect_all(room: str = "", show: bool = False) -> int:
+def connect_all(room: str = "", show: bool = False, ui=None, ask: bool | None = None) -> int:
     """サイトのボタン1つで呼ばれる本体。
 
     show=True のときだけ、小さな画面を出す。
@@ -2196,7 +2243,15 @@ def connect_all(room: str = "", show: bool = False) -> int:
     サイトから呼ばれたとき（合図つき）と自動起動では、これまでどおり出さない。
     """
     banner("接続開始")
-    ui = installer_ui.open_window() if show else None
+    if ui is None:
+        ui = installer_ui.open_window() if show else None
+    else:
+        # 初回の設定の窓をそのまま使う（閉じて開き直すと、お客様には「消えた」と見える）
+        try:
+            ui.clear_body()
+            ui.clear_buttons()
+        except Exception:  # noqa: BLE001
+            pass
     global _UI_FOR_PUMP
     _UI_FOR_PUMP = ui
 
@@ -2225,7 +2280,7 @@ def connect_all(room: str = "", show: bool = False) -> int:
     # 別の口座につながってしまう（しかもお客様には分からない）。
     say("MT5を確認しています…")
     # 手で開いたときは毎回選んでもらう。黙って繋ぐと、お客様は「勝手に繋いだ」としか見えない
-    picked = choose_session(ui, log=log, always_ask=ui is not None)
+    picked = choose_session(ui, log=log, always_ask=(ui is not None) if ask is None else ask)
     if picked is None:
         return 1
     session, chosen = picked
