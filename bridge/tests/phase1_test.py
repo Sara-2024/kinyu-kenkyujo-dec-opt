@@ -671,3 +671,15 @@ check("Windows以外では小さな画面を出さない", installer_ui.message_
 shutil.rmtree(WORK, ignore_errors=True)
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)
+
+
+# ── 自分自身を起こすとき、PyInstaller の目印を子に持ち越さない ──
+#    持ち越すと子が親の一時展開フォルダを使い、親の終了で「Failed to remove temporary directory」が出て、
+#    合図を待つ係とそこからの連携が黙って落ちる（VPS の実機で起きた）
+os.environ["_MEIPASS2"] = "C:/Temp/_MEI1234"
+os.environ["_PYI_ARCHIVE_FILE"] = "C:/x.exe"
+_env = connect.child_env()
+check("子の環境から _MEIPASS2 を外す", "_MEIPASS2" not in _env and "_PYI_ARCHIVE_FILE" not in _env)
+check("ほかの環境変数はそのまま", _env.get("PATH") == os.environ.get("PATH"))
+check("渡した環境からも外す", "_MEIPASS2" not in connect.child_env({"_MEIPASS2": "x", "A": "1"}) and connect.child_env({"_MEIPASS2": "x", "A": "1"}).get("A") == "1")
+os.environ.pop("_MEIPASS2", None); os.environ.pop("_PYI_ARCHIVE_FILE", None)

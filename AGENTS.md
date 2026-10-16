@@ -497,6 +497,13 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
 - **搭乗口はプランごとに 2 つ。** `first`＝ファーストクラス（搭乗口 1・DL-001）、
   `crystal`＝ロイヤルファーストクラス（搭乗口 2・DL-002。紺×金の装い。MT5 の口座を **2 つ**つなぐ）。
   行き先は `LINKS.dreamlandFirst` / `LINKS.dreamlandCrystal`。違う搭乗口に来たらミナトが正しい搭乗口へ案内する。
+- **プランは 3 つ。** `first`＝ファーストクラス（搭乗口 1）、`crystal`＝ロイヤルファーストクラス（搭乗口 2・口座 2 つ）、
+  `premium`＝プレミアム（**渡航なし**。中身はファーストクラスと同じだが搭乗口が無く、搭乗ゲートでは「渡航の対象ではありません」と
+  案内して飛ばさない。`PLANS.premium.gate` が空であることが「飛べない」の根拠。`supabase/migrations/20261015_premium_plan.sql`）。
+  **搭乗ゲートは合言葉が済んでいないと搭乗口を出さない**（`gate.start` が先に `entry` の記入欄を出す）。
+- **ドリームランド本体への出発は当面止めてある（渡航準備中）。** `LINKS.dreamlandFirst` / `dreamlandCrystal` はロビー内の
+  `maintenance/`（「渡航準備中です。準備が完了次第お知らせいたします」）を指し、`DREAMLAND_MAINTENANCE = true` で搭乗券に同じ注記を出す。
+  再開するときは本体の URL に戻して `false` にする。本体（chatgpt.site）の URL を直接知っている人には効かない。
 - **プランは「合言葉」で決まる。** サービスカウンターの「接続ツールの設置」で、お客様がご契約時の合言葉を打つ。
   合言葉はプランごとに 1 つ（`plan_passwords`。管理者画面の「プランの合言葉」か
   `supabase/migrations/20261013_set_plan_passwords.sql` で決める。これまでの入場パスワードはファーストクラスに引き継がれる）。

@@ -183,12 +183,29 @@ def _hidden_startupinfo():
     return si
 
 
+# PyInstaller（1 ファイルの exe）が自分の環境に置く目印。子プロセスに持ち越すと、子は「もう展開済み」と
+# 思って親の一時展開フォルダ（_MEIxxxx）を使う。すると親が終わるときに
+# 「Failed to remove temporary directory」の警告が出て、子はそのあと部品を読めずに黙って落ちる
+# （設置のあとの「合図を待つ係」と、そこから起こす連携で実際に起きた）。
+# この exe から自分自身を起こすときは、必ずここを通して目印を外す。
+_PYI_ENV_KEYS = ("_MEIPASS2", "_PYI_APPLICATION_HOME_DIR", "_PYI_ARCHIVE_FILE", "_PYI_PARENT_PROCESS_LEVEL")
+
+
+def child_env(base: dict[str, str] | None = None) -> dict[str, str]:
+    """子プロセスに渡す環境。PyInstaller の目印を外したもの。"""
+    env = dict(os.environ if base is None else base)
+    for key in _PYI_ENV_KEYS:
+        env.pop(key, None)
+    return env
+
+
 def run_hidden(cmd: list[str], cwd: str | None = None, timeout: float | None = None) -> int:
     """終わるまで待つ。ウィンドウは出さない。"""
     try:
         completed = subprocess.run(
             cmd,
             cwd=cwd,
+            env=child_env(),
             check=False,
             timeout=timeout,
             creationflags=_no_window_flags(),
@@ -208,7 +225,7 @@ def spawn_hidden(cmd: list[str], cwd: str | None = None, env: dict[str, str] | N
         return subprocess.Popen(
             cmd,
             cwd=cwd,
-            env=env,
+            env=child_env(env),
             creationflags=_no_window_flags(detached=True),
             startupinfo=_hidden_startupinfo(),
             stdout=subprocess.DEVNULL,
