@@ -57,6 +57,18 @@ from mt5_terminal import (  # noqa: E402
     resolve_terminal_exe,
 )
 import connect_state  # noqa: E402  INSTALL_ONLY / CONNECTED
+
+# HTTPS の証明書は、同梱した certifi のものを使う（Mac と同じ）。
+# 更新が止まっている Windows Server（VPS に多い）はルート証明書が古く、サイト（Vercel）にも
+# 中継（Render）にも「証明書を確認できない」= URLError でつながらない（VPS の実機で起きた）。
+# 親から引き継いだ値は親の一時フォルダを指していて消えるので、必ず自分のものに上書きする
+try:
+    import certifi  # noqa: E402
+
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+except ImportError:  # pragma: no cover - 部品を入れ忘れたとき
+    pass
 import ea_manager  # noqa: E402  EA の状態判定と配置
 import gold_symbol  # noqa: E402  金の銘柄を気配値に出す
 import installer_ui  # noqa: E402  初回の設定画面
@@ -702,6 +714,9 @@ LINK_WAIT_MIN = 60          # 設置のあと、合図を取りに行き続け�
 LINK_POLL_SEC = 5
 
 
+_CLAIM_ERR_LOGGED = False
+
+
 def relay_claim(account: str) -> str:
     """中継に預けられた合図（この口座番号あて）を取りに行く。無ければ空。"""
     url = relay_url()
@@ -711,7 +726,11 @@ def relay_claim(account: str) -> str:
     try:
         with urllib.request.urlopen(f"{origin}/claim?account={urllib.parse.quote(account)}", timeout=6) as res:
             data = json.loads(res.read().decode("utf-8", errors="replace"))
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        global _CLAIM_ERR_LOGGED
+        if not _CLAIM_ERR_LOGGED:
+            _CLAIM_ERR_LOGGED = True
+            log(f"中継に合図を取りに行けません: {type(exc).__name__} {getattr(exc, 'reason', exc)}")
         return ""
     token = str(data.get("token") or "") if isinstance(data, dict) and data.get("ok") else ""
     return token if TOKEN_RE.match(token) else ""
@@ -1055,7 +1074,7 @@ def redeem_connect_token(token: str) -> str:
         log(f"連携の合図を確かめられませんでした（{exc.code}）")
         return ""
     except Exception as exc:  # noqa: BLE001 通信できない
-        log(f"サイトに問い合わせできませんでした: {type(exc).__name__}")
+        log(f"サイトに問い合わせできませんでした: {type(exc).__name__} {getattr(exc, 'reason', exc)}")
         return ""
     room = str(data.get("room") or "").strip()
     if not MEMBER_ROOM_RE.match(room):

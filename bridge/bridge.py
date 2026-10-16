@@ -2536,7 +2536,19 @@ async def _acheck(cfg: Config) -> int:
     return 0
 
 
+def _use_bundled_certs() -> None:
+    """同梱した certifi の証明書を使う。古い Windows Server はルート証明書が古く、中継（wss）につなげない。"""
+    try:
+        import certifi
+
+        os.environ["SSL_CERT_FILE"] = certifi.where()
+        os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+    except ImportError:
+        pass
+
+
 def main() -> int:
+    _use_bundled_certs()
     parser = argparse.ArgumentParser(description="トレラボ MT5 ブリッジ")
     parser.add_argument("--check", action="store_true", help="MT5への接続と現在値を確認して終了する")
     # 追加口座の目印（口座番号）。値そのものは環境変数 BRIDGE_SLOT で受け取る。
