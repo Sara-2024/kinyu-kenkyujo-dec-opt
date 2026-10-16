@@ -20,7 +20,7 @@ if errorlevel 1 (
 
 echo [1/3] 必要なものを入れています...
 py -3 -m pip install --upgrade pip >nul
-py -3 -m pip install pyinstaller MetaTrader5 websockets python-dotenv
+py -3 -m pip install pyinstaller MetaTrader5 websockets python-dotenv certifi
 if errorlevel 1 (
   echo [ERROR] pip install に失敗しました。
   pause
@@ -109,6 +109,8 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --hidden-import websockets ^
   --hidden-import websockets.asyncio.client ^
   --hidden-import dotenv ^
+  --hidden-import certifi ^
+  --collect-data certifi ^
   connect.py
 if errorlevel 1 (
   echo [ERROR] ビルドに失敗しました。
