@@ -793,11 +793,47 @@ def setup_window_open() -> bool:
     return False
 
 
+def list_link_waiters() -> list[int]:
+    """動いている「合図を待つ係」（--wait-link）の番号。自分と親は除く。"""
+    if os.name != "nt":
+        return []
+    script = (
+        "Get-CimInstance Win32_Process | "
+        "Where-Object { $_.CommandLine -and $_.CommandLine -like '*--wait-link*' } | "
+        "ForEach-Object { \"$($_.ProcessId)\" }"
+    )
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, errors="replace", check=False, timeout=40,
+            creationflags=_no_window_flags(), startupinfo=_hidden_startupinfo(),
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log(f"合図を待つ係の一覧を取れませんでした: {exc}")
+        return []
+    skip = {os.getpid(), os.getppid()}
+    return [int(x) for x in out.split() if x.strip().isdigit() and int(x) not in skip]
+
+
+def stop_link_waiters() -> None:
+    """古い「合図を待つ係」を終える。
+
+    前の版の係が壊れたまま残っていると（親の一時フォルダが消えて部品を読めない状態）、
+    係の二重起動の歯止め（mutex）を握ったまま合図を横取りして落ちるので、
+    新しい係も、サイトからの「つなぎ直す」も、永久に通らない（VPS の実機で起きた）。
+    設置のとき・サイトから呼ばれたときに、まず片づける。
+    """
+    for pid in list_link_waiters():
+        log(f"古い「合図を待つ係」（PID {pid}）を終了します")
+        kill_process(pid)
+
+
 def start_link_waiter() -> None:
     """合図を待つ係を裏で起こす（exe 版だけ。手元の Python では起こさない）。"""
     if not FROZEN:
         log("合図を待つ係は exe 版だけで起こします（手元では省略）")
         return
+    stop_link_waiters()
     spawn_hidden([sys.executable, "--wait-link"], cwd=str(CONFIG_DIR))
     log("サイトの「設置が終わった」を裏で待ちます")
 
@@ -2175,6 +2211,8 @@ def connect_all(room: str = "", show: bool = False) -> int:
 
     if room:
         adopt_room(room)
+        # 設置のあとに残った「合図を待つ係」は、もう要らない（壊れた係が合図を横取りするのを防ぐ）
+        run_pumping(stop_link_waiters)
         if run_pumping(lambda: bridge_already_running() and relay_has_bridge(room) is not True):
             run_pumping(stop_stale_bridge)
 
