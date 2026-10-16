@@ -9,15 +9,10 @@
 # 右クリック →「開く」で通す（サイトの手順に書いてある）。
 name: build-mac
 
+# push では回さない（macOS のランナーは無料枠を 10 倍の速さで使うので、月の枠を使い切って
+# Windows 版まで作れなくなった）。Mac 版は手元の Mac で `bash tools/mac/build-mac.sh` → commit で配る。
+# どうしても GitHub で作るときだけ、Actions の画面から手で回す（workflow_dispatch）。
 on:
-  push:
-    branches: [main]
-    paths:
-      - connect.py
-      - connect_mac.py
-      - bridge/**
-      - tools/mac/**
-      - .github/workflows/build-mac.yml
   workflow_dispatch:
 
 concurrency:
