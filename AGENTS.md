@@ -277,6 +277,8 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   損切り幅から先に計算して超える取引は見送る）・月次損失ストップ（残高の `InpMonthLossPct`％）**。
   サイト連携は 1 年版と同じ `TradingGate.mqh`：設定画面は一番上が「ロット」、その下が「ユメックAIの制御を受ける」。
   **サイトの管理画面でロットを決めると（`AI_LOT` > 0）それを固定ロットとして使い、複利は止まる**（`SiteLot()`）。
+  だから管理画面（`ControlPanel`）は、この EA の口座ではロットの ＋ − を出さず送らない（`isAutoLotEa()`。ブリッジの `ea_expected`／`ea_name` で見分ける。
+  画面の最小が 0.01 で「複利に戻す（0）」を送れないため）。ロットを手で固定したい人は MT5 の EA の設定画面で。
   リスク上限はどちらのロットでも効く。有効期限は 1 年版と同じ 2027-10-31（ソースの `EXPIRY_TIME`。1 年版を書き換えたらこちらも）。
   サイトでは別のシステムとして扱う：管理者画面・一斉制御に「システム」列（`systemLabel()`。ブリッジの `ea_expected`／`ea_name` から
   「1年版」「1年版｜安定低月利ver」）、`/control` の表示名も `ea_name` で変わる。会員（＝口座）もブリッジも口座ごとに別。
@@ -293,7 +295,9 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
 - **2 つ目の口座を足せるのはロイヤルファーストクラスだけ（2026-10-17 から）。** パスポートはプランを見ないと、
   ファーストクラスの人が別の口座番号で手続きし直すだけで 2 本目（安定低月利ver）が入ってしまった。
   合図を確かめる `/api/connect` が会員の `plan` を返し（`connect_token_redeem`、`supabase/migrations/20261017_connect_plan_and_admin_set_plan.sql`）、
-  `connect.py` は `second_account_allowed()`（`LAST_REDEEMED_PLAN == "crystal"`）のときだけ `connect_slot()`。
+  `connect.py` は `second_account_allowed()`（`LAST_REDEEMED_PLAN == "crystal"`）のときだけ `connect_slot()`
+  （ロイヤルは MT5 が見つからなくても `connect_slot()` に任せて「ログインしてからもう一度」で止める。1 本目を黙って切り替えない）。
+  **Mac は 2 つ目に対応していない**ので、ロビーは Mac を選んでいるときは 2 つ目の導線を出さず「Windows のパソコンで」と案内する（`canSecond()`）。
   それ以外（ファースト／プレミアム。プランが分からない古いサイトも）は **元の口座を「停止」にしてから**
   （`stop_old_account()`：`trelab_gate_<元の口座>.ini` に `AI_TRADING_ALLOWED=0`、`intent.json` も停止）1 本目をその口座に替える。
   替えたあと元の MT5 の EA はサイトから制御できないので、止めてから手放す。新しい口座は管理画面で「はじめる」を押すまで動かない。

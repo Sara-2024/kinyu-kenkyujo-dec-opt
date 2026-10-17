@@ -600,6 +600,11 @@ const currentPlan = () => planKey() || "first";
 const PLAN = () => PLANS[currentPlan()];
 const doneMembers = () => members.filter((m) => m.done);
 const needSecond = () => currentPlan() === "crystal" && doneMembers().length < 2 && members.length < 2;
+/* 2 つ目の口座は Windows だけ（パスポートの「MT5 ごとにブリッジ 1 本」が Windows 専用）。
+   Mac では導線を出さず、「Windows のパソコンで」と案内する。osPick は下の osNow と同じ値 */
+let osPick = null;
+const canSecond = () => needSecond() && osPick !== "mac";
+const secondNote = () => (needSecond() && !canSecond() ? "\n2つ目の口座の手続きは、Windows のパソコンからこのサイトで行ってください（Mac では 1 つの口座だけつなげます）。" : "");
 const tail2 = (a) => (a == null ? "" : "…" + String(a).slice(-2));
 
 const STAFF = {
@@ -640,12 +645,12 @@ const SCRIPT = {
   },
   service: {
     start: { say: () => members.length
-        ? `サービスカウンターのソラです。\n${PLAN().name}で、${doneMembers().length ? `口座 ${doneMembers().map((m) => tail2(m.account)).join("・")} の接続が済んでいます。` : `口座 ${tail2(members[0].account)} の接続が途中です。`}${needSecond() ? "\n2つ目の口座のパスポートは、いつでもここで発行できます。" : ""}`
+        ? `サービスカウンターのソラです。\n${PLAN().name}で、${doneMembers().length ? `口座 ${doneMembers().map((m) => tail2(m.account)).join("・")} の接続が済んでいます。` : `口座 ${tail2(members[0].account)} の接続が途中です。`}${canSecond() ? "\n2つ目の口座のパスポートは、いつでもここで発行できます。" : secondNote()}`
         : app
         ? `サービスカウンターのソラです。\n受付番号 ${app.no} で、MT5 口座（下2桁 ${tail2(app.accountFull || app.account)}）の登録を承っています。次は、パスポートの発行です。`
         : "サービスカウンターのソラです。\n口座開設のご案内、MT5 口座の登録、パスポートの発行を承ります。口座はもうお持ちですか？",
       choices: () => members.length
-        ? [["接続の状態を見る・つなぎ直す", "members", "go"], ...(needSecond() ? [["2つ目の口座をつなぐ", "terms"]] : []), ["口座の登録をし直す（申込の修正）", "register"], ["設置マニュアル", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
+        ? [["接続の状態を見る・つなぎ直す", "members", "go"], ...(canSecond() ? [["2つ目の口座をつなぐ", "terms"]] : []), ["口座の登録をし直す（申込の修正）", "register"], ["設置マニュアル", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
         : app
         ? [["パスポートの発行（MT5 とつなぐ）", "connect", "go"], ["登録し直す（プランの変更など）", "register"], ["設置マニュアル", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
         : [["まだ持っていない（口座開設の案内）", "account"], ["持っている（MT5 口座を登録する）", "register", "go"], ["パスポートの発行（MT5 とつなぐ）", "connect"], ["設置マニュアル", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]] },
@@ -697,10 +702,10 @@ const SCRIPT = {
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
       choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
-    done: { say: () => needSecond()
+    done: { say: () => canSecond()
         ? `口座（${tail2(members[members.length - 1].account)}）のパスポートが発行できました。お使いの MT5 とドリームランドがつながっています。\nロイヤルファーストクラスは、2つ目の口座もつなげます。まだ設置していない口座は、あとからこのサイトのサービスカウンター（「2つ目の口座をつなぐ」）で手続きしてください。このまま搭乗ゲートへ進めます。${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}`
-        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : ""}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}${PLAN().gate ? "\n次は搭乗ゲートで、搭乗券を受け取ってください。" : "\nお手続きは以上です。"}`,
-      choices: () => needSecond()
+        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : secondNote()}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}${PLAN().gate ? "\n次は搭乗ゲートで、搭乗券を受け取ってください。" : "\nお手続きは以上です。"}`,
+      choices: () => canSecond()
         ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["2つ目の口座を今から発行する", "terms"], ["ほかのもの", "start"]]
         : PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] : [["ほかのもの", "start"]] },
     later: { say: () => `承知しました。2つ目の口座は、いつでもこのカウンターの「2つ目の口座をつなぐ」から発行できます。\nまずは1つ目の口座で、搭乗ゲートへどうぞ（搭乗口 ${PLAN().gate}）。`,
@@ -709,8 +714,8 @@ const SCRIPT = {
       choices: [["もう一度つなぐ", "launch", "go"], ["ダウンロードからやり直す", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     expired: { say: "前回のログインが切れています。口座番号をもう一度入力してください。", docs: "login",
       choices: [["ほかのもの", "start"]] },
-    members: { say: () => `${PLAN().name}の、つないでいる口座です。${needSecond() ? "2つ目の口座は、まだ発行していません。" : ""}`, docs: "members",
-      choices: () => [...(needSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), ...(PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""]] : []), ["ほかのもの", "start"]] },
+    members: { say: () => `${PLAN().name}の、つないでいる口座です。${canSecond() ? "2つ目の口座は、まだ発行していません。" : secondNote()}`, docs: "members",
+      choices: () => [...(canSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), ...(PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""]] : []), ["ほかのもの", "start"]] },
   },
   gate: {
     start: { say: () => !planKey()
@@ -732,7 +737,7 @@ const SCRIPT = {
       choices: () => [[checks.account ? "サービスカウンターでパスポートを発行する" : "サービスカウンターで口座を登録する", checks.account ? "@service:connect" : "@service:register", "go"], ["チェックを見直す", gatePlan ? "door" : "start"], ["確認は済んでいるので、このまま進む", "board!"]] },
     plan: { say: "ご契約のプランは、サービスカウンターの「パスポートの発行」で合言葉を打つと決まります。先にそちらを済ませてください。",
       choices: [["サービスカウンターへ", "@service:connect", "go"], ["準備にもどる", "close"]] },
-    pass: { say: () => `お待たせしました、こちらが${PLAN().name}の搭乗券です。${needSecond() ? "\n2つ目の口座をまだ設置していない場合は、このサイトのサービスカウンターから手続きしてください。1つでも渡航できます。" : ""}\nいってらっしゃいませ。ドリームランドで、お待ちしています。`, docs: "pass",
+    pass: { say: () => `お待たせしました、こちらが${PLAN().name}の搭乗券です。${canSecond() ? "\n2つ目の口座をまだ設置していない場合は、このサイトのサービスカウンターから手続きしてください。1つでも渡航できます。" : secondNote()}\nいってらっしゃいませ。ドリームランドで、お待ちしています。`, docs: "pass",
       choices: [["もうすこしロビーにいる", "close"]] },
   },
 };
@@ -787,6 +792,7 @@ const SCRIPT = {
   })();
   /* 自動判定が違っていたら、ダウンロードの画面で切り替えられる */
   let osChoice = null;
+  osPick = os;
   const osNow = () => osChoice || os;
   const platformName = () => (osNow() === "mac" ? "mac" : "windows");
   /* スマホ・タブレット（MT5 もパスポートも入らない）。iPad は Mac を名乗るので指で触れるかで見分ける */
@@ -1586,7 +1592,7 @@ const SCRIPT = {
       }
       docs.querySelectorAll("[data-reconnect]").forEach((b) => b.addEventListener("click", () => startConnect(Number(b.dataset.reconnect), "wait")));
       docs.querySelectorAll("[data-door]").forEach((b) => b.addEventListener("click", () => show("gate", "door:" + b.dataset.door)));
-      docs.querySelectorAll("[data-os]").forEach((b) => b.addEventListener("click", () => { osChoice = b.dataset.os; show(staffKey, nodeKey); }));
+      docs.querySelectorAll("[data-os]").forEach((b) => b.addEventListener("click", () => { osChoice = b.dataset.os; osPick = osChoice; show(staffKey, nodeKey); }));
       const dl = docs.querySelector("[data-download]");
       if (dl) { dl.removeAttribute("target"); dl.setAttribute("download", ""); dl.addEventListener("click", (e) => startDownload(e, dl)); }
       if (nodeKey === "download" && staffKey === "service") { flow.phase = "download"; flow.downloadShownAt = flow.downloadShownAt || Date.now(); }

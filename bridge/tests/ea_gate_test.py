@@ -220,6 +220,8 @@ check("2 本目のブリッジを足すのはロイヤルファーストクラ�
       slot_call > 0 and "second_account_allowed()" in main_body[max(0, slot_call - 400) : slot_call])
 check("ロイヤル以外で別の口座が来たら、元の口座を「停止」にしてから替える（stop_old_account）",
       "stop_old_account(mine)" in main_body[slot_call : slot_call + 800])
+check("ロイヤルは MT5 が見つからなくても 1 本目を切り替えない（connect_slot に任せて止まる）",
+      "terminal_for_account(wanted) is not None" not in main_body[max(0, slot_call - 400) : slot_call])
 stop_body = py_body_of(CONNECT, "stop_old_account")
 check("停止は元の口座あての指令ファイル（trelab_gate_<口座>.ini）に書く", 'trelab_gate_{account}.ini' in stop_body and 'AI_TRADING_ALLOWED' in stop_body)
 check("この PC の意思（intent.json）も停止に戻す", 'intent.json' in stop_body and '"allowed": 0.0' in stop_body)

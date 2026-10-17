@@ -8,6 +8,7 @@ import { BridgeStatusBar } from './BridgeStatusBar'
 import type { Connection } from '../data/connection'
 import { formatBridgeError } from '../data/bridgeErrors'
 import { EA_SETTINGS, formatValue } from '../data/eaSettings'
+import { isAutoLotEa } from '../data/fleet'
 import type { useBridge } from '../hooks/useBridge'
 import { useAuth } from '../hooks/AuthContext'
 import { fleetErrorMessage, fleetMyOptout, fleetOptoutSet } from '../data/fleet'
@@ -70,7 +71,11 @@ export function ControlPanel({
     })
   }, [conn.settings])
 
-  const dirty = EA_SETTINGS.some((s) => draft[s.key] !== conn.settings[s.key])
+  // 安定低月利ver（ロイヤルの 2 つ目）はロットを EA が残高から決める。サイトから送ると複利が止まり、
+  // 画面の最小が 0.01 なので戻せない。だからロットの行は出さず、送らない
+  const autoLot = isAutoLotEa(bridge.status)
+  const settings = autoLot ? EA_SETTINGS.filter((s) => s.key !== 'lot') : EA_SETTINGS
+  const dirty = settings.some((s) => draft[s.key] !== conn.settings[s.key])
 
   const bump = (key: string, dir: 1 | -1) => {
     const setting = EA_SETTINGS.find((s) => s.key === key)
@@ -99,7 +104,7 @@ export function ControlPanel({
       return
     }
 
-    const changed = EA_SETTINGS.filter((s) => draft[s.key] !== conn.settings[s.key])
+    const changed = settings.filter((s) => draft[s.key] !== conn.settings[s.key])
     // 1件ずつ MT5 に書く。途中で失敗しても、そこまでに書けたぶんは必ず確定させる。
     // 確定しないと「MT5 は新しい値／画面は古い値」のまま食い違いに気づけない。
     const applied: Record<string, number> = {}
@@ -268,7 +273,19 @@ export function ControlPanel({
       </div>
 
       <div className="space-y-2.5">
-        {EA_SETTINGS.map((s) => {
+        {autoLot && (
+          <div
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[6px] border px-4 py-3"
+            style={{ borderColor: 'rgba(94,204,255,0.18)', background: 'rgba(9,17,31,0.5)' }}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] font-bold text-white">ロット数</p>
+              <p className="text-[13px] text-slate-300">50万円ごとに0.01ロットで、ロットは自動で決まります</p>
+            </div>
+            <p className="text-[15px] font-bold" style={{ color: 'var(--accent)' }}>自動</p>
+          </div>
+        )}
+        {settings.map((s) => {
           const value = draft[s.key] ?? s.defaultValue
           const changed = value !== conn.settings[s.key]
           return (

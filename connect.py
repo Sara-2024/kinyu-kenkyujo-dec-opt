@@ -2693,7 +2693,10 @@ def main() -> int:
         wanted = account_from_args(raw_args)
         mine = primary_account()
         if wanted and mine and wanted != mine and connect_state.is_connected():
-            if second_account_allowed() and terminal_for_account(wanted) is not None:
+            if second_account_allowed():
+                # ロイヤル：必ず 2 本目として扱う。その口座の MT5 が見つからなければ connect_slot が
+                # 「ログインしてからもう一度」と出して止まる（1 本目を黙って切り替えない。
+                # 切り替えると 1 つ目の口座がサイトから外れる）
                 return connect_slot(room, wanted)
             if not second_account_allowed():
                 # ファーストクラス／プレミアム（口座は 1 つ）：2 本目は足さず、1 本目をこの口座に替える。

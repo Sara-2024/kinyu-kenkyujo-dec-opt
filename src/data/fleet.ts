@@ -32,6 +32,16 @@ export function systemLabel(status: unknown): string {
   return raw.replace(/^YumekkuEA[-_ ]?/i, '') || raw
 }
 
+/**
+ * ロットを EA 自身が決める（複利）EA か。ロイヤルの 2 つ目に置く「安定低月利ver」。
+ * この EA はサイトからロット（AI_LOT）を送ると複利をやめて固定になるので、管理画面はロットの操作を出さない。
+ */
+export function isAutoLotEa(status: unknown): boolean {
+  const s = (status ?? null) as { ea_expected?: unknown; ea_name?: unknown } | null
+  const raw = s?.ea_expected ?? s?.ea_name
+  return typeof raw === 'string' && raw.includes('安定低月利')
+}
+
 function client() {
   if (!supabase) throw new Error('NOT_CONFIGURED')
   return supabase
