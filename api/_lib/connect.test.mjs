@@ -27,7 +27,7 @@ function fakeSupabase(response, calls = []) {
     return response
   }
 }
-const okRes = () => ({ ok: true, json: async () => ({ member_id: MEMBER, can_trade: true }) })
+const okRes = () => ({ ok: true, json: async () => ({ member_id: MEMBER, can_trade: true, plan: 'crystal' }) })
 const ngRes = () => ({ ok: false, status: 400, text: async () => 'INVALID_TOKEN' })
 
 // ── 正しい合図 ──────────────────────────────────
@@ -36,6 +36,7 @@ const ngRes = () => ({ ok: false, status: 400, text: async () => 'INVALID_TOKEN'
   const r = await handleConnect({ token: GOOD }, env, 'ip-1', fakeSupabase(okRes(), calls))
   check('正しい合図なら 200', r.status === 200, String(r.status))
   check('部屋（会員ID）を返す', r.body.room === MEMBER, String(r.body.room))
+  check('会員のプランも返す（パスポートが 2 つ目の口座を足してよいかに使う）', r.body.plan === 'crystal', String(r.body.plan))
   check('合図は Supabase へそのまま渡す', calls[0]?.body?.p_connect_token === GOOD)
   check('確かめるのは redeem の関数', String(calls[0]?.url).endsWith('/rpc/connect_token_redeem'))
 }

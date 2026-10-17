@@ -133,11 +133,14 @@ def find_source_file(assets_dir: Path) -> Path | None:
     return found[0]
 
 
-def load_source(assets_dir: Path) -> Source | None:
+def load_source(assets_dir: Path, include_dir: Path | None = None) -> Source | None:
     """同梱している EA を読む。
 
     manifest に SHA-256 が書いてあれば、同梱物が途中で壊れていないかをここで確かめる。
     食い違っていたら broken を立てる。壊れたものは置かない。
+
+    include_dir … EA が読む Include（TradingGate.mqh）の置き場。省略すると assets_dir。
+    追加口座用の EA（bridge/growth/）は Include を 1 本目と共有するので、ここで bridge/ を渡す。
     """
     global EA_NAME
     ea = find_source_file(assets_dir)
@@ -164,8 +167,9 @@ def load_source(assets_dir: Path) -> Source | None:
     if expected and expected != digest:
         broken = "同梱の EA が manifest と違う（壊れている可能性）"
 
-    includes = tuple(Path(assets_dir) / name for name in INCLUDE_FILES if (Path(assets_dir) / name).is_file())
-    missing = [name for name in INCLUDE_FILES if not (Path(assets_dir) / name).is_file()]
+    inc_dir = Path(include_dir) if include_dir is not None else Path(assets_dir)
+    includes = tuple(inc_dir / name for name in INCLUDE_FILES if (inc_dir / name).is_file())
+    missing = [name for name in INCLUDE_FILES if not (inc_dir / name).is_file()]
     if missing and not broken:
         broken = f"同梱物が足りない: {'・'.join(missing)}"
 

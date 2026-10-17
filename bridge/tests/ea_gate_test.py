@@ -12,8 +12,10 @@ MetaEditor はここでは動かせないので、ソースを読んで
   IsTradingAllowedRaw が無い … 管理画面の「停止」を押しても止まらない
   SiteLot が無い             … 管理画面でロットを変えても反映されない
 
-見るのは Windows 用（bridge/<EA_NAMES[0]>.mq5）と Mac 用（bridge/mac/*Yumekku*.mq5）。
+見るのは Windows 用（bridge/<EA_NAMES[0]>.mq5）と Mac 用（bridge/mac/*Yumekku*.mq5）、
+追加口座用（bridge/growth/<GROWTH_EA_NAME>.mq5。ロイヤルファーストクラスの 2 つ目に置く「安定低月利ver」）。
 Mac 用には、接続ツールが口座を読むためのファイル書き出し（docs/mac-ea-files.md）も要る。
+追加口座用には、設定画面の順（ロット → ユメックAIの制御）と、1 取引のリスク上限・月次ストップが要る。
 ソースが無いとき（配るのは .ex5 だけなので、普通は無い）は何もせず通す。
 """
 from __future__ import annotations
@@ -25,11 +27,16 @@ import sys
 BRIDGE = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BRIDGE))
 
-from mt5_terminal import EA_NAMES  # noqa: E402
+from mt5_terminal import EA_NAMES, GROWTH_EA_DIRNAME, GROWTH_EA_NAME  # noqa: E402
 
+GROWTH_DIR = BRIDGE / GROWTH_EA_DIRNAME
 SOURCES = [
     p
-    for p in (BRIDGE / f"{EA_NAMES[0]}.mq5", *sorted((BRIDGE / "mac").glob("*Yumekku*.mq5")))
+    for p in (
+        BRIDGE / f"{EA_NAMES[0]}.mq5",
+        *sorted((BRIDGE / "mac").glob("*Yumekku*.mq5")),
+        GROWTH_DIR / f"{GROWTH_EA_NAME}.mq5",
+    )
     if p.is_file()
 ]
 
@@ -64,9 +71,20 @@ def body_of(src: str, name: str) -> str:
     return src[start:]
 
 
+def py_body_of(src: str, name: str) -> str:
+    """python の関数の中身（次の top-level def/class まで）。"""
+    m = re.search(rf"^def {name}\b.*?$", src, re.M)
+    if m is None:
+        return ""
+    rest = src[m.end():]
+    n = re.search(r"^(def |class |[A-Za-z_])", rest, re.M)
+    return rest[: n.start()] if n else rest
+
+
 def run_checks(source: pathlib.Path) -> None:
     src = source.read_text(encoding="utf-8", errors="ignore")
     is_mac = source.parent.name == "mac"
+    is_growth = source.parent.name == GROWTH_EA_DIRNAME
 
     # ── 1) 連携部品を読んでいるか ──
     check("TradingGate.mqh を include している", "#include <TradingGate.mqh>" in src)
@@ -105,6 +123,17 @@ def run_checks(source: pathlib.Path) -> None:
     calc_lot = body_of(src, "CalcLot")
     check("ロットはサイトの設定から取る", "SiteLot" in calc_lot, calc_lot[:80])
 
+    # ── 4-2) 設定画面の順（一番上がロット、その下に「ユメックAIの制御を受ける」、連携部品は入力の後ろ）──
+    groups = [m.start() for m in re.finditer(r'input group "', src)]
+    first_group = re.search(r'input group "([^"]*)"', src)
+    check("設定画面の一番上のグループは「ロット」", first_group is not None and "ロット" in first_group.group(1),
+          first_group.group(1) if first_group else "無し")
+    site_ctl = src.find("input bool    InpSiteControl")
+    check("「ユメックAIの制御を受ける」はロットのグループの中にある",
+          site_ctl > 0 and len(groups) >= 2 and groups[0] < site_ctl < groups[1], f"位置={site_ctl}")
+    inc = src.find("#include <TradingGate.mqh>")
+    check("TradingGate.mqh は入力の後ろで読む（中の入力が一番上に出ないように）", inc > 0 and all(g < inc for g in groups))
+
     # ── 5) この EA の建玉を、取りこぼさず数えているか ──
     magic = body_of(src, "IsOrbitMagic")
     for axis in ("InpM1Magic", "InpH1Magic", "InpM30Magic"):
@@ -118,6 +147,24 @@ def run_checks(source: pathlib.Path) -> None:
     check("エントリー条件（リテスト）はそのまま", "retestBuy" in src and "retestSell" in src)
     check("トレールはそのまま", "ManageTrail" in src)
     check("日次損失リミットはそのまま", "TodayRealizedPnL" in src)
+
+    if is_growth:
+        # ── 9) 追加口座用（安定低月利ver）: 安全装置がサイト連携のあとも残っているか ──
+        check("安定低月利ver: 1 取引のリスク上限を発注の前に見る",
+              "RiskAmount" in open_trade and 0 <= open_trade.find("RiskAmount") < (re.search(r"g_trade\.(Buy|Sell)\s*\(", open_trade) or re.search("$", open_trade)).start())
+        check("安定低月利ver: 月次損失ストップがある", "MonthRealizedPnL" in open_trade)
+        check("安定低月利ver: 複利ロットがある", bool(body_of(src, "CompoundLot")))
+        site_lot = body_of(src, "SiteLot")
+        check("安定低月利ver: サイトのロットが無ければ複利に戻る", "AI_LOT" in site_lot and "CompoundLot" in site_lot, site_lot[:120])
+        check("安定低月利ver: サイトのロットにも上限（InpMaxLotCap）が効く", "InpMaxLotCap" in site_lot)
+        check("安定低月利ver: 月次の集計も決済ぶんを落とさない（INOUT / OUT_BY）",
+              "DEAL_ENTRY_INOUT" in body_of(src, "RealizedPnLSince") and "DEAL_ENTRY_OUT_BY" in body_of(src, "RealizedPnLSince"))
+        check("安定低月利ver: 名前は mt5_terminal.GROWTH_EA_NAME と同じ", source.stem == GROWTH_EA_NAME, source.stem)
+        main_src = BRIDGE / f"{EA_NAMES[0]}.mq5"
+        if main_src.is_file():
+            exp = lambda t: (re.search(r"#define EXPIRY_TIME\s+D'([^']+)'", t) or re.search("$", t)).group(0)
+            check("安定低月利ver: 有効期限は 1 年版と同じ", exp(src) == exp(main_src.read_text(encoding="utf-8", errors="ignore")), exp(src))
+        return
 
     if not is_mac:
         return
@@ -156,6 +203,35 @@ check("指令ファイルは口座番号付き（trelab_gate_<口座>.ini）が�
 check("控えも口座番号付きで書く（同じ PC の別口座と混ざらない）", "StateFileName()" in GATE and "trelab_state_" in GATE)
 check("口座番号付きが無ければこれまでの名前（1 口座の PC・古い接続ツール）", '"trelab_gate.ini"' in GATE and '"trelab_state.ini"' in GATE)
 check("生きているかは「変化を最後に見た時刻」で決める（PC の時計と更新時刻を直接比べない）", "g_gate_changed_at" in GATE and "now - beat" not in GATE and "now - g_gate_mtime" not in GATE)
+
+# ── 追加口座（2 つ目の口座）には「安定低月利ver」を置く配線（connect.py）──
+CONNECT = (BRIDGE.parent / "connect.py").read_text(encoding="utf-8", errors="ignore")
+print("── connect.py（追加口座に置く EA）──")
+slot_body = py_body_of(CONNECT, "connect_slot")
+check("connect_slot は 1 本目の配布物ではなく growth_source() を置く", "growth_source()" in slot_body and "load_source(BRIDGE_DIR)" not in slot_body)
+growth_body = py_body_of(CONNECT, "growth_source")
+check("growth_source は bridge/growth/ から読む（Include は 1 本目と共有）",
+      "GROWTH_EA_DIR" in growth_body and "include_dir=BRIDGE_DIR" in growth_body)
+check("置いた EA の名前を slot.json に控える", '"ea": source.ea_path.stem' in slot_body)
+check("追加口座のブリッジに「載せるべき EA」を渡す（BRIDGE_EA_NAME）", 'env["BRIDGE_EA_NAME"]' in py_body_of(CONNECT, "start_slot_bridge"))
+main_body = CONNECT[CONNECT.index("def main(") :] if "def main(" in CONNECT else CONNECT
+slot_call = main_body.find("return connect_slot(room, wanted)")
+check("2 本目のブリッジを足すのはロイヤルファーストクラスだけ（second_account_allowed）",
+      slot_call > 0 and "second_account_allowed()" in main_body[max(0, slot_call - 400) : slot_call])
+check("ロイヤル以外で別の口座が来たら、元の口座を「停止」にしてから替える（stop_old_account）",
+      "stop_old_account(mine)" in main_body[slot_call : slot_call + 800])
+stop_body = py_body_of(CONNECT, "stop_old_account")
+check("停止は元の口座あての指令ファイル（trelab_gate_<口座>.ini）に書く", 'trelab_gate_{account}.ini' in stop_body and 'AI_TRADING_ALLOWED' in stop_body)
+check("この PC の意思（intent.json）も停止に戻す", 'intent.json' in stop_body and '"allowed": 0.0' in stop_body)
+check("プランは合図の返事（/api/connect の plan）から取る", 'data.get("plan")' in py_body_of(CONNECT, "redeem_connect_token"))
+check("配布物（bridge/growth/<名前>.ex5）がリポジトリにある", (GROWTH_DIR / f"{GROWTH_EA_NAME}.ex5").is_file())
+check("bridge/ 直下に安定低月利ver の .ex5 を置いていない（1 本目として配られる）", not (BRIDGE / f"{GROWTH_EA_NAME}.ex5").exists())
+BRIDGE_PY = (BRIDGE / "bridge.py").read_text(encoding="utf-8", errors="ignore")
+check("ブリッジは載せるべき EA（EXPECTED_EA）を状態に返す", '"ea_expected": EXPECTED_EA' in BRIDGE_PY and 'os.environ.get("BRIDGE_EA_NAME"' in BRIDGE_PY)
+check("「○○を載せてください」は EXPECTED_EA で出す", "{EXPECTED_EA} を載せてください" in BRIDGE_PY)
+LOBBY = (BRIDGE.parent / "dreamland" / "index.html").read_text(encoding="utf-8", errors="ignore")
+check("ロビーの手順は ea_expected（無ければ何番目の口座か）で EA 名を出す", "Bridge.status.ea_expected" in LOBBY and "${eaName()}" in LOBBY)
+check("ロビーの EA 名は mt5_terminal と同じ", f'"{GROWTH_EA_NAME}"' in LOBBY and f'"{EA_NAMES[0]}"' in LOBBY)
 
 if not SOURCES:
     print("  --   EA のソース（.mq5）が無いので省略します（配るのは .ex5 だけ）")

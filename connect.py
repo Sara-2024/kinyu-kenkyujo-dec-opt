@@ -45,6 +45,8 @@ ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resol
 # PyInstaller で1つの exe にまとめた場合、EA などの同梱物はここに展開される
 ASSETS = Path(getattr(sys, "_MEIPASS", ROOT))
 BRIDGE_DIR = ASSETS / "bridge"
+# 追加口座（ロイヤルファーストクラスの 2 つ目）に置く EA の置き場。1 本目の配布物（bridge/ 直下）とは分ける
+GROWTH_EA_DIR = BRIDGE_DIR / "growth"
 # 同梱の EA（.ex5）の置き場。普段は bridge/ と同じ。Mac 版が手元で動くときは bridge/mac/ に向ける
 EA_ASSETS_DIR = BRIDGE_DIR
 SERVER_DIR = ROOT / "server"
@@ -52,6 +54,7 @@ sys.path.insert(0, str(BRIDGE_DIR))
 
 from mt5_terminal import (  # noqa: E402
     EA_NAMES,
+    GROWTH_EA_NAME,
     find_logged_in_terminal,
     probe_ea_files,
     resolve_terminal_exe,
@@ -994,8 +997,22 @@ def list_slot_bridge_processes(account: str) -> list[tuple[int, str]]:
     return [(pid, img) for pid, img, cmd in list_bridge_processes_with_cmdline() if f"--slot {account}" in cmd.lower()]
 
 
+def growth_source():
+    """追加口座（2 つ目の口座）に置く EA「安定低月利ver」の配布物。
+
+    1 本目の EA（YumekkuEA-1年版）とは別物で、bridge/growth/ に同梱している
+    （Include の TradingGate.mqh は 1 本目と共有）。同梱されていなければ 1 本目と同じ EA で代える
+    （ビルドはこの同梱物が無いと止まるので、ふつうは起きない。起きたらログに残す）。
+    """
+    source = ea_manager.load_source(GROWTH_EA_DIR, include_dir=BRIDGE_DIR)
+    if source is not None:
+        return source
+    log(f"追加口座用の EA（{GROWTH_EA_NAME}）が同梱されていないので、1 本目と同じ EA を置きます")
+    return ea_manager.load_source(BRIDGE_DIR)
+
+
 def connect_slot(room: str, account: str) -> int:
-    """追加口座の連携。その口座の MT5 に EA を置き、口座専用のブリッジを起こす。1 本目は触らない。"""
+    """追加口座の連携。その口座の MT5 に「安定低月利ver」の EA を置き、口座専用のブリッジを起こす。1 本目は触らない。"""
     banner(f"追加口座の連携（口座 …{account[-4:]}）")
     target = terminal_for_account(account)
     if target is None:
@@ -1004,13 +1021,14 @@ def connect_slot(room: str, account: str) -> int:
             f"口座 {account} の MT5 が見つかりません。",
             "その口座で MT5 にログインしてから、サイトの「設置が終わった（つなぐ）」をもう一度押してください。",
         )
-    source = ea_manager.load_source(BRIDGE_DIR)
+    source = growth_source()
     if source is None:
         return show_failure("自動売買の設定を取り出せませんでした。", "パスポートをダウンロードし直してください。")
     after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, log=log)
-    log(f"追加口座の EA: {after.as_dict()}")
+    log(f"追加口座の EA（{source.ea_path.stem}）: {after.as_dict()}")
     exe = target.exe
     data = {"account": account, "room": room, "terminal": str(target.data_path), "exe": str(exe or ""),
+            "ea": source.ea_path.stem,
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     (slot_dir(account) / "slot.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"追加口座の部屋: {room}（MT5: {target.data_path}）")
@@ -1030,6 +1048,8 @@ def start_slot_bridge(slot: dict) -> None:
     env = bridge_env(None)
     env["BRIDGE_ID"] = str(slot.get("room") or "")
     env["BRIDGE_SLOT"] = account
+    # この口座が載せる EA（安定低月利ver）。ブリッジはこれと違う EA が載っていたら「○○を載せてください」と出す
+    env["BRIDGE_EA_NAME"] = str(slot.get("ea") or GROWTH_EA_NAME)
     env["LOG_FILE"] = str(slot_dir(account) / "bridge.log")
     if slot.get("exe"):
         env["MT5_PATH"] = str(slot["exe"])
@@ -1080,8 +1100,66 @@ def redeem_connect_token(token: str) -> str:
     if not MEMBER_ROOM_RE.match(room):
         log("サイトの返事に部屋が入っていませんでした")
         return ""
-    log("連携の合図を確認しました")
+    global LAST_REDEEMED_PLAN
+    LAST_REDEEMED_PLAN = str(data.get("plan") or "").strip().lower()
+    log("連携の合図を確認しました" + (f"（プラン: {LAST_REDEEMED_PLAN}）" if LAST_REDEEMED_PLAN else ""))
     return room
+
+
+# 直前に確かめた合図の会員のプラン（first / crystal / premium。古いサイトなら空）
+LAST_REDEEMED_PLAN = ""
+# 同じ PC に 2 つ目の口座（2 本目のブリッジ）を足してよいプラン。ロイヤルファーストクラスだけ
+PLANS_WITH_SECOND_ACCOUNT = ("crystal",)
+
+
+def second_account_allowed() -> bool:
+    """いま確かめた合図の会員は、2 つ目の口座を足してよいか（ロイヤルファーストクラスだけ）。
+
+    プランが分からないとき（古いサイト）は足さない。ファーストクラスの人が別の口座番号で
+    もう一度手続きすると、ここで止まって「1 本目を切り替える」（口座を替える）に回る。
+    """
+    return LAST_REDEEMED_PLAN in PLANS_WITH_SECOND_ACCOUNT
+
+
+def stop_old_account(account: str) -> None:
+    """口座を替える前に、元の口座を「停止」にする。
+
+    切り替えたあと、元の MT5 の EA はサイトから制御できなくなる（ユメックAIからの制御を受けられない）。
+    最後の指示が「稼働」のままだと誰も止められずに売買が続くので、
+      ・元の口座あての指令ファイル（trelab_gate_<口座番号>.ini）に AI_TRADING_ALLOWED=0 を書き
+      ・この PC の意思（intent.json）も「停止」に戻す（新しい口座は、お客様が管理画面で押すまで動かさない）
+    EA がチャートに残っていれば、次の 1 秒で止まる（保有分の決済管理は続く）。
+    """
+    if not account.isdigit():
+        return
+    gate_dir = ea_manager.heartbeat_path().parent
+    gate = gate_dir / f"trelab_gate_{account}.ini"
+    values: dict[str, str] = {}
+    try:
+        if gate.is_file():
+            for line in gate.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if "=" in line and not line.strip().startswith("#"):
+                    k, v = line.split("=", 1)
+                    values[k.strip()] = v.strip()
+    except OSError:
+        values = {}
+    values["AI_TRADING_ALLOWED"] = "0.0"
+    try:
+        gate_dir.mkdir(parents=True, exist_ok=True)
+        tmp = gate.with_suffix(".tmp")
+        tmp.write_text("".join(f"{k}={v}\n" for k, v in sorted(values.items())), encoding="utf-8")
+        tmp.replace(gate)
+        log(f"元の口座（…{account[-4:]}）あての指令を「停止」にしました")
+    except OSError as exc:
+        log(f"元の口座あての指令を書けませんでした: {exc}")
+    try:
+        (CONFIG_DIR / "intent.json").write_text(
+            json.dumps({"allowed": 0.0, "by": "口座の切り替え", "at": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        log("この PC の意思を「停止」に戻しました（新しい口座は管理画面で「はじめる」を押すまで動きません）")
+    except OSError as exc:
+        log(f"意思を書き戻せませんでした: {exc}")
 
 
 # ────────────────────────────────────────────────
@@ -2614,8 +2692,14 @@ def main() -> int:
     if room and os.name == "nt":
         wanted = account_from_args(raw_args)
         mine = primary_account()
-        if wanted and mine and wanted != mine and connect_state.is_connected() and terminal_for_account(wanted) is not None:
-            return connect_slot(room, wanted)
+        if wanted and mine and wanted != mine and connect_state.is_connected():
+            if second_account_allowed() and terminal_for_account(wanted) is not None:
+                return connect_slot(room, wanted)
+            if not second_account_allowed():
+                # ファーストクラス／プレミアム（口座は 1 つ）：2 本目は足さず、1 本目をこの口座に替える。
+                # 元の口座はこのあとサイトから制御できなくなるので、先に「停止」にしておく
+                log(f"このプラン（{LAST_REDEEMED_PLAN or '不明'}）は口座 1 つまで。口座 …{mine[-4:]} から …{wanted[-4:]} に替えます")
+                stop_old_account(mine)
 
     # Windows の起動時に呼ばれたとき（--startup）。
     # 自動起動は「つながっていたものを戻す」ためのもの。まだ連携していない PC では

@@ -3,9 +3,11 @@
 #
 #   bash tools/mac/compile-ea.sh mac    # Mac 用:     bridge/mac/<名前>.mq5 → .ex5
 #   bash tools/mac/compile-ea.sh win    # Windows 用: bridge/<名前>.mq5     → .ex5
-#   bash tools/mac/compile-ea.sh all    # 両方（引数なしも同じ）
+#   bash tools/mac/compile-ea.sh growth # 追加口座用（安定低月利ver）: bridge/growth/YumekkuEA1年版｜安定低月利ver.mq5 → .ex5
+#   bash tools/mac/compile-ea.sh all    # 全部（引数なしも同じ）
 #
-# 名前はどちらも同じ（EA_NAME。既定は bridge/mt5_terminal.py の EA_NAMES[0] と揃える）。
+# 名前は mac / win が同じ（EA_NAME。既定は bridge/mt5_terminal.py の EA_NAMES[0] と揃える）。
+# growth は bridge/mt5_terminal.py の GROWTH_EA_NAME（ロイヤルファーストクラスの 2 つ目の口座に置く EA）。
 # .ex5 は OS に依らない（MT5 の中間コード）ので、Windows 用もここで作れる。
 # ソース（.mq5）はどちらも .gitignore で配らない。この Mac にしか無いので消さないこと。
 #
@@ -17,13 +19,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-EA="${EA_NAME:-YumekkuEA-1年版}"
 TARGET="${1:-all}"
 case "$TARGET" in
-  all) bash "$0" mac && bash "$0" win; exit $? ;;
-  win) SRC_DIR="$ROOT/bridge" ;;
-  mac) SRC_DIR="$ROOT/bridge/mac" ;;
-  *)   echo "使い方: bash tools/mac/compile-ea.sh [mac|win|all]" >&2; exit 2 ;;
+  all)    bash "$0" mac && bash "$0" win && bash "$0" growth; exit $? ;;
+  win)    SRC_DIR="$ROOT/bridge";        EA="${EA_NAME:-YumekkuEA-1年版}" ;;
+  mac)    SRC_DIR="$ROOT/bridge/mac";    EA="${EA_NAME:-YumekkuEA-1年版}" ;;
+  growth) SRC_DIR="$ROOT/bridge/growth"; EA="${EA_NAME:-YumekkuEA1年版｜安定低月利ver}" ;;
+  *)      echo "使い方: bash tools/mac/compile-ea.sh [mac|win|growth|all]" >&2; exit 2 ;;
 esac
 REL="${SRC_DIR#$ROOT/}"
 APP="${MT5_APP:-/Applications/MetaTrader 5.app}"

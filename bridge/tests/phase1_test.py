@@ -169,6 +169,16 @@ check("SHA-256 が合っている", source.ok, source.broken)
 check("Include も同梱している", len(source.includes) == 1, str(source.includes))
 check("お客様のPCでコンパイルしない", not ea_manager.needs_compile())
 
+# 追加口座用の EA（bridge/growth/）は Include を 1 本目と共有する：別のフォルダから取れる
+_growth = pathlib.Path(tempfile.mkdtemp(prefix="growth-", dir=WORK))
+(_growth / "YumekkuEA-sodateru.ex5").write_bytes(b"EX5-GROWTH")
+_gsrc = ea_manager.load_source(_growth, include_dir=assets)
+check("Include を別のフォルダ（1 本目の配布物）から取れる", _gsrc is not None and _gsrc.ok and len(_gsrc.includes) == 1
+      and _gsrc.includes[0].parent == assets, str(_gsrc.as_dict() if hasattr(_gsrc, "as_dict") else _gsrc))
+_gsrc_missing = ea_manager.load_source(_growth)
+check("Include が無いフォルダだけでは「同梱物が足りない」", _gsrc_missing is not None and not _gsrc_missing.ok)
+source = ea_manager.load_source(assets)   # 以降の検査は 1 本目の配布物で続ける（load_source は名前を覚える）
+
 # 中身が控えと違う配布物は使わない
 bad = ea_manager.load_source(make_assets(sha_ok=False))
 check("中身が控えと違えば使わない", bad is not None and not bad.ok, str(bad.broken if bad else None))

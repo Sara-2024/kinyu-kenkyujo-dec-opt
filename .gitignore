@@ -21,6 +21,9 @@ bridge/*Yumekku*.mq5
 # Mac 用 EA のソースも配らない（.ex5 だけコミットする）。控えは build-mac.sh が作る
 bridge/mac/*.mq5
 bridge/mac/ea_manifest.json
+# 追加口座用 EA（育てる運用）も同じ。ソースはこの Mac にしか無い。.ex5 だけコミットする
+bridge/growth/*.mq5
+bridge/growth/ea_manifest.json
 # EA の控え。ビルドのたびに作り直すので、git では持たない
 # （持つと、取り込みのたびにぶつかる）
 bridge/ea_manifest.json

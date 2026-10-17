@@ -255,6 +255,18 @@ if ban_mig.is_file():
     check("ブリッジの確認は「止められているか」だけ返す", "status = 'active'" in ban_sql[ban_sql.index("bridges_blocked") :])
     check("削除・BAN の migration は既存のテーブルを落とさない", "drop table" not in ban_sql.lower())
 
+# ── 8-3b) 「合図の返事にプラン」「管理者が会員のプランを直す」migration も schema.sql とずれていないか ──
+plan_mig = ROOT / "supabase" / "migrations" / "20261017_connect_plan_and_admin_set_plan.sql"
+check("プランの migration がある", plan_mig.is_file())
+if plan_mig.is_file():
+    plan_sql = plan_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("プランの migration の中身が schema.sql と同じ", plan_sql.strip() in schema_all)
+    check("合図の返事に plan が入る", "'plan', v_member.plan" in plan_sql[plan_sql.index("connect_token_redeem") :])
+    check("プランを直せるのは管理者だけ", "_require_admin(p_token)" in plan_sql[plan_sql.index("admin_set_member_plan") :])
+    check("プランは 3 つのどれか", "('first', 'crystal', 'premium')" in plan_sql[plan_sql.index("admin_set_member_plan") :])
+    check("プランの migration は既存のテーブルを落とさない", "drop table" not in plan_sql.lower())
+
 # ── 8-4) 「お使いのパソコン（Windows / Mac）の記録」migration も schema.sql とずれていないか ──
 pf_mig = ROOT / "supabase" / "migrations" / "20261004_platform.sql"
 check("OS の記録の migration がある", pf_mig.is_file())

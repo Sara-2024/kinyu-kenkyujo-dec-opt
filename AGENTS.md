@@ -269,6 +269,38 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   1 本目のブリッジは 30 秒ごとに、同じ PC の別口座あての合図を中継に取りに行き（`_poll_other_claims`）、
   来ていれば接続ツールを token 付きで起こす（ロビーで「2 つ目の口座をつなぐ」→ 押すだけで足される）。
   該当しないとき（口座番号が無い・Mac・その口座の MT5 が無い）は、これまでどおり 1 本目を切り替える。
+- **2 つ目の口座に置く EA は「安定低月利ver」（`YumekkuEA1年版｜安定低月利ver`。2026-10-16 から）。** 1 つ目は `YumekkuEA-1年版` のまま。
+  `connect_slot()` だけが `GROWTH_EA_DIR`（`bridge/growth/`）の配布物を置く（`growth_source()`。Include の
+  `TradingGate.mqh` は 1 本目と共有、`ea_manager.load_source(..., include_dir=BRIDGE_DIR)`）。名前は
+  `mt5_terminal.py` の `GROWTH_EA_NAME` が唯一の定義。売買の判断は 1 年版と同じ（Orbit GOLD 2 軸・ナンピン OFF）で、
+  違いは **複利ロット（残高 `InpLotPerAmount` ごとに `InpLotStep`）・1 取引の想定損失上限（残高の `InpRiskPerTradePct`％。
+  損切り幅から先に計算して超える取引は見送る）・月次損失ストップ（残高の `InpMonthLossPct`％）**。
+  サイト連携は 1 年版と同じ `TradingGate.mqh`：設定画面は一番上が「ロット」、その下が「ユメックAIの制御を受ける」。
+  **サイトの管理画面でロットを決めると（`AI_LOT` > 0）それを固定ロットとして使い、複利は止まる**（`SiteLot()`）。
+  リスク上限はどちらのロットでも効く。有効期限は 1 年版と同じ 2027-10-31（ソースの `EXPIRY_TIME`。1 年版を書き換えたらこちらも）。
+  サイトでは別のシステムとして扱う：管理者画面・一斉制御に「システム」列（`systemLabel()`。ブリッジの `ea_expected`／`ea_name` から
+  「1年版」「1年版｜安定低月利ver」）、`/control` の表示名も `ea_name` で変わる。会員（＝口座）もブリッジも口座ごとに別。
+  - **置き場を `bridge/` 直下にしない。** 1 本目の配布物は「bridge/ 直下の Yumekku の .ex5」で拾う
+    （`ea_manager.find_source_file`・`build-windows.bat`・`build-release.py`）ので、直下に置くと 1 本目として配られる。
+    ソース（`bridge/growth/YumekkuEA1年版｜安定低月利ver.mq5`）は `.gitignore`。**この Mac にしか無い。消さないこと。**
+    コンパイルは `bash tools/mac/compile-ea.sh growth`（`all` で 3 つとも）。`.ex5` だけコミットする。
+    控え（`bridge/growth/ea_manifest.json`）は自動ビルドが作り直す（`build-exe.yml`・`build-windows.bat`）。
+    Mac 版（`build-mac.sh`）には入れない（Mac は追加口座に対応していない）。
+  - 追加口座のブリッジは `BRIDGE_EA_NAME`（`slot.json` の `ea`）で「載せるべき EA」を知り（`bridge.py` の `EXPECTED_EA`）、
+    `get_status` に `ea_expected` を返す。追加口座は名前そのもので見るので、1 年版が載っていれば
+    「安定低月利ver を載せてください」（`ea_problem`）。ロビーの手順の EA 名は `ea_expected`（無ければ何番目の口座か）で出す（`eaName()`）。
+  - 試験は `bridge/tests/ea_gate_test.py`（`bridge/growth/` のソースも同じ検査＋安定低月利ver の固有の検査、`connect.py` の配線）。
+- **2 つ目の口座を足せるのはロイヤルファーストクラスだけ（2026-10-17 から）。** パスポートはプランを見ないと、
+  ファーストクラスの人が別の口座番号で手続きし直すだけで 2 本目（安定低月利ver）が入ってしまった。
+  合図を確かめる `/api/connect` が会員の `plan` を返し（`connect_token_redeem`、`supabase/migrations/20261017_connect_plan_and_admin_set_plan.sql`）、
+  `connect.py` は `second_account_allowed()`（`LAST_REDEEMED_PLAN == "crystal"`）のときだけ `connect_slot()`。
+  それ以外（ファースト／プレミアム。プランが分からない古いサイトも）は **元の口座を「停止」にしてから**
+  （`stop_old_account()`：`trelab_gate_<元の口座>.ini` に `AI_TRADING_ALLOWED=0`、`intent.json` も停止）1 本目をその口座に替える。
+  替えたあと元の MT5 の EA はサイトから制御できないので、止めてから手放す。新しい口座は管理画面で「はじめる」を押すまで動かない。
+  ロビーは `PLANS[].links`（first/premium = 1、crystal = 2）を見て、上限に達していれば口座番号の入力のあとに `service.replace`
+  （「元の口座は、ユメックAIからの制御を受けることができなくなります」）を通してから登録する（`doReplace` → `registerAndConnect`）。
+  プランの合言葉（2026-10-13）より前に登録した会員は `plan` が空＝口座 1 つ扱いなので、ロイヤルの方は管理者画面の
+  「プラン」の選択で直す（`admin_set_member_plan`）。
 - **状態は2つだけ。** `bridge/connect_state.py` の `INSTALL_ONLY` / `CONNECTED`。
   記録は `%LOCALAPPDATA%\AITrader\state.json`。
   - `INSTALL_ONLY` … MT5 を探して EA を置くところまで。**サイトとは一切通信しない。**

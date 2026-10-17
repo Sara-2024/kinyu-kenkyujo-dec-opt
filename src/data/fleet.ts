@@ -19,6 +19,19 @@ export interface FleetAccount {
   platform?: 'windows' | 'mac' | null
 }
 
+/**
+ * その口座で動いているシステム（EA）の短い呼び名。管理者画面・一斉制御の「システム」列に出す。
+ * ブリッジが名乗った「載せるべき EA」（ea_expected。1 つ目は YumekkuEA-1年版、ロイヤルの 2 つ目は
+ * YumekkuEA1年版｜安定低月利ver）を優先し、無ければ実際に載っている EA 名（ea_name）。
+ * 先頭の「YumekkuEA」は省いて「1年版」「1年版｜安定低月利ver」のように出す。
+ */
+export function systemLabel(status: unknown): string {
+  const s = (status ?? null) as { ea_expected?: unknown; ea_name?: unknown } | null
+  const raw = s?.ea_expected ?? s?.ea_name
+  if (typeof raw !== 'string' || !raw) return '—'
+  return raw.replace(/^YumekkuEA[-_ ]?/i, '') || raw
+}
+
 function client() {
   if (!supabase) throw new Error('NOT_CONFIGURED')
   return supabase

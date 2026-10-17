@@ -64,6 +64,10 @@ jobs:
         shell: cmd
         run: py -3 tools\make-ea-manifest.py
 
+      - name: 追加口座用の EA（安定低月利ver）の控えを作る
+        shell: cmd
+        run: py -3 tools\make-ea-manifest.py --dir bridge\growth --quiet
+
       - name: exe を作る
         shell: cmd
         run: cmd /c "tools\build-windows.bat --from-release < NUL"

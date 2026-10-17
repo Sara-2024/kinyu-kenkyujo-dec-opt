@@ -64,6 +64,23 @@ if not exist bridge\ea_manifest.json (
   pause
   exit /b 1
 )
+REM 追加口座（ロイヤルファーストクラスの 2 つ目）に置く EA「安定低月利ver」。bridge\growth\ に分けて同梱する
+set GROWTH_EA=
+for %%f in (bridge\growth\*Yumekku*.ex5) do set GROWTH_EA=%%f
+if "%GROWTH_EA%"=="" (
+  echo [ERROR] bridge\growth\ に追加口座用の EA（*Yumekku*.ex5）がありません。
+  echo         Mac で bash tools/mac/compile-ea.sh growth を実行して .ex5 を入れてください。
+  pause
+  exit /b 1
+)
+echo   同梱する EA（追加口座用）: %GROWTH_EA%
+REM 控えは毎回作り直す（.ex5 を差し替えたのに古い控えが残ると「壊れている」扱いになる）
+py -3 tools\make-ea-manifest.py --dir bridge\growth --quiet
+if not exist bridge\growth\ea_manifest.json (
+  echo [ERROR] bridge\growth\ea_manifest.json を作れませんでした。
+  pause
+  exit /b 1
+)
 
 py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --onefile --noconsole ^
@@ -81,6 +98,8 @@ py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
   --paths bridge ^
   --add-data "%EA_FILE%;bridge" ^
   --add-data "bridge\ea_manifest.json;bridge" ^
+  --add-data "%GROWTH_EA%;bridge\growth" ^
+  --add-data "bridge\growth\ea_manifest.json;bridge\growth" ^
   --add-data "bridge\TradingGate.mqh;bridge" ^
   --hidden-import bridge ^
   --hidden-import mt5_terminal ^

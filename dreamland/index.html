@@ -671,7 +671,12 @@ const SCRIPT = {
     who: { say: () => `${PLAN().name}のお客様ですね。\n` + (currentPlan() === "crystal"
         ? "ロイヤルファーストクラスは、MT5 の口座を2つまでつなげます。1つだけでも進めます。まず1つ目の口座からご案内します。2つ目は、あとからこのサイトで手続きできます。"
         : "MT5 の口座を1つつなぎます。このまま進めましょう。"),
-      choices: () => [[members.length ? "次の口座をつないでパスポートを発行する" : "口座をつないでパスポートを発行する", "terms", "go"], ["合言葉を入れ直す", "entry!"], ["ほかのもの", "start"]] },
+      choices: () => [[!members.length ? "口座をつないでパスポートを発行する" : members.length >= PLAN().links ? "別の口座に替えてパスポートを発行する" : "次の口座をつないでパスポートを発行する", "terms", "go"], ["合言葉を入れ直す", "entry!"], ["ほかのもの", "start"]] },
+    /* 口座 1 つのプラン（ファースト／プレミアム）で、別の口座番号を入れたとき。警告を読んでから替える。
+       元の口座はサイト（ユメックAI）から制御できなくなる。パスポート側も、ロイヤル以外は 2 本目を足さず
+       元の口座を「停止」にしてから 1 本目を替える（connect.py の second_account_allowed / stop_old_account） */
+    replace: { say: () => `${PLAN().name}でつなげる口座は ${PLAN().links} つです。\nいまつないでいる口座 ${members.map((m) => tail2(m.account)).join("・")} の接続を解除して、口座 ${pendingReplace ? tail2(pendingReplace.account) : ""} に替えますか？\n\n元の口座は、ユメックAIからの制御を受けることができなくなります。元の MT5 のチャートからシステム（EA）を外してください。`,
+      choices: () => [["この口座に替える", "replace!"], ["やめる（いまの口座のまま）", "members"]] },
     pc: { say: () => `${planKey() ? PLAN().name + "のお客様ですね。" : ""}パスポートの発行は、MT5 が入っている**パソコン**で行います。\nいま開いているのはスマートフォン（またはタブレット）なので、下のボタンでこのページのリンクをご自身に送り、パソコンのブラウザで開いて続きを進めてください。合言葉はパソコンでもう一度お聞きします。`.replace(/\*\*/g, ""), docs: "pc",
       choices: [["口座の登録や案内は、このまま見る", "start"], ["ロビーにもどる", "close"]] },
     terms: { say: "お手続きの前に、必ず下の注意事項をお読みください。\n2つの確認にチェックを入れると、次へ進めます。", docs: "terms",
@@ -737,6 +742,12 @@ const SCRIPT = {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  /* チャートに載せる EA の名前。1 つ目の口座は YumekkuEA-1年版、ロイヤルの 2 つ目は「育てる運用」。
+     パスポートが口座ごとに置き分けるので、つながっていればブリッジの ea_expected をそのまま使う。
+     まだつながっていないときは、いま手続きしている口座が何番目かで決める */
+  const EA_NAME_FIRST = "YumekkuEA-1年版", EA_NAME_SECOND = "YumekkuEA1年版｜安定低月利ver";
+  const eaName = () => (Bridge.status && Bridge.status.ea_expected) || (flow.idx >= 1 ? EA_NAME_SECOND : EA_NAME_FIRST);
+  /* Bridge・flow は下で定義する（呼ばれるのは画面を出すときなので、ここで名前だけ先に決めておく） */
   const val = (x) => (typeof x === "function" ? x() : x);
 
   /* スマホのアドレスバーぶんを除いた高さ */
@@ -886,10 +897,10 @@ const SCRIPT = {
       + doc("PDF", "Mac 設置マニュアル", "手順を見ながら進めたい方はこちら", "macPdf", "ひらく"),
     ea: () => `<ol class="steps">
         <li><span>MT5 を起こして、口座に<b>ログイン</b>しておく</span></li>
-        <li><span>左の「ナビゲーター」にある <b>YumekkuEA-1年版</b> を、<b>ゴールド（XAUUSD）のチャート</b>へドラッグ</span></li>
+        <li><span>左の「ナビゲーター」にある <b>${esc(EA_NAME_FIRST)}</b> を、<b>ゴールド（XAUUSD）のチャート</b>へドラッグ</span></li>
         <li><span>出てきた画面で<b>「アルゴ取引を許可」</b>にチェックを入れて OK</span></li>
         <li><span>MT5 の上のほうにある<b>「アルゴ取引」ボタン</b>を押して、緑にする</span></li>
-      </ol><p class="note">Windows も Mac も同じ名前です。</p>${osNow() === "mac" ? "" : doc("EA", "パスポートと EA の設置マニュアル", "画面の写真を見ながら、1ページずつ", "winPdf", "ひらく")}`,
+      </ol><p class="note">Windows も Mac も同じ名前です。${planKey() === "crystal" ? `ロイヤルファーストクラスの <b>2 つ目の口座</b>の MT5 には、代わりに <b>${esc(EA_NAME_SECOND)}</b> が入ります。そちらを載せてください。` : ""}</p>${osNow() === "mac" ? "" : doc("EA", "パスポートと EA の設置マニュアル", "画面の写真を見ながら、1ページずつ", "winPdf", "ひらく")}`,
     support: () => doc("LINE", "サポート LINE", "係員が、止まったところから続きをご案内します", "support", "ひらく", "doc--line"),
     gates: () => `<div class="gates">` + Object.values(PLANS).filter((p) => p.gate).map((p) => {
       const mine = planKey() === p.key, locked = !!planKey() && !mine;
@@ -986,7 +997,7 @@ const SCRIPT = {
     mt5steps: () => {
       const idx = flow.mt5Index;
       const steps = [
-        ["システムをチャートに載せる", `ナビゲーター →「エキスパートアドバイザ」→ YumekkuEA-1年版 をゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK`],
+        ["システムをチャートに載せる", `ナビゲーター →「エキスパートアドバイザ」→ ${eaName()} をゴールド（XAUUSD または GOLD）のチャートへドラッグ →「アルゴ取引を許可」にチェック → OK`],
         ["「アルゴ取引」ボタンを ON にする", "MT5 上部のボタンが緑になれば OK（「自動売買」と表示される版もあります）"],
       ];
       return `<ol class="steps steps--live">${steps.map(([t, d], i) => `<li class="${i < idx ? "is-done" : i === idx ? "is-active" : ""}"><span><b>${esc(t)}</b><br>${esc(d)}</span></li>`).join("")}</ol>
@@ -994,7 +1005,7 @@ const SCRIPT = {
         <ul class="prog"><li class="is-wait">MT5 の画面を見ています… 終わると自動で進みます</li></ul>`;
     },
     members: () => `<ul class="prog prog--members">${members.map((m, i) => `
-        <li class="${m.done ? "is-ok" : "is-ng"}"><span>口座 ${esc(tail2(m.account))}${m.name ? `（${esc(m.name)}）` : ""}　${m.done ? "接続済み" : "未接続"}</span>
+        <li class="${m.done ? "is-ok" : "is-ng"}"><span>口座 ${esc(tail2(m.account))}${m.name ? `（${esc(m.name)}）` : ""}${planKey() === "crystal" ? `　<small>${esc(i === 0 ? EA_NAME_FIRST : EA_NAME_SECOND)}</small>` : ""}　${m.done ? "接続済み" : "未接続"}</span>
           <button type="button" class="mini" data-reconnect="${i}">${m.done ? "つなぎ直す" : "続きから"}</button></li>`).join("")}</ul>`,
   };
 
@@ -1135,7 +1146,26 @@ const SCRIPT = {
     if (members.some((m) => String(m.account) === account)) return (err.textContent = "この口座はもうつないでいます。「接続の状態を見る」からつなぎ直せます。");
     const entry = entryPw.get();
     if (!entry) { plan = null; savePlan(); return show("service", "connect"); }
-    setBusy(form, true, "登録しています…");
+    // このプランでつなげる口座の数を超える（ファースト／プレミアムで 2 つ目）→ 警告を読んでから「替える」
+    if (members.length >= PLAN().links) { pendingReplace = { account, name }; return show("service", "replace"); }
+    await registerAndConnect(account, name, entry, form);
+  };
+  /* 口座を替える：いまの口座をこの端末の一覧から外してから、新しい口座で登録する。
+     会員（サイト側）は消さない（管理者が見て判断する）。元の口座の停止はパスポートが行う */
+  let pendingReplace = null;
+  const doReplace = async () => {
+    const next = pendingReplace; pendingReplace = null;
+    if (!next) return show("service", "members");
+    const entry = entryPw.get();
+    if (!entry) { plan = null; savePlan(); return show("service", "connect"); }
+    clearFlowTimers(); Bridge.close();
+    members.length = 0; saveMembers(); flow.idx = -1;
+    checks.tool = false; checks.ea = false; checks.algo = false; saveChecks(); renderReady();
+    await registerAndConnect(next.account, next.name, entry, null);
+  };
+  const registerAndConnect = async (account, name, entry, form) => {
+    const err = $("signup-err");
+    if (form) setBusy(form, true, "登録しています…");
     const password = await derivedPassword(account, entry);
     const { status, data } = await api({ action: "register", account, name, password, entry });
     if (status !== 200) {
@@ -1143,10 +1173,12 @@ const SCRIPT = {
         // 登録済みなら、そのまま同じ口座で入る（パスワードは同じ作り方なので一致する）
         const again = await api({ action: "login", account, password });
         if (again.status === 200) return startConnect(adoptMember(again.data.session, again.data.member));
-        flow.retryAccount = account; setBusy(form, false); return show("service", "loginpw");
+        flow.retryAccount = account; if (form) setBusy(form, false); return show("service", "loginpw");
       }
       if (data.error === "BAD_ENTRY") { plan = null; savePlan(); entryPw.set(""); return show("service", "connect"); }
-      err.textContent = errText(data.error); setBusy(form, false); return;
+      if (err) err.textContent = errText(data.error); else alert(errText(data.error));
+      if (form) setBusy(form, false);
+      return;
     }
     startConnect(adoptMember(data.session, data.member));
   };
@@ -1630,6 +1662,7 @@ const SCRIPT = {
     if (to === "next") to = nextStep();
     if (to === "entry!") { plan = null; savePlan(); entryPw.set(""); renderGates(); return show("service", "connect"); }
     if (to === "later") { second = "later"; saveSecond(); return show("service", "later"); }
+    if (to === "replace!") return void doReplace();
     // 「設置が終わった（つなぐ）」：つながっているかを確かめて、次へ（呼び出さない）
     if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, "wait") : show("service", "connect"); }
     if (to === "relaunch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, "launch") : show("service", "connect"); }

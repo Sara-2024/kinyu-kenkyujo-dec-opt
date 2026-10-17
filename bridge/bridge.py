@@ -119,6 +119,9 @@ LOCK_NAMES = ("aitrader-bridge.lock", "trelab-bridge.lock")
 SLOT = os.environ.get("BRIDGE_SLOT", "").strip()
 if not SLOT.isdigit():
     SLOT = ""
+# この口座のチャートに載っているべき EA の名前。1 本目は配っている EA（EA_NAMES[0]）、
+# 追加口座は接続ツールが BRIDGE_EA_NAME で渡す（安定低月利ver）。画面の「○○を載せてください」に使う
+EXPECTED_EA = os.environ.get("BRIDGE_EA_NAME", "").strip() or EA_NAMES[0]
 
 
 def _lock_name() -> str:
@@ -1133,7 +1136,7 @@ class MT5Controller:
         out: dict[str, Any] = {}
         try:
             if not path.is_file():
-                return {"ea_state": None, "ea_alive": False, "ea_ready": False, "ea_problem": None}
+                return {"ea_state": None, "ea_alive": False, "ea_ready": False, "ea_problem": None, "ea_expected": EXPECTED_EA}
             # EA(MQL5)の書き出しは環境によって文字コードが変わる。読めるもので読む
             raw = path.read_bytes()
             text = ""
@@ -1154,7 +1157,7 @@ class MT5Controller:
                 out[key.strip()] = raw.strip()
             age = time.time() - path.stat().st_mtime
         except OSError:
-            return {"ea_state": None, "ea_alive": False, "ea_ready": False, "ea_problem": None}
+            return {"ea_state": None, "ea_alive": False, "ea_ready": False, "ea_problem": None, "ea_expected": EXPECTED_EA}
         skipped = {
             key: int(float(out[key]))
             for key in ("ai_skip_buy", "ai_skip_sell", "ai_shadow_buy", "ai_shadow_sell")
@@ -1178,14 +1181,19 @@ class MT5Controller:
         # EA は10秒ごとに書く。30秒以上古ければ、チャートから外れている
         fresh = age < 30
         same_account = (ea_account == my_login) if (ea_account and my_login) else None
-        ours = _is_our_ea(ea_name) if ea_name else None
+        # 1 本目は「うちの EA か」（名前の後半が変わっても拾う）。追加口座は載せる EA が決まっている
+        # （安定低月利ver）ので、名前そのもので見る。1 年版が載っていたら「安定低月利ver を載せてください」と出す
+        if ea_name and SLOT:
+            ours = (ea_name == EXPECTED_EA)
+        else:
+            ours = _is_our_ea(ea_name) if ea_name else None
         symbol_ok = _is_gold_symbol(ea_symbol) if ea_symbol else None
         alive = bool(fresh and same_account is not False and ours is not False)
         problem = None
         if fresh and same_account is False:
             problem = f"別の口座（{ea_account}）のMT5で動いています。いまつないでいるのは口座 {my_login} です。"
         elif fresh and ours is False:
-            problem = f"「{ea_name}」が載っています。{EA_NAMES[0]} を載せてください。"
+            problem = f"「{ea_name}」が載っています。{EXPECTED_EA} を載せてください。"
         elif alive and symbol_ok is False:
             problem = f"{ea_symbol} のチャートに載っています。ゴールド（XAUUSD または GOLD）のチャートに載せてください。"
         return {
@@ -1193,6 +1201,7 @@ class MT5Controller:
             "ea_allowed": out.get("allowed"),
             "ea_state_at": out.get("at"),
             "ea_name": ea_name or None,
+            "ea_expected": EXPECTED_EA,
             "ea_symbol": ea_symbol or None,
             # EA が自分の設定を書き出したもの。AI へ渡す戦略プロフィールの元になる
             "ea_profile_raw": out.get("profile"),

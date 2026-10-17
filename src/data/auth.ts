@@ -189,6 +189,11 @@ export async function adminSetOperatorPassword(token: string, password: string):
 }
 
 /** プランごとの合言葉（ロビーの「パスポートの設置」で打つもの）を決める */
+/** 会員のプランを直す（プランの合言葉より前に登録した会員は空なので、ロイヤルの方はここで直す） */
+export async function adminSetMemberPlan(token: string, memberId: string, plan: 'first' | 'crystal' | 'premium'): Promise<Member> {
+  return rpc<Member>('admin_set_member_plan', { p_token: token, p_member_id: memberId, p_plan: plan })
+}
+
 export async function adminSetPlanPassword(token: string, plan: 'first' | 'crystal' | 'premium', password: string): Promise<void> {
   await rpc('admin_set_plan_password', { p_token: token, p_plan: plan, p_password: password })
 }

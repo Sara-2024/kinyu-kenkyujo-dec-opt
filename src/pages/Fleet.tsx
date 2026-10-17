@@ -14,6 +14,7 @@ import {
   fleetRegisterFor,
   fleetReveal,
   fleetSetIncluded,
+  systemLabel,
   type FleetAccount,
 } from '../data/fleet'
 
@@ -306,6 +307,7 @@ export function Fleet() {
                 <th className="px-3 py-3 font-bold">登録した口座</th>
                 <th className="px-3 py-3 font-bold">登録者</th>
                 <th className="px-3 py-3 font-bold">OS</th>
+                <th className="px-3 py-3 font-bold">システム</th>
                 <th className="px-3 py-3 font-bold">接続</th>
                 <th className="px-3 py-3 font-bold">つながっている口座</th>
                 <th className="px-3 py-3 font-bold">自動売買</th>
@@ -354,6 +356,7 @@ export function Fleet() {
                     </td>
                     <td className="px-3 py-3 text-slate-300">{row.virtual ? <span className="text-slate-500">連携のみ</span> : row.email}</td>
                     <td className="px-3 py-3">{platformLabel((s as { platform?: unknown } | null | undefined)?.platform ?? row.platform)}</td>
+                    <td className="px-3 py-3 text-slate-300">{systemLabel(s)}</td>
                     <td className="px-3 py-3">
                       {st?.online ? (
                         <span style={{ color: '#35f58a' }}>● つながっている</span>

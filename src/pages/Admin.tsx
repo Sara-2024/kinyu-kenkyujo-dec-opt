@@ -13,6 +13,7 @@ import {
   type Member,
   type MemberRole,
   type MemberStatus,
+  adminSetMemberPlan,
 } from '../data/auth'
 import { useAuth } from '../hooks/AuthContext'
 import { useFleet, type FleetCommand } from '../hooks/useFleet'
@@ -20,6 +21,7 @@ import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { CHARACTERS } from '../data/characters'
 import { DreamlandApplications } from '../components/DreamlandApplications'
 import { DREAMLAND_PLAN_NAMES } from '../data/dreamland'
+import { systemLabel } from '../data/fleet'
 
 export function Admin() {
   const { member, token, ready } = useAuth()
@@ -190,6 +192,7 @@ export function Admin() {
                 <th className="px-3 py-3 font-bold">お客様の操作</th>
                 <th className="px-3 py-3 font-bold">MT5連携</th>
                 <th className="px-3 py-3 font-bold">パスポート</th>
+                <th className="px-3 py-3 font-bold">システム</th>
                 <th className="px-3 py-3 font-bold">OS</th>
                 <th className="px-3 py-3 font-bold">最終ログイン</th>
                 <th className="px-3 py-3 font-bold">操作</th>
@@ -206,11 +209,32 @@ export function Admin() {
                   </td>
                   <td className="px-3 py-3 font-mono">{row.account ?? '—'}</td>
                   <td className="px-3 py-3">
-                    {row.plan ? (
-                      <span style={{ color: row.plan === 'crystal' ? '#e8d8a8' : undefined }}>{DREAMLAND_PLAN_NAMES[row.plan]}</span>
-                    ) : (
-                      <span className="text-slate-500">—</span>
-                    )}
+                    {/* プランはここで直せる。ロイヤル（crystal）だけが同じ PC に 2 つ目の口座を足せる */}
+                    <select
+                      aria-label="プラン"
+                      value={row.plan ?? ''}
+                      disabled={busyId === row.id}
+                      onChange={(e) => {
+                        const next = e.target.value as 'first' | 'crystal' | 'premium' | ''
+                        if (!next || next === row.plan) return
+                        if (!window.confirm(`${memberLabel(row)} のプランを「${DREAMLAND_PLAN_NAMES[next]}」にします。よろしいですか？`)) return
+                        void act(row.id, async () => {
+                          await adminSetMemberPlan(token!, row.id, next)
+                          await reload()
+                        })
+                      }}
+                      className="h-11 rounded-[4px] border px-2 text-[14px]"
+                      style={{
+                        borderColor: 'var(--panel-border)',
+                        background: 'rgba(8,14,26,0.7)',
+                        color: row.plan === 'crystal' ? '#e8d8a8' : row.plan ? '#e2e8f0' : '#94a3b8',
+                      }}
+                    >
+                      <option value="">—（未設定）</option>
+                      {(['first', 'crystal', 'premium'] as const).map((p) => (
+                        <option key={p} value={p}>{DREAMLAND_PLAN_NAMES[p]}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-3 py-3">{row.role === 'admin' ? '管理者' : '一般'}</td>
                   <td className="px-3 py-3">
@@ -241,6 +265,7 @@ export function Admin() {
                       )
                     })()}
                   </td>
+                  <td className="px-3 py-3 text-slate-300">{systemLabel(fleet.states[row.id]?.status)}</td>
                   <td className="px-3 py-3">{row.platform === 'mac' ? 'Mac' : row.platform === 'windows' ? 'Windows' : '—'}</td>
                   <td className="px-3 py-3 text-slate-400">
                     {row.last_login_at ? new Date(row.last_login_at).toLocaleString('ja-JP') : '—'}

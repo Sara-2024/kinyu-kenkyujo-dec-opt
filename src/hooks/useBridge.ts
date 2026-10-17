@@ -37,6 +37,8 @@ export interface BridgeStatus {
   ea_allowed?: string | null
   ea_state_at?: string | null
   ea_name?: string | null
+  /** この口座が載せるべき EA（1 つ目は YumekkuEA-1年版、ロイヤルの 2 つ目は YumekkuEA1年版｜安定低月利ver） */
+  ea_expected?: string | null
   /** EA が生きているか（10秒ごとの書き込みが届いていて、いまつないでいる口座の Yumekku のもの） */
   ea_alive?: boolean
   /** EA が載っているチャートの銘柄 */
@@ -114,6 +116,7 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'ea_allowed',
   'ea_state_at',
   'ea_name',
+  'ea_expected',
   'ea_alive',
   'ea_symbol',
   'ea_symbol_ok',
