@@ -9,7 +9,9 @@ EXTRA = """
 .slide__head{display:flex;gap:14px;align-items:center;margin-bottom:12px}
 .slide__head h3{margin:0;font-family:var(--serif);font-weight:600;font-size:20px;letter-spacing:.06em;line-height:1.4}
 .slide__head .chip{margin-left:auto;flex:0 0 auto;font-size:12px;color:var(--teal-b);background:#e6f3f3;border-radius:20px;padding:4px 12px;white-space:nowrap}
-.slide__img{margin:0;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#dbe5f2}
+.slide__img{position:relative;margin:0;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#dbe5f2}
+.hot{position:absolute;display:block;border-radius:10px;cursor:pointer;outline:3px solid transparent;transition:outline-color .2s,box-shadow .2s}
+.hot:hover,.hot:focus-visible{outline-color:var(--teal);box-shadow:0 0 0 6px rgba(105,180,188,.25)}
 .slide__img img{display:block;width:100%;height:auto}
 .flow--auto{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
 @media (max-width:720px){.slide{padding:12px 12px 14px}.slide__head h3{font-size:17px}.slide__head .chip{display:none}}
@@ -57,9 +59,10 @@ def page(key, title, en, lead, cover_img, parts, done_items, back_href, back_lab
         for entry in p["pages"]:
             n, t = entry[0], entry[1]
             extra = entry[2] if len(entry) > 2 else ""
+            hot = entry[3] if len(entry) > 3 else ""   # 画像の中の「ボタンの絵」に重ねる、押せる領域
             out.append(f'''<section class="slide" id="p{n:02d}">
   <div class="slide__head"><span class="step__no">{n:02d}</span><h3>{html.escape(t)}</h3><span class="chip">{html.escape(p["name"])}</span></div>
-  <figure class="slide__img"><img src="img/p{n:02d}.webp" alt="{html.escape(t)}" width="1600" height="900" loading="lazy" decoding="async"></figure>
+  <figure class="slide__img"><img src="img/p{n:02d}.webp" alt="{html.escape(t)}" width="1600" height="900" loading="lazy" decoding="async">{hot}</figure>
   {extra}
 </section>''')
         out.append("</div>")
@@ -95,11 +98,17 @@ MT5_DOWNLOAD_CTA = (
     '<p class="tip">ダウンロードが終わったら、次のページ（セットアップを開く）へ進んでください。</p>'
 )
 
+# 3 ページ目の絵の「Windows版をダウンロード」のボタンの位置（画像 1600×900 に対する割合。ボタンの色から測った）
+MT5_DOWNLOAD_HOT = (
+    f'<a class="hot" href="{MT5_DOWNLOAD_URL}" target="_blank" rel="noopener noreferrer" '
+    'style="left:16.6%;top:47.9%;width:66.8%;height:22%" aria-label="Windows 版の MT5 をダウンロード（HFM 公式）"></a>'
+)
+
 page("manual-login", "MT5 ログインマニュアル", "MT5 LOGIN MANUAL",
      "Windows 版の MT5 を入れて、リアル口座にログインするまでの手順です。ログインできたら、パスポートと EA の設置マニュアルへ進みます。",
      None,
      [
-       {"code": "PART 1", "name": "MT5 をダウンロード", "desc": "HFM の Windows 版 MT5 を手に入れる", "pages": [(3, "Windows 版の MT5 をダウンロード", MT5_DOWNLOAD_CTA)]},
+       {"code": "PART 1", "name": "MT5 をダウンロード", "desc": "HFM の Windows 版 MT5 を手に入れる", "pages": [(3, "Windows 版の MT5 をダウンロード", MT5_DOWNLOAD_CTA, MT5_DOWNLOAD_HOT)]},
        {"code": "PART 2", "name": "MT5 をインストール", "desc": "セットアップを開いて「次へ」→「完了」", "pages": [(4, "ダウンロードしたセットアップを開く"), (5, "内容を確認し、「次へ」を押す"), (6, "終わったら、「完了」を押す")]},
        {"code": "PART 3", "name": "リアル口座にログイン", "desc": "会社を選び、口座番号・パスワード・サーバーを入れる", "pages": [(7, "利用する会社を選ぶ"), (8, "会社を選べたら、「次へ」"), (9, "「既存の取引口座」を選ぶ"), (10, "リアル口座の口座番号を入力する"), (11, "リアル口座の取引用パスワードを入力する"), (12, "リアル口座のサーバーを選ぶ"), (13, "入力できたら、「完了」を押す")]},
      ],
