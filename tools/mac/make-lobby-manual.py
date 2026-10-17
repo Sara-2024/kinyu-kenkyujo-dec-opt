@@ -54,10 +54,13 @@ def page(key, title, en, lead, cover_img, parts, done_items, back_href, back_lab
     for i, p in enumerate(parts):
         out.append(f'''
 <div class="part" id="part-{i+1}"><div class="sign"><span class="sign__wire"></span><span class="sign__wire"></span><div class="sign__panel"><span class="sign__code">{html.escape(p["code"])}</span><span class="sign__jp">{html.escape(p["name"])}</span></div></div><p class="part__desc">{html.escape(p["desc"])}</p>''')
-        for n, t in p["pages"]:
+        for entry in p["pages"]:
+            n, t = entry[0], entry[1]
+            extra = entry[2] if len(entry) > 2 else ""
             out.append(f'''<section class="slide" id="p{n:02d}">
   <div class="slide__head"><span class="step__no">{n:02d}</span><h3>{html.escape(t)}</h3><span class="chip">{html.escape(p["name"])}</span></div>
   <figure class="slide__img"><img src="img/p{n:02d}.webp" alt="{html.escape(t)}" width="1600" height="900" loading="lazy" decoding="async"></figure>
+  {extra}
 </section>''')
         out.append("</div>")
     out.append(f'''
@@ -84,11 +87,19 @@ def page(key, title, en, lead, cover_img, parts, done_items, back_href, back_lab
     (ROOT / key / "index.html").write_text("".join(out))
     print("wrote", key, len("".join(out)), "bytes")
 
+# HFM の Windows 版 MT5（公式の配布元）。変わったらここだけ直す
+MT5_DOWNLOAD_URL = "https://download.terminal.free/cdn/web/12018/mt5/hfmarketsglobal5setup.exe"
+MT5_DOWNLOAD_CTA = (
+    f'<a class="cta" href="{MT5_DOWNLOAD_URL}" target="_blank" rel="noopener noreferrer">'
+    '<span>Windows 版の MT5 をダウンロード</span><small>HFM 公式 · hfmarketsglobal5setup.exe</small></a>'
+    '<p class="tip">ダウンロードが終わったら、次のページ（セットアップを開く）へ進んでください。</p>'
+)
+
 page("manual-login", "MT5 ログインマニュアル", "MT5 LOGIN MANUAL",
      "Windows 版の MT5 を入れて、リアル口座にログインするまでの手順です。ログインできたら、パスポートと EA の設置マニュアルへ進みます。",
      None,
      [
-       {"code": "PART 1", "name": "MT5 をダウンロード", "desc": "HFM の Windows 版 MT5 を手に入れる", "pages": [(3, "Windows 版の MT5 をダウンロード")]},
+       {"code": "PART 1", "name": "MT5 をダウンロード", "desc": "HFM の Windows 版 MT5 を手に入れる", "pages": [(3, "Windows 版の MT5 をダウンロード", MT5_DOWNLOAD_CTA)]},
        {"code": "PART 2", "name": "MT5 をインストール", "desc": "セットアップを開いて「次へ」→「完了」", "pages": [(4, "ダウンロードしたセットアップを開く"), (5, "内容を確認し、「次へ」を押す"), (6, "終わったら、「完了」を押す")]},
        {"code": "PART 3", "name": "リアル口座にログイン", "desc": "会社を選び、口座番号・パスワード・サーバーを入れる", "pages": [(7, "利用する会社を選ぶ"), (8, "会社を選べたら、「次へ」"), (9, "「既存の取引口座」を選ぶ"), (10, "リアル口座の口座番号を入力する"), (11, "リアル口座の取引用パスワードを入力する"), (12, "リアル口座のサーバーを選ぶ"), (13, "入力できたら、「完了」を押す")]},
      ],
