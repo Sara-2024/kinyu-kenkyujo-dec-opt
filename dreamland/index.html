@@ -543,10 +543,10 @@ const LINKS = {
   support:       "https://lin.ee/V0ikrqq",  // サポートLINE
   register:      SITE + "/api/dreamland",  // 口座の登録を送る先（サイトのサーバー関数）
   lobby:         SITE + "/api/lobby",      // 合言葉の確認・会員登録・接続の合図（サイトのサーバー関数）
-  // 本体（https://dreamland-yumeck-kondo.kondo910742.chatgpt.site/）は当面メンテナンス中。
-  // 出発はロビー内の「メンテナンス中」のページに向ける。再開するときはここを本体の URL に戻す
-  dreamlandFirst:   "maintenance/",   // ファーストクラスの行き先
-  dreamlandCrystal: "maintenance/",   // ロイヤルファーストクラスの行き先
+  // 本体への出発を止めるときは "maintenance/"（ロビー内の「渡航準備中」のページ）に向け、
+  // 下の DREAMLAND_MAINTENANCE も true にする（2026-10-19 に解放）
+  dreamlandFirst:   "https://dreamland-yumeck-kondo.kondo910742.chatgpt.site/",  // ファーストクラスの行き先
+  dreamlandCrystal: "https://dreamland-yumeck-kondo.kondo910742.chatgpt.site/",  // ロイヤルファーストクラスの行き先
 };
 
 /* ═══════════════════════════════════════════════
@@ -554,7 +554,7 @@ const LINKS = {
    どのプランかは、サービスカウンターで打つ「合言葉」で決まる（合言葉は本体サイトの管理者画面で決める）。
    ═══════════════════════════════════════════════ */
 // ドリームランド本体への出発を止めるとき true。搭乗券は出すが「メンテナンス中」と案内し、本体へは移動しない
-const DREAMLAND_MAINTENANCE = true;   // 渡航準備中：出発ボタンを出さず（演出もしない）、搭乗券に注記だけ出す。再開するときは false
+const DREAMLAND_MAINTENANCE = false;  // true にすると渡航準備中：出発ボタンを出さず（演出もしない）、搭乗券に注記だけ出す
 const MAINTENANCE_NOTE = "ドリームランドは現在、渡航準備中です。準備が完了次第お知らせいたします。";
 
 const PLANS = {
