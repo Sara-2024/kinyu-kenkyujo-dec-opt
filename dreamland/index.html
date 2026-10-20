@@ -605,6 +605,14 @@ const needSecond = () => currentPlan() === "crystal" && doneMembers().length < 2
 let osPick = null;
 const canSecond = () => needSecond() && osPick !== "mac";
 const secondNote = () => (needSecond() && !canSecond() ? "\n2つ目の口座の手続きは、Windows のパソコンからこのサイトで行ってください（Mac では 1 つの口座だけつなげます）。" : "");
+/* ロイヤルファーストクラスの 2 つ目の口座に入るのは、1 つ目とは別のシステム。
+   パスポートが口座ごとに置き分ける（2 つ目だけ安定低月利ver）ので、お客様がすることは
+   「ナビゲーターで載せる名前が違う」だけ。台詞と手順の名前はここから引く */
+const EA_FIRST  = "YumekkuEA-1年版";
+const EA_SECOND = "YumekkuEA1年版｜安定低月利ver";
+const SECOND_SYSTEM = `2つ目の口座には、1つ目とは別のシステム「${EA_SECOND}」が入ります。残高に合わせてロットが少しずつ増える、安定重視の運用です（パスポートが自動で入れますので、MT5 のナビゲーターでは「${EA_SECOND}」を載せてください）。`;
+/* いま手続きしているのが 2 つ目の口座か（ロイヤルで、2 つ目の会員ができていて、まだつながっていない） */
+const isSecondFlow = () => currentPlan() === "crystal" && members.length >= 2 && !members[members.length - 1].done;
 const tail2 = (a) => (a == null ? "" : "…" + String(a).slice(-2));
 
 const STAFF = {
@@ -632,7 +640,7 @@ const SCRIPT = {
         : [["流れを教えて", "flow", "go"], ["移住に必要なものは？", "need"], ["パスワードはどう扱うの？", "pw"], ["搭乗券の有効期間は？", "period"], ["困ったときは？", "help"], ["だいじょうぶです", "close"]] },
     flow: { say: "手続きは3つです。順番に進めば、ドリームランドへ出発できます。\n1　サービスカウンターで、口座をひらく（まだの方）→ MT5 の口座を登録する\n2　同じカウンターで「パスポートの発行」。ご契約時の合言葉を打つと、プランに合わせて案内します。パスポートが MT5 とドリームランドをつなぎます\n3　搭乗ゲートで準備を確かめて、搭乗券を受け取り、ご契約のプランの搭乗口から出発",
       choices: [["サービスカウンターへ", "@service", "go"], ["搭乗口が2つあるのは？", "gates"], ["ほかの質問", "start"]] },
-    gates: { say: () => `搭乗口は、ご契約のプランごとに分かれています。\n搭乗口 1 が「${PLANS.first.name}」、搭乗口 2 が「${PLANS.crystal.name}」です。${PLANS.crystal.name}は MT5 の口座を2つつなぎます。合言葉で振り分けるので、違うプランの搭乗口には行けません。`,
+    gates: { say: () => `搭乗口は、ご契約のプランごとに分かれています。\n搭乗口 1 が「${PLANS.first.name}」、搭乗口 2 が「${PLANS.crystal.name}」です。${PLANS.crystal.name}は MT5 の口座を2つつなぎます（2つ目には、1つ目とは別の安定重視のシステム「${EA_SECOND}」が入ります）。合言葉で振り分けるので、違うプランの搭乗口には行けません。`,
       choices: [["サービスカウンターへ", "@service", "go"], ["ほかの質問", "start"]] },
     need: { say: "ご用意いただくのは、この4つです。", docs: "need",
       choices: [["口座がまだない", "@service:account", "go"], ["口座はある（登録へ）", "@service:register"], ["ほかの質問", "start"]] },
@@ -645,7 +653,7 @@ const SCRIPT = {
   },
   service: {
     start: { say: () => members.length
-        ? `サービスカウンターのソラです。\n${PLAN().name}で、${doneMembers().length ? `口座 ${doneMembers().map((m) => tail2(m.account)).join("・")} の接続が済んでいます。` : `口座 ${tail2(members[0].account)} の接続が途中です。`}${canSecond() ? "\n2つ目の口座のパスポートは、いつでもここで発行できます。" : secondNote()}`
+        ? `サービスカウンターのソラです。\n${PLAN().name}で、${doneMembers().length ? `口座 ${doneMembers().map((m) => tail2(m.account)).join("・")} の接続が済んでいます。` : `口座 ${tail2(members[0].account)} の接続が途中です。`}${canSecond() ? `\n2つ目の口座のパスポートは、いつでもここで発行できます。${SECOND_SYSTEM}` : secondNote()}`
         : app
         ? `サービスカウンターのソラです。\n受付番号 ${app.no} で、MT5 口座（下2桁 ${tail2(app.accountFull || app.account)}）の登録を承っています。次は、パスポートの発行です。`
         : "サービスカウンターのソラです。\n口座開設のご案内、MT5 口座の登録、パスポートの発行を承ります。口座はもうお持ちですか？",
@@ -674,7 +682,9 @@ const SCRIPT = {
     connect: { say: "パスポートの発行ですね。\nご契約時にお渡しした「合言葉」を入力してください。合言葉でご契約のプランを確かめて、そのプランの案内に進みます。", docs: "entry",
       choices: [["合言葉がわからない（サポート LINE）", "support"], ["ほかのもの", "start"]] },
     who: { say: () => `${PLAN().name}のお客様ですね。\n` + (currentPlan() === "crystal"
-        ? "ロイヤルファーストクラスは、MT5 の口座を2つまでつなげます。1つだけでも進めます。まず1つ目の口座からご案内します。2つ目は、あとからこのサイトで手続きできます。"
+        ? (members.length >= 1 && members.length < PLAN().links
+            ? `ロイヤルファーストクラスは、MT5 の口座を2つまでつなげます。次は2つ目の口座です。\n${SECOND_SYSTEM}`
+            : `ロイヤルファーストクラスは、MT5 の口座を2つまでつなげます。1つだけでも進めます。まず1つ目の口座からご案内します。\n${SECOND_SYSTEM}\n2つ目は、1つ目が済んだあと続けて、またはあとからこのサイトで手続きできます。`)
         : "MT5 の口座を1つつなぎます。このまま進めましょう。"),
       choices: () => [[!members.length ? "口座をつないでパスポートを発行する" : members.length >= PLAN().links ? "別の口座に替えてパスポートを発行する" : "次の口座をつないでパスポートを発行する", "terms", "go"], ["合言葉を入れ直す", "entry!"], ["ほかのもの", "start"]] },
     /* 口座 1 つのプラン（ファースト／プレミアム）で、別の口座番号を入れたとき。警告を読んでから替える。
@@ -686,7 +696,7 @@ const SCRIPT = {
       choices: [["口座の登録や案内は、このまま見る", "start"], ["ロビーにもどる", "close"]] },
     terms: { say: "お手続きの前に、必ず下の注意事項をお読みください。\n2つの確認にチェックを入れると、次へ進めます。", docs: "terms",
       choices: [["ほかのもの", "start"]] },
-    signup: { say: () => `${members.length + 1}つ目の口座をつなぎます。\nMT5 の口座番号とお名前を入力してください。`, docs: "signup",
+    signup: { say: () => `${members.length + 1}つ目の口座をつなぎます。\nMT5 の口座番号とお名前を入力してください。${currentPlan() === "crystal" && members.length === 1 ? `\n${SECOND_SYSTEM}` : ""}`, docs: "signup",
       choices: [["登録済みの口座でログインする", "login"], ["ほかのもの", "start"]] },
     login: { say: "すでに登録した口座ですね。口座番号を入力してください。", docs: "login",
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
@@ -697,24 +707,24 @@ const SCRIPT = {
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["パスポートを呼び出す", "relaunch"], ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     stuck: { say: "パスポートはこの口座につながっていますが、この画面が中継に入れていません。ページを再読み込み（F5）して、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "progress",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
-    download: { say: "パスポート（パソコン上の名前は DreamlandPassport）を、下のボタンからダウンロードして、手順どおりに設置してください。マニュアルも下にあります。\n設置が終わると、この画面が自動で次の案内に進みます。進まないときは「設置が終わった（つなぐ）」を押してください。", docs: "download",
+    download: { say: () => `パスポート（パソコン上の名前は DreamlandPassport）を、下のボタンからダウンロードして、手順どおりに設置してください。マニュアルも下にあります。\n設置が終わると、この画面が自動で次の案内に進みます。進まないときは「設置が終わった（つなぐ）」を押してください。${isSecondFlow() ? `\n※ 2つ目の口座です。すでにパスポートが入っているパソコンなら、ダウンロードし直さずに「設置が終わった（つなぐ）」を押してください。2つ目の口座でログインしている MT5 に「${EA_SECOND}」が自動で入ります。` : ""}`, docs: "download",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
-    mt5: { say: "お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。\n終わると、この画面が自動で先に進みます。", docs: "mt5steps",
+    mt5: { say: () => `お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。${isSecondFlow() ? `\n2つ目の口座なので、載せるシステムは「${EA_SECOND}」です（1つ目の「${EA_FIRST}」ではありません）。` : ""}\n終わると、この画面が自動で先に進みます。`, docs: "mt5steps",
       choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
     done: { say: () => canSecond()
-        ? `口座（${tail2(members[members.length - 1].account)}）のパスポートが発行できました。お使いの MT5 とドリームランドがつながっています。\nロイヤルファーストクラスは、2つ目の口座もつなげます。まだ設置していない口座は、あとからこのサイトのサービスカウンター（「2つ目の口座をつなぐ」）で手続きしてください。このまま搭乗ゲートへ進めます。${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}`
+        ? `口座（${tail2(members[members.length - 1].account)}）のパスポートが発行できました。お使いの MT5 とドリームランドがつながっています。\nロイヤルファーストクラスは、2つ目の口座もつなげます。${SECOND_SYSTEM}\n2つ目の口座を、今から設置しますか？ あとからでも、このサービスカウンター（「2つ目の口座をつなぐ」）で手続きできます。1つの口座だけでも搭乗ゲートへ進めます。${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}`
         : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : secondNote()}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}${PLAN().gate ? "\n次は搭乗ゲートで、搭乗券を受け取ってください。" : "\nお手続きは以上です。"}`,
       choices: () => canSecond()
-        ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["2つ目の口座を今から発行する", "terms"], ["ほかのもの", "start"]]
+        ? [["2つ目の口座を今から設置する", "terms", "go"], [`あとで設置する（まず搭乗ゲートへ・搭乗口 ${PLAN().gate}）`, "later"], ["ほかのもの", "start"]]
         : PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] : [["ほかのもの", "start"]] },
-    later: { say: () => `承知しました。2つ目の口座は、いつでもこのカウンターの「2つ目の口座をつなぐ」から発行できます。\nまずは1つ目の口座で、搭乗ゲートへどうぞ（搭乗口 ${PLAN().gate}）。`,
+    later: { say: () => `承知しました。2つ目の口座は、いつでもこのカウンターの「2つ目の口座をつなぐ」から発行できます（2つ目には「${EA_SECOND}」が入ります）。\nまずは1つ目の口座で、搭乗ゲートへどうぞ（搭乗口 ${PLAN().gate}）。`,
       choices: () => [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
     failed: { say: "パスポートからの応答がありません。ツールと MT5 が起動しているか確かめて、もう一度お試しください。", docs: "progress",
       choices: [["もう一度つなぐ", "launch", "go"], ["ダウンロードからやり直す", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     expired: { say: "前回のログインが切れています。口座番号をもう一度入力してください。", docs: "login",
       choices: [["ほかのもの", "start"]] },
-    members: { say: () => `${PLAN().name}の、つないでいる口座です。${canSecond() ? "2つ目の口座は、まだ発行していません。" : secondNote()}`, docs: "members",
+    members: { say: () => `${PLAN().name}の、つないでいる口座です。${canSecond() ? `2つ目の口座は、まだ発行していません。\n${SECOND_SYSTEM}` : currentPlan() === "crystal" && doneMembers().length >= 2 ? `\n1つ目は「${EA_FIRST}」、2つ目は「${EA_SECOND}」が入っています。` : secondNote()}`, docs: "members",
       choices: () => [...(canSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), ...(PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""]] : []), ["ほかのもの", "start"]] },
   },
   gate: {
@@ -750,7 +760,7 @@ const SCRIPT = {
   /* チャートに載せる EA の名前。1 つ目の口座は YumekkuEA-1年版、ロイヤルの 2 つ目は「育てる運用」。
      パスポートが口座ごとに置き分けるので、つながっていればブリッジの ea_expected をそのまま使う。
      まだつながっていないときは、いま手続きしている口座が何番目かで決める */
-  const EA_NAME_FIRST = "YumekkuEA-1年版", EA_NAME_SECOND = "YumekkuEA1年版｜安定低月利ver";
+  const EA_NAME_FIRST = EA_FIRST, EA_NAME_SECOND = EA_SECOND;   // 名前は上（台詞と同じ出どころ）
   const eaName = () => (Bridge.status && Bridge.status.ea_expected) || (flow.idx >= 1 ? EA_NAME_SECOND : EA_NAME_FIRST);
   /* Bridge・flow は下で定義する（呼ばれるのは画面を出すときなので、ここで名前だけ先に決めておく） */
   const val = (x) => (typeof x === "function" ? x() : x);
