@@ -2365,8 +2365,10 @@ class Bridge:
             accounts: list[str] = []
             for t in mt5_detect.list_terminals():
                 m = re.search(r"口座\s*(\d+)", str(getattr(t, "label", "") or ""))
-                if m and m.group(1) != mine and m.group(1) not in accounts:
+                if m and m.group(1) not in accounts:
                     accounts.append(m.group(1))
+            if mine and mine not in accounts:
+                accounts.append(mine)
             if not accounts:
                 return
             origin = re.sub(r"^wss?://", lambda m: "https://" if m.group(0) == "wss://" else "http://", self.cfg.ws_url)
@@ -2379,9 +2381,15 @@ class Bridge:
                     continue
                 token = str(data.get("token") or "") if isinstance(data, dict) and data.get("ok") else ""
                 if re.fullmatch(r"[0-9a-fA-F]{64}", token):
-                    log.info("追加口座（…%s）あての合図を受け取りました。接続ツールに連携させます", acct[-4:])
+                    slot = data.get("slot") if isinstance(data, dict) else None
+                    extra = f"&slot={slot}" if str(slot) in ("1", "2") else ""
+                    log.info("口座（…%s）あての合図を受け取りました。接続ツールに連携させます", acct[-4:])
                     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-                    subprocess.Popen([sys.executable, f"aitrader://connect?token={token}&account={acct}"], creationflags=flags, close_fds=True)
+                    subprocess.Popen(
+                        [sys.executable, f"aitrader://connect?token={token}&account={acct}{extra}"],
+                        creationflags=flags,
+                        close_fds=True,
+                    )
         except Exception as exc:  # noqa: BLE001
             log.debug("追加口座の合図の確認で例外: %s", exc)
 

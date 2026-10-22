@@ -249,6 +249,10 @@ LOBBY = (BRIDGE.parent / "dreamland" / "index.html").read_text(encoding="utf-8",
 check("ロビーの手順は ea_expected（無ければ何番目の口座か）で EA 名を出す", "Bridge.status.ea_expected" in LOBBY and "${eaName()}" in LOBBY)
 check("ロビーの EA 名は mt5_terminal と同じ", f'"{GROWTH_EA_NAME}"' in LOBBY and f'"{EA_NAMES[0]}"' in LOBBY)
 check("ロビーは 2 つ目の手続きで slot=2 を合図に付ける", "slot: memberSlot(m)" in LOBBY and "memberSlot" in LOBBY)
+check("2 つ目は合図を待つだけでなくパスポートを呼び出す（slot=2 を URL に載せる）",
+      "memberSlot(m) === 2) issueAndLaunch()" in LOBBY)
+check("連携済みでもロビーの合図を先に取る（1 年版の置き直しを防ぐ）",
+      "take_any_claim()" in main_body)
 
 if not SOURCES:
     print("  --   EA のソース（.mq5）が無いので省略します（配るのは .ex5 だけ）")

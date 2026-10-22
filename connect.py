@@ -723,6 +723,37 @@ def relay_claim(account: str) -> str:
     return ""
 
 
+def logged_in_accounts() -> list[str]:
+    """いまログインしている MT5 の口座番号（表示名に出ていなければ、ログイン中の MT5 から直接）。"""
+    accounts: list[str] = []
+    try:
+        for t in mt5_detect.list_terminals():
+            acct = str(account_of(t) or "").strip()
+            if acct.isdigit() and acct not in accounts:
+                accounts.append(acct)
+    except Exception as exc:  # noqa: BLE001
+        log(f"MT5 の口座を読めませんでした: {exc}")
+    if not accounts:
+        try:
+            session = find_logged_in_terminal()
+            acct = str((session or {}).get("account") or "").strip()
+            if acct.isdigit():
+                accounts.append(acct)
+        except Exception as exc:  # noqa: BLE001
+            log(f"ログイン中の MT5 を読めませんでした: {exc}")
+    return accounts
+
+
+def take_any_claim() -> str:
+    """ログイン中のどの口座あての合図でも取る（slot も覚える）。無ければ空。"""
+    for acct in logged_in_accounts():
+        token = relay_claim(acct)
+        if token:
+            log(f"ロビーからの合図を受け取りました（口座 …{acct[-4:]}）")
+            return token
+    return ""
+
+
 def wait_for_link() -> int:
     """設置のあと、サイトで「設置が終わった（つなぐ）」が押されるのを裏で待つ。
 
@@ -743,23 +774,7 @@ def wait_for_link() -> int:
     log(f"サイトの「設置が終わった」を待ちます（最長 {LINK_WAIT_MIN} 分）")
     deadline = time.time() + LINK_WAIT_MIN * 60
     while time.time() < deadline:
-        accounts: list[str] = []
-        try:
-            for t in mt5_detect.list_terminals():
-                acct = str(account_of(t) or "").strip()
-                if acct.isdigit() and acct not in accounts:
-                    accounts.append(acct)
-        except Exception as exc:  # noqa: BLE001
-            log(f"MT5 の口座を読めませんでした: {exc}")
-        if not accounts:
-            # 入れたばかりの MT5 は表示名に口座番号が出ないことがある。ログイン中の MT5 から直接読む
-            try:
-                session = find_logged_in_terminal()
-                acct = str((session or {}).get("account") or "").strip()
-                if acct.isdigit():
-                    accounts.append(acct)
-            except Exception as exc:  # noqa: BLE001
-                log(f"ログイン中の MT5 を読めませんでした: {exc}")
+        accounts = logged_in_accounts()
         if not accounts:
             log("ログイン中の MT5 が見つからないので、合図はまだ取りに行けません（MT5 にログインしてください）")
         for acct in accounts:
@@ -1978,6 +1993,11 @@ def setup_phase1() -> int:
     say(f"{target.label} が見つかりました。")
     log(f"対象 {target.data_path}")
 
+    # 置く前にロビーの合図を見る。後だと 1 年版を置いてから 2 つ目の判断になる
+    if try_connect_from_claim(ui, target):
+        log("置く前に、サイトとつながりました")
+        return 0
+
     source = source_for_account(account_of(target))
     if source is None:
         log(f"同梱の EA が読めない: {BRIDGE_DIR}")
@@ -2759,6 +2779,14 @@ def main() -> int:
         else:
             installer_ui.message_box("パスポートは、すでに開いています。\n開いている画面をご覧ください。")
         return 0
+
+    # ロビーが預けた合図があれば、ファイル名の合図よりそちらを使う（slot=2 が付いている）。
+    # 連携済みの PC で exe を開いただけだと connect_all が 1 年版を置き直すので、先に取る。
+    # aitrader:// で呼ばれたときは URL の token / slot を使う（上書きしない）。
+    if FROZEN and "--startup" not in args and not account_from_args(raw_args):
+        claimed = take_any_claim()
+        if claimed:
+            connect_token = claimed
 
     # サイトの「MT5と連携する」から呼ばれたとき。
     # 合図が正しいときだけ連携する（アプリ単体では連携できない）。
