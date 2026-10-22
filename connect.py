@@ -581,36 +581,17 @@ def copy_ea_files(session: dict) -> Path:
     log(f"口座 {session.get('account')} / {session.get('server')}")
     log(f"配置先 {experts}")
 
-    for name in INCLUDE_FILES:
-        src = BRIDGE_DIR / name
-        if not src.is_file():
-            raise SystemExit(f"元ファイルがありません: {src}")
-        shutil.copy2(src, include / name)
-        log(f"OK  Include\\{name}")
-
-    for name in EA_FILES:
-        src = EA_ASSETS_DIR / name
-        if not src.is_file():
-            raise SystemExit(f"元ファイルがありません: {src}")
-        shutil.copy2(src, experts / name)
-        log(f"OK  Experts\\{name}")
-
-    # 以前配った余分なシステムを片づける（チャートに載っていると消せないことがある）
-    for name in OLD_EA_NAMES:
-        for suffix in (".mq5", ".ex5"):
-            stale = experts / f"{name}{suffix}"
-            if not stale.is_file():
-                continue
-            try:
-                stale.unlink()
-                log(f"片づけ  Experts\\{name}{suffix}")
-            except OSError:
-                log(f"注意  {name}{suffix} を消せません（チャートから外してから開き直してください）")
-
-    # コンパイルはしない。配っているものがすでにコンパイル済みのため。
-    ok, probe = verify_ea_install(data_path)
+    source = source_for_account(str(session.get("account") or ""))
+    if source is None:
+        raise SystemExit("同梱の EA が読めません")
+    after = ea_manager.install(data_path, source, old_names=OLD_EA_NAMES, log=log)
+    if after.state == ea_manager.ERROR:
+        raise SystemExit("システムの配置が終わりませんでした（connect.log を確認）")
+    stem = source.ea_path.stem
+    probe = probe_ea_files(data_path)
     log(f"確認 Include/TradingGate.mqh : {'OK' if probe['include_ok'] else 'なし'}")
-    log(f"確認 Experts/{EA_NAME}.ex5 : {'OK' if EA_NAME in probe['ea_compiled'] else 'なし'}")
+    log(f"確認 Experts/{stem}.ex5 : {'OK' if stem in probe['ea_compiled'] else 'なし'}")
+    ok = probe["include_ok"] and stem in probe["ea_compiled"]
 
     # 画面に出さない方針なので、エクスプローラは調査モードのときだけ開く
     if CONSOLE and os.name == "nt":
@@ -880,6 +861,11 @@ def try_connect_from_claim(ui, target) -> bool:
         log("合図が古いか、すでに使われていました。裏で待ちます")
         return False
     stop_link_waiters()
+    # 合図を取りに行った口座（いまログインしている MT5）が「どの口座の手続きか」。
+    # サイトが返す account は会員の 1 本目なので、2 つ目では使わない。
+    slotted = maybe_connect_second_account(room, acct)
+    if slotted is not None:
+        return slotted == 0
     code = connect_all(room, show=True, ui=ui, ask=False)
     return code == 0
 
@@ -1026,6 +1012,21 @@ def growth_source():
     return ea_manager.load_source(BRIDGE_DIR)
 
 
+def is_second_account(account: str) -> bool:
+    """この口座は、すでに連携済みの 1 本目とは別の 2 つ目か。"""
+    account = str(account or "").strip()
+    mine = primary_account()
+    return bool(account.isdigit() and mine and account != mine and connect_state.is_connected())
+
+
+def source_for_account(account: str):
+    """置く EA を口座で分ける。1 本目は 1 年版、2 つ目は安定低月利ver。"""
+    if is_second_account(account):
+        log(f"口座 …{account[-4:]} は 2 つ目なので {GROWTH_EA_NAME} を置きます")
+        return growth_source()
+    return ea_manager.load_source(BRIDGE_DIR)
+
+
 def connect_slot(room: str, account: str) -> int:
     """追加口座の連携。その口座の MT5 に「安定低月利ver」の EA を置き、口座専用のブリッジを起こす。1 本目は触らない。"""
     banner(f"追加口座の連携（口座 …{account[-4:]}）")
@@ -1141,6 +1142,26 @@ def second_account_allowed() -> bool:
     もう一度手続きすると、ここで止まって「1 本目を切り替える」（口座を替える）に回る。
     """
     return LAST_REDEEMED_PLAN in PLANS_WITH_SECOND_ACCOUNT
+
+
+def maybe_connect_second_account(room: str, wanted: str) -> int | None:
+    """2 本目を足す／1 本目を替えるならその結果。該当しなければ None（1 本目の connect_all へ）。
+
+    ロビーからその場でつなぐ経路（try_connect_from_claim）も、サイトのボタン（main）もここを通す。
+    ロビー経路がここを通らないと、クリスタルの 2 つ目なのに 1 本目の MT5 へ 1 年版を置き直す
+    （connect.log の「合図は …6998、選んだ MT5 は 1 本目、Experts/YumekkuEA-1年版」がそれ）。
+    """
+    if os.name != "nt" or not room:
+        return None
+    wanted = str(wanted or "").strip()
+    mine = primary_account()
+    if not (wanted.isdigit() and mine and wanted != mine and connect_state.is_connected()):
+        return None
+    if second_account_allowed():
+        return connect_slot(room, wanted)
+    log(f"このプラン（{LAST_REDEEMED_PLAN or '不明'}）は口座 1 つまで。口座 …{mine[-4:]} から …{wanted[-4:]} に替えます")
+    stop_old_account(mine)
+    return None
 
 
 def stop_old_account(account: str) -> None:
@@ -1903,7 +1924,7 @@ def setup_phase1() -> int:
     say(f"{target.label} が見つかりました。")
     log(f"対象 {target.data_path}")
 
-    source = ea_manager.load_source(BRIDGE_DIR)
+    source = source_for_account(account_of(target))
     if source is None:
         log(f"同梱の EA が読めない: {BRIDGE_DIR}")
         tell(ui, "設定に必要なファイルが見つかりませんでした。", "アプリを入れ直してから、もう一度お試しください。")
@@ -1948,6 +1969,11 @@ def setup_phase1() -> int:
         ui.add_step("ea", "自動売買の設定")
     say("自動売買の設定をしています…")
 
+    source = source_for_account(account_of(target))
+    if source is None:
+        log(f"同梱の EA が読めない: {BRIDGE_DIR}")
+        tell(ui, "設定に必要なファイルが見つかりませんでした。", "アプリを入れ直してから、もう一度お試しください。")
+        return 1
     after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, force=force, log=log)
     log(f"配置のあとの状態: {after.as_dict()}")
     # MT5 に最初から入っているサンプルを片づける。
@@ -2238,7 +2264,7 @@ def choose_terminal() -> int:
     connect_state.write(connect_state.current(), terminal=str(target.data_path))
     log(f"これから使う MT5: {target.label} / {target.data_path}")
 
-    source = ea_manager.load_source(BRIDGE_DIR)
+    source = source_for_account(account_of(target))
     if source is not None:
         after = ea_manager.install(target.data_path, source, old_names=OLD_EA_NAMES, log=log)
         log(f"EA の状態: {after.as_dict()}")
@@ -2711,22 +2737,13 @@ def main() -> int:
     # 追加口座（ロイヤルファーストクラスの 2 つ目）：この PC はすでに別の口座で連携済みで、
     # 合図に付いてきた口座番号が 1 本目と違い、その口座の MT5 がこの PC にある → その MT5 専用の
     # ブリッジを 1 本足す。1 本目はそのまま。該当しなければ、これまでどおり 1 本目を切り替える
-    if room and os.name == "nt":
-        # 口座番号は URL の account=、無ければ合図を確かめたときにサイトが返した会員の口座番号
-        #（会員 ＝ 口座番号）。ダウンロードしたファイルの名前の合図には account= が無い
+    # 口座番号は URL の account=、無ければ合図を確かめたときにサイトが返した会員の口座番号
+    #（会員 ＝ 口座番号）。ダウンロードしたファイルの名前の合図には account= が無い
+    if room:
         wanted = account_from_args(raw_args) or LAST_REDEEMED_ACCOUNT
-        mine = primary_account()
-        if wanted and mine and wanted != mine and connect_state.is_connected():
-            if second_account_allowed():
-                # ロイヤル：必ず 2 本目として扱う。その口座の MT5 が見つからなければ connect_slot が
-                # 「ログインしてからもう一度」と出して止まる（1 本目を黙って切り替えない。
-                # 切り替えると 1 つ目の口座がサイトから外れる）
-                return connect_slot(room, wanted)
-            if not second_account_allowed():
-                # ファーストクラス／プレミアム（口座は 1 つ）：2 本目は足さず、1 本目をこの口座に替える。
-                # 元の口座はこのあとサイトから制御できなくなるので、先に「停止」にしておく
-                log(f"このプラン（{LAST_REDEEMED_PLAN or '不明'}）は口座 1 つまで。口座 …{mine[-4:]} から …{wanted[-4:]} に替えます")
-                stop_old_account(mine)
+        slotted = maybe_connect_second_account(room, wanted)
+        if slotted is not None:
+            return slotted
 
     # Windows の起動時に呼ばれたとき（--startup）。
     # 自動起動は「つながっていたものを戻す」ためのもの。まだ連携していない PC では

@@ -214,14 +214,25 @@ check("growth_source は bridge/growth/ から読む（Include は 1 本目と�
       "GROWTH_EA_DIR" in growth_body and "include_dir=BRIDGE_DIR" in growth_body)
 check("置いた EA の名前を slot.json に控える", '"ea": source.ea_path.stem' in slot_body)
 check("追加口座のブリッジに「載せるべき EA」を渡す（BRIDGE_EA_NAME）", 'env["BRIDGE_EA_NAME"]' in py_body_of(CONNECT, "start_slot_bridge"))
+route_body = py_body_of(CONNECT, "maybe_connect_second_account")
+claim_body = py_body_of(CONNECT, "try_connect_from_claim")
 main_body = CONNECT[CONNECT.index("def main(") :] if "def main(" in CONNECT else CONNECT
-slot_call = main_body.find("return connect_slot(room, wanted)")
-check("2 本目のブリッジを足すのはロイヤルファーストクラスだけ（second_account_allowed）",
-      slot_call > 0 and "second_account_allowed()" in main_body[max(0, slot_call - 400) : slot_call])
+check("2 本目を足す／替える判断は maybe_connect_second_account に集約する",
+      "return connect_slot(room, wanted)" in route_body and "second_account_allowed()" in route_body)
 check("ロイヤル以外で別の口座が来たら、元の口座を「停止」にしてから替える（stop_old_account）",
-      "stop_old_account(mine)" in main_body[slot_call : slot_call + 800])
+      "stop_old_account(mine)" in route_body)
 check("ロイヤルは MT5 が見つからなくても 1 本目を切り替えない（connect_slot に任せて止まる）",
-      "terminal_for_account(wanted) is not None" not in main_body[max(0, slot_call - 400) : slot_call])
+      "terminal_for_account(wanted) is not None" not in route_body)
+check("ロビーからその場でつなぐ経路も 2 本目の判断を通す（1 年版の置き直しを防ぐ）",
+      "maybe_connect_second_account(room, acct)" in claim_body)
+check("サイトのボタン経路も同じ判断を通す",
+      "maybe_connect_second_account(room, wanted)" in main_body)
+pick_body = py_body_of(CONNECT, "source_for_account")
+check("置く EA は口座で分ける（1 本目は 1 年版、2 つ目は安定低月利ver）",
+      "is_second_account(account)" in pick_body and "growth_source()" in pick_body)
+check("設置もつなぎ直しも source_for_account で置く",
+      "source_for_account(" in py_body_of(CONNECT, "setup_phase1")
+      and "source_for_account(" in py_body_of(CONNECT, "copy_ea_files"))
 stop_body = py_body_of(CONNECT, "stop_old_account")
 check("停止は元の口座あての指令ファイル（trelab_gate_<口座>.ini）に書く", 'trelab_gate_{account}.ini' in stop_body and 'AI_TRADING_ALLOWED' in stop_body)
 check("この PC の意思（intent.json）も停止に戻す", 'intent.json' in stop_body and '"allowed": 0.0' in stop_body)
