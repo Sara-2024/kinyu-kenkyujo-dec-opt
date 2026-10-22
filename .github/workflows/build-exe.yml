@@ -37,6 +37,7 @@ jobs:
       PYTHONIOENCODING: utf-8
       # build-windows.bat は `py -3` で呼ぶ。MetaTrader5 の wheel がある版に固定する
       PY_PYTHON: "3.12"
+      PY_PYTHON3: "3.12"   # py -3 も 3.12 にする（3.15 には MetaTrader5 の部品が無い）
     steps:
       - uses: actions/checkout@v4
 

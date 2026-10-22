@@ -10,6 +10,12 @@ REM
 REM    dist\DreamlandPassport.exe   … これをお客様にお渡しする
 REM ================================================================
 cd /d "%~dp0.."
+REM Python は 3.12 を使う（MetaTrader5 の部品は新しすぎる Python 向けがまだ無い。
+REM GitHub の Windows は py -3 が 3.15 を選ぶので、setup-python が置いた %pythonLocation% を優先する）
+set "PY=py -3"
+if defined pythonLocation if exist "%pythonLocation%\python.exe" set "PY="%pythonLocation%\python.exe""
+py -3.12 -c "import sys" >nul 2>&1 && if not defined pythonLocation set "PY=py -3.12"
+
 
 where py >nul 2>&1
 if errorlevel 1 (
@@ -19,8 +25,8 @@ if errorlevel 1 (
 )
 
 echo [1/3] 必要なものを入れています...
-py -3 -m pip install --upgrade pip >nul
-py -3 -m pip install pyinstaller MetaTrader5 websockets python-dotenv certifi
+%PY% -m pip install --upgrade pip >nul
+%PY% -m pip install pyinstaller MetaTrader5 websockets python-dotenv certifi
 if errorlevel 1 (
   echo [ERROR] pip install に失敗しました。
   pause
@@ -60,7 +66,7 @@ if "%EA_FILE%"=="" (
 echo   同梱する EA: %EA_FILE%
 if not exist bridge\ea_manifest.json (
   echo [ERROR] bridge\ea_manifest.json がありません。
-  echo         py -3 tools\make-ea-manifest.py を実行してください。
+  echo         %PY% tools\make-ea-manifest.py を実行してください。
   pause
   exit /b 1
 )
@@ -75,14 +81,14 @@ if "%GROWTH_EA%"=="" (
 )
 echo   同梱する EA（追加口座用）: %GROWTH_EA%
 REM 控えは毎回作り直す（.ex5 を差し替えたのに古い控えが残ると「壊れている」扱いになる）
-py -3 tools\make-ea-manifest.py --dir bridge\growth --quiet
+%PY% tools\make-ea-manifest.py --dir bridge\growth --quiet
 if not exist bridge\growth\ea_manifest.json (
   echo [ERROR] bridge\growth\ea_manifest.json を作れませんでした。
   pause
   exit /b 1
 )
 
-py -3 -m PyInstaller --noconfirm --clean %RISKARG% ^
+%PY% -m PyInstaller --noconfirm --clean %RISKARG% ^
   --onefile --noconsole ^
   --name DreamlandPassport ^
   --splash tools\splash.png ^
@@ -147,10 +153,10 @@ if not exist dist\DreamlandPassport.exe (
 
 REM 画面の部品（tkinter）が入っているか確かめる。
 REM 入っていないと、お客様がダブルクリックしても窓が出ない（無言で終わる）。
-py -3 -c "import sys;d=open(r'dist\DreamlandPassport.exe','rb').read();sys.exit(0 if b'_tkinter' in d else 1)"
+%PY% -c "import sys;d=open(r'dist\DreamlandPassport.exe','rb').read();sys.exit(0 if b'_tkinter' in d else 1)"
 if errorlevel 1 (
   echo [ERROR] 画面の部品が入っていません。この exe は配らないでください。
-  echo         py -3 -m pip install --upgrade pyinstaller を試してから、もう一度実行してください。
+  echo         %PY% -m pip install --upgrade pyinstaller を試してから、もう一度実行してください。
   pause
   exit /b 1
 )
