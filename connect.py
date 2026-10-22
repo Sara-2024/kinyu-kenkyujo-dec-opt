@@ -986,9 +986,24 @@ def primary_account() -> str:
 
 
 def terminal_for_account(account: str):
-    """その口座番号でログインしている MT5（表示名の「口座 N」で見る）。無ければ None。"""
-    for t in mt5_detect.list_terminals():
+    """その口座番号でログインしている MT5。無ければ None。
+
+    まず表示名の「口座 N」（ログから拾う）で見る。入れたばかりの MT5 はログに口座が
+    まだ出ていないことがあるので、見つからなければログイン中の MT5 に 1 台ずつ直接聞く
+    （ここで見つけられないと、ロイヤルの 2 つ目が「1 つ目を替える」に落ちて 1 年版が置かれた。
+    口座 198676996 で実際に起きた）。
+    """
+    terminals = list(mt5_detect.list_terminals())
+    for t in terminals:
         if account_of(t) == account:
+            return t
+    for t in terminals:
+        try:
+            session = find_logged_in_terminal(prefer_data_path=str(t.data_path))
+        except Exception:  # noqa: BLE001
+            continue
+        if session and str(session.get("account") or "").strip() == account:
+            log(f"口座 {account} の MT5 を、ログイン中の MT5 から見つけました（表示名にはまだ出ていない）")
             return t
     return None
 
@@ -1100,14 +1115,21 @@ def redeem_connect_token(token: str) -> str:
     if not MEMBER_ROOM_RE.match(room):
         log("サイトの返事に部屋が入っていませんでした")
         return ""
-    global LAST_REDEEMED_PLAN
+    global LAST_REDEEMED_PLAN, LAST_REDEEMED_ACCOUNT
     LAST_REDEEMED_PLAN = str(data.get("plan") or "").strip().lower()
-    log("連携の合図を確認しました" + (f"（プラン: {LAST_REDEEMED_PLAN}）" if LAST_REDEEMED_PLAN else ""))
+    acct = str(data.get("account") or "").strip()
+    LAST_REDEEMED_ACCOUNT = acct if acct.isdigit() else ""
+    log("連携の合図を確認しました" + (f"（プラン: {LAST_REDEEMED_PLAN}）" if LAST_REDEEMED_PLAN else "")
+        + (f"（口座 …{acct[-4:]}）" if LAST_REDEEMED_ACCOUNT else ""))
     return room
 
 
 # 直前に確かめた合図の会員のプラン（first / crystal / premium。古いサイトなら空）
 LAST_REDEEMED_PLAN = ""
+# 直前に確かめた合図の会員の口座番号（会員 ＝ 口座番号。古いサイトなら空）。
+# 合図が URL に口座番号を付けていないとき（ダウンロードしたファイルの名前から拾った合図）に、
+# 「どの口座の手続きか」をこれで決める。無いと、ロイヤルの 2 つ目が 1 つ目を替えてしまう
+LAST_REDEEMED_ACCOUNT = ""
 # 同じ PC に 2 つ目の口座（2 本目のブリッジ）を足してよいプラン。ロイヤルファーストクラスだけ
 PLANS_WITH_SECOND_ACCOUNT = ("crystal",)
 
@@ -2690,7 +2712,9 @@ def main() -> int:
     # 合図に付いてきた口座番号が 1 本目と違い、その口座の MT5 がこの PC にある → その MT5 専用の
     # ブリッジを 1 本足す。1 本目はそのまま。該当しなければ、これまでどおり 1 本目を切り替える
     if room and os.name == "nt":
-        wanted = account_from_args(raw_args)
+        # 口座番号は URL の account=、無ければ合図を確かめたときにサイトが返した会員の口座番号
+        #（会員 ＝ 口座番号）。ダウンロードしたファイルの名前の合図には account= が無い
+        wanted = account_from_args(raw_args) or LAST_REDEEMED_ACCOUNT
         mine = primary_account()
         if wanted and mine and wanted != mine and connect_state.is_connected():
             if second_account_allowed():

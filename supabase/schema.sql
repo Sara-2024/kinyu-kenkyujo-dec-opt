@@ -718,7 +718,13 @@ begin
   end if;
 
   -- plan はパスポートが「2 つ目の口座を足してよいか（crystal か）」を決めるのに使う
-  return jsonb_build_object('member_id', v_member.id, 'can_trade', v_member.can_trade, 'plan', v_member.plan);
+  -- account はパスポートが「どの口座の手続きか」を決めるのに使う（URL に口座番号が無いとき。20261022）
+  return jsonb_build_object(
+    'member_id', v_member.id,
+    'can_trade', v_member.can_trade,
+    'plan', v_member.plan,
+    'account', v_member.account
+  );
 end;
 $$;
 

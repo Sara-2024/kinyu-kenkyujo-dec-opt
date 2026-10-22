@@ -269,6 +269,13 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   1 本目のブリッジは 30 秒ごとに、同じ PC の別口座あての合図を中継に取りに行き（`_poll_other_claims`）、
   来ていれば接続ツールを token 付きで起こす（ロビーで「2 つ目の口座をつなぐ」→ 押すだけで足される）。
   該当しないとき（口座番号が無い・Mac・その口座の MT5 が無い）は、これまでどおり 1 本目を切り替える。
+  **口座番号は URL の `account=` が無ければ、合図を確かめた返事（`/api/connect` の `account`。会員 ＝ 口座番号。
+  `supabase/migrations/20261022_connect_token_account.sql`）から取る**（`LAST_REDEEMED_ACCOUNT`）。ダウンロードした
+  ファイルの名前の合図には `account=` が付かないので、これが無いとロイヤルの 2 つ目が「1 つ目を替える」に落ちる。
+  **その口座の MT5 は、表示名の「口座 N」で見つからなければログイン中の MT5 に 1 台ずつ直接聞く**（`terminal_for_account`。
+  入れたばかりの MT5 はログに口座が出ていない）。どちらも口座 198676996 で実際に起きた（2 つ目に 1 年版が置かれた）。
+  **直すときは、その PC の `%LOCALAPPDATA%\AITrader` の `state.json`・`bridge.env`・`accounts\` を消して、
+  ロビーで 1 つ目 → 2 つ目の順にやり直す**（1 本目の口座が入れ替わってしまっているため。自動では戻らない）。
 - **2 つ目の口座に置く EA は「安定低月利ver」（`YumekkuEA1年版｜安定低月利ver`。2026-10-16 から）。** 1 つ目は `YumekkuEA-1年版` のまま。
   `connect_slot()` だけが `GROWTH_EA_DIR`（`bridge/growth/`）の配布物を置く（`growth_source()`。Include の
   `TradingGate.mqh` は 1 本目と共有、`ea_manager.load_source(..., include_dir=BRIDGE_DIR)`）。名前は

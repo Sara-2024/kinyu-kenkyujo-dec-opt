@@ -90,17 +90,25 @@ export async function handleConnect(
     return { status: 401, body: { error: 'INVALID_TOKEN' } }
   }
 
-  const data = (await res.json().catch(() => null)) as { member_id?: string; can_trade?: boolean; plan?: string | null } | null
+  const data = (await res.json().catch(() => null)) as {
+    member_id?: string
+    can_trade?: boolean
+    plan?: string | null
+    account?: number | string | null
+  } | null
   if (!data?.member_id) {
     return { status: 401, body: { error: 'INVALID_TOKEN' } }
   }
 
   // 部屋の名前は会員ID。中継はこの部屋以外へ指令を流さない（既存のしくみ）
   // plan は、パスポートが「同じ PC に 2 つ目の口座を足してよいか」（ロイヤルファーストクラス＝crystal だけ）を決めるのに使う
+  // account（会員 ＝ 口座番号）は、合図の URL に口座番号が付いていないとき（ダウンロードしたファイルの名前の合図）に
+  // パスポートが「どの口座の手続きか」を決めるのに使う。会員本人の合図でしか返らないので、口座番号は秘密ではない
   const plan = typeof data.plan === 'string' && ['first', 'crystal', 'premium'].includes(data.plan) ? data.plan : null
+  const account = /^\d+$/.test(String(data.account ?? '')) ? String(data.account) : null
   return {
     status: 200,
-    body: { ok: true, room: data.member_id, can_trade: data.can_trade !== false, plan },
+    body: { ok: true, room: data.member_id, can_trade: data.can_trade !== false, plan, account },
   }
 }
 
