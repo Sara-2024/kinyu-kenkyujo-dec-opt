@@ -717,7 +717,10 @@ def relay_claim(account: str) -> str:
             log(f"中継に合図を取りに行けません: {type(exc).__name__} {getattr(exc, 'reason', exc)}")
         return ""
     token = str(data.get("token") or "") if isinstance(data, dict) and data.get("ok") else ""
-    return token if TOKEN_RE.match(token) else ""
+    if TOKEN_RE.match(token) and isinstance(data, dict):
+        remember_slot(data.get("slot"))
+        return token
+    return ""
 
 
 def wait_for_link() -> int:
@@ -769,6 +772,8 @@ def wait_for_link() -> int:
                         break
                     time.sleep(5)
                 url = f"{PROTOCOL}://connect?token={token}&account={acct}"
+                if LAST_REDEEMED_SLOT in (1, 2):
+                    url += f"&slot={LAST_REDEEMED_SLOT}"
                 if FROZEN:
                     spawn_hidden([sys.executable, url], cwd=str(CONFIG_DIR))
                 else:
@@ -862,7 +867,8 @@ def try_connect_from_claim(ui, target) -> bool:
         return False
     stop_link_waiters()
     # 合図を取りに行った口座（いまログインしている MT5）が「どの口座の手続きか」。
-    # サイトが返す account は会員の 1 本目なので、2 つ目では使わない。
+    # 会員 ＝ 口座番号なので、サイトが返す account もこの口座。2 つ目かどうかは
+    # サイトが返す slot（とロビーが預けた slot）で決める。手元の 1 本目と比べない。
     slotted = maybe_connect_second_account(room, acct)
     if slotted is not None:
         return slotted == 0
@@ -920,20 +926,36 @@ def connect_token_from_exe_name(exe: str | None = None) -> str:
     return found.group(1) if found else ""
 
 
-def account_from_args(argv: list[str]) -> str:
-    """aitrader://connect?token=…&account=<口座番号> の口座番号（無ければ空）。
-    どの MT5 を担当させるかを選ぶためだけに使う。部屋（会員）は合図を確かめて決める。"""
+def _protocol_query(argv: list[str]) -> dict[str, list[str]]:
     for raw in argv:
         if not is_protocol_url(raw):
             continue
         try:
-            query = urllib.parse.parse_qs(urllib.parse.urlparse(raw.replace("\\", "/")).query)
-            acct = (query.get("account") or [""])[0].strip()
-            if acct.isdigit():
-                return acct
+            return urllib.parse.parse_qs(urllib.parse.urlparse(raw.replace("\\", "/")).query)
         except Exception:  # noqa: BLE001
             continue
-    return ""
+    return {}
+
+
+def account_from_args(argv: list[str]) -> str:
+    """aitrader://connect?token=…&account=<口座番号> の口座番号（無ければ空）。
+    どの MT5 を担当させるかを選ぶためだけに使う。部屋（会員）は合図を確かめて決める。"""
+    acct = (_protocol_query(argv).get("account") or [""])[0].strip()
+    return acct if acct.isdigit() else ""
+
+
+def slot_from_args(argv: list[str]) -> int:
+    """aitrader://connect?…&slot=2 の「何番目の口座か」（1 か 2。無ければ 0）。
+
+    ロビーは 2 つ目の手続きのとき slot=2 を付ける。サイトが「2 本目」と言っている口座
+    （口座 198676996）を、この PC の 1 本目と見ないため。
+    """
+    raw = (_protocol_query(argv).get("slot") or [""])[0].strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        return 0
+    return n if n in (1, 2) else 0
 
 
 # ────────────────────────────────────────────────
@@ -1012,9 +1034,31 @@ def growth_source():
     return ea_manager.load_source(BRIDGE_DIR)
 
 
+def remember_slot(raw) -> None:
+    """サイトが言った「何番目の口座か」を覚える。2 は 1 では上書きしない。"""
+    global LAST_REDEEMED_SLOT
+    try:
+        n = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return
+    if n not in (1, 2):
+        return
+    if LAST_REDEEMED_SLOT == 2 and n == 1:
+        return
+    LAST_REDEEMED_SLOT = n
+
+
+def site_says_second() -> bool:
+    """サイト（ロビーの口座の順番／合図の返事）が、いまの手続きを 2 つ目と言っているか。"""
+    return LAST_REDEEMED_SLOT == 2
+
+
 def is_second_account(account: str) -> bool:
-    """この口座は、すでに連携済みの 1 本目とは別の 2 つ目か。"""
+    """この口座は 2 つ目か。サイトが 2 つ目と言っていれば、手元の 1 本目が空でも同じでもそう見る。"""
     account = str(account or "").strip()
+    if site_says_second() and account.isdigit():
+        if not LAST_REDEEMED_ACCOUNT or account == LAST_REDEEMED_ACCOUNT:
+            return True
     mine = primary_account()
     return bool(account.isdigit() and mine and account != mine and connect_state.is_connected())
 
@@ -1120,8 +1164,10 @@ def redeem_connect_token(token: str) -> str:
     LAST_REDEEMED_PLAN = str(data.get("plan") or "").strip().lower()
     acct = str(data.get("account") or "").strip()
     LAST_REDEEMED_ACCOUNT = acct if acct.isdigit() else ""
+    remember_slot(data.get("slot"))
     log("連携の合図を確認しました" + (f"（プラン: {LAST_REDEEMED_PLAN}）" if LAST_REDEEMED_PLAN else "")
-        + (f"（口座 …{acct[-4:]}）" if LAST_REDEEMED_ACCOUNT else ""))
+        + (f"（口座 …{acct[-4:]}）" if LAST_REDEEMED_ACCOUNT else "")
+        + (f"（{LAST_REDEEMED_SLOT}つ目）" if LAST_REDEEMED_SLOT in (1, 2) else ""))
     return room
 
 
@@ -1131,6 +1177,10 @@ LAST_REDEEMED_PLAN = ""
 # 合図が URL に口座番号を付けていないとき（ダウンロードしたファイルの名前から拾った合図）に、
 # 「どの口座の手続きか」をこれで決める。無いと、ロイヤルの 2 つ目が 1 つ目を替えてしまう
 LAST_REDEEMED_ACCOUNT = ""
+# 直前にサイトが言った「何番目の口座か」（1 / 2。分からなければ 0）。
+# ロビーの口座の順番と、合図の返事の slot。手元の state.json よりこちらを優先する
+# （口座 198676996 はサイトでは 2 本目なのに、この PC が 1 本目と見て 1 年版を置いた）
+LAST_REDEEMED_SLOT = 0
 # 同じ PC に 2 つ目の口座（2 本目のブリッジ）を足してよいプラン。ロイヤルファーストクラスだけ
 PLANS_WITH_SECOND_ACCOUNT = ("crystal",)
 
@@ -1148,13 +1198,17 @@ def maybe_connect_second_account(room: str, wanted: str) -> int | None:
     """2 本目を足す／1 本目を替えるならその結果。該当しなければ None（1 本目の connect_all へ）。
 
     ロビーからその場でつなぐ経路（try_connect_from_claim）も、サイトのボタン（main）もここを通す。
-    ロビー経路がここを通らないと、クリスタルの 2 つ目なのに 1 本目の MT5 へ 1 年版を置き直す
-    （connect.log の「合図は …6998、選んだ MT5 は 1 本目、Experts/YumekkuEA-1年版」がそれ）。
+    「2 つ目か」はサイトが決める（slot=2）。手元の 1 本目が空でも、同じ口座でも、
+    サイトが 2 つ目と言っていれば安定低月利ver を置く（口座 198676996 がそれ）。
     """
     if os.name != "nt" or not room:
         return None
     wanted = str(wanted or "").strip()
     mine = primary_account()
+    if wanted.isdigit() and site_says_second() and second_account_allowed():
+        if mine == wanted:
+            log(f"口座 …{wanted[-4:]} はこの PC では 1 本目になっていましたが、サイトでは 2 つ目です。安定低月利ver を置きます")
+        return connect_slot(room, wanted)
     if not (wanted.isdigit() and mine and wanted != mine and connect_state.is_connected()):
         return None
     if second_account_allowed():
@@ -2740,6 +2794,7 @@ def main() -> int:
     # 口座番号は URL の account=、無ければ合図を確かめたときにサイトが返した会員の口座番号
     #（会員 ＝ 口座番号）。ダウンロードしたファイルの名前の合図には account= が無い
     if room:
+        remember_slot(slot_from_args(raw_args))
         wanted = account_from_args(raw_args) or LAST_REDEEMED_ACCOUNT
         slotted = maybe_connect_second_account(room, wanted)
         if slotted is not None:

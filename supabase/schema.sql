@@ -695,6 +695,7 @@ as $$
 declare
   v_row public.connect_tokens;
   v_member public.members;
+  v_slot int := 1;
 begin
   if p_connect_token is null or length(p_connect_token) < 32 then
     raise exception 'INVALID_TOKEN';
@@ -717,13 +718,32 @@ begin
     raise exception 'INVALID_TOKEN';
   end if;
 
+  -- ロイヤルの同じお名前で、この会員より先に登録した口座が居れば 2 つ目
+  if v_member.plan = 'crystal' and nullif(trim(coalesce(v_member.name, '')), '') is not null then
+    select 1 + count(*)::int into v_slot
+      from public.members o
+     where o.plan = 'crystal'
+       and o.status = 'active'
+       and o.id <> v_member.id
+       and o.name = v_member.name
+       and o.created_at < v_member.created_at;
+    if v_slot is null then
+      v_slot := 1;
+    end if;
+    if v_slot > 2 then
+      v_slot := 2;
+    end if;
+  end if;
+
   -- plan はパスポートが「2 つ目の口座を足してよいか（crystal か）」を決めるのに使う
   -- account はパスポートが「どの口座の手続きか」を決めるのに使う（URL に口座番号が無いとき）
+  -- slot は「何番目の口座か」。2 なら安定低月利ver を置く
   return jsonb_build_object(
     'member_id', v_member.id,
     'can_trade', v_member.can_trade,
     'plan', v_member.plan,
-    'account', v_member.account
+    'account', v_member.account,
+    'slot', v_slot
   );
 end;
 $$;

@@ -762,6 +762,12 @@ const SCRIPT = {
      まだつながっていないときは、いま手続きしている口座が何番目かで決める */
   const EA_NAME_FIRST = EA_FIRST, EA_NAME_SECOND = EA_SECOND;   // 名前は上（台詞と同じ出どころ）
   const eaName = () => (Bridge.status && Bridge.status.ea_expected) || (flow.idx >= 1 ? EA_NAME_SECOND : EA_NAME_FIRST);
+  /* パスポートへ渡す「何番目の口座か」。2 なら安定低月利ver。手元の 1 本目と比べさせない */
+  const memberSlot = (m) => {
+    const acct = String((m || {}).account || "");
+    const i = members.findIndex((x) => String(x.account) === acct);
+    return i >= 1 ? 2 : 1;
+  };
   /* Bridge・flow は下で定義する（呼ばれるのは画面を出すときなので、ここで名前だけ先に決めておく） */
   const val = (x) => (typeof x === "function" ? x() : x);
 
@@ -1307,7 +1313,7 @@ const SCRIPT = {
     const { status, data } = await api({ action: "connect_token", session: m.token });
     if (status === 401) { flow.retryAccount = String(m.account || ""); setPhase("expired"); return false; }
     if (status !== 200) return false;
-    const params = new URLSearchParams({ from: SITE, token: data.token, account: String(m.account || "") });
+    const params = new URLSearchParams({ from: SITE, token: data.token, account: String(m.account || ""), slot: String(memberSlot(m)) });
     try { window.location.href = `aitrader://connect?${params.toString()}`; } catch (_) {}
     return true;
   };
@@ -1340,7 +1346,7 @@ const SCRIPT = {
   const postClaim = async (m, token) => {
     const http = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
     try {
-      await fetch(`${http}/claim`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: m.token, token, account: m.account }) });
+      await fetch(`${http}/claim`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: m.token, token, account: m.account, slot: memberSlot(m) }) });
     } catch (_) {}
   };
   const handOverClaim = async () => {

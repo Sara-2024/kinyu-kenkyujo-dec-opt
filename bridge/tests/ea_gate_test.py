@@ -230,6 +230,8 @@ check("サイトのボタン経路も同じ判断を通す",
 pick_body = py_body_of(CONNECT, "source_for_account")
 check("置く EA は口座で分ける（1 本目は 1 年版、2 つ目は安定低月利ver）",
       "is_second_account(account)" in pick_body and "growth_source()" in pick_body)
+check("2 つ目かはサイトの slot を優先する（手元の 1 本目が空でも同じでも）",
+      "site_says_second()" in route_body and "remember_slot(" in CONNECT)
 check("設置もつなぎ直しも source_for_account で置く",
       "source_for_account(" in py_body_of(CONNECT, "setup_phase1")
       and "source_for_account(" in py_body_of(CONNECT, "copy_ea_files"))
@@ -237,6 +239,7 @@ stop_body = py_body_of(CONNECT, "stop_old_account")
 check("停止は元の口座あての指令ファイル（trelab_gate_<口座>.ini）に書く", 'trelab_gate_{account}.ini' in stop_body and 'AI_TRADING_ALLOWED' in stop_body)
 check("この PC の意思（intent.json）も停止に戻す", 'intent.json' in stop_body and '"allowed": 0.0' in stop_body)
 check("プランは合図の返事（/api/connect の plan）から取る", 'data.get("plan")' in py_body_of(CONNECT, "redeem_connect_token"))
+check("何番目の口座かも合図の返事（slot）から取る", 'data.get("slot")' in py_body_of(CONNECT, "redeem_connect_token"))
 check("配布物（bridge/growth/<名前>.ex5）がリポジトリにある", (GROWTH_DIR / f"{GROWTH_EA_NAME}.ex5").is_file())
 check("bridge/ 直下に安定低月利ver の .ex5 を置いていない（1 本目として配られる）", not (BRIDGE / f"{GROWTH_EA_NAME}.ex5").exists())
 BRIDGE_PY = (BRIDGE / "bridge.py").read_text(encoding="utf-8", errors="ignore")
@@ -245,6 +248,7 @@ check("「○○を載せてください」は EXPECTED_EA で出す", "{EXPECTE
 LOBBY = (BRIDGE.parent / "dreamland" / "index.html").read_text(encoding="utf-8", errors="ignore")
 check("ロビーの手順は ea_expected（無ければ何番目の口座か）で EA 名を出す", "Bridge.status.ea_expected" in LOBBY and "${eaName()}" in LOBBY)
 check("ロビーの EA 名は mt5_terminal と同じ", f'"{GROWTH_EA_NAME}"' in LOBBY and f'"{EA_NAMES[0]}"' in LOBBY)
+check("ロビーは 2 つ目の手続きで slot=2 を合図に付ける", "slot: memberSlot(m)" in LOBBY and "memberSlot" in LOBBY)
 
 if not SOURCES:
     print("  --   EA のソース（.mq5）が無いので省略します（配るのは .ex5 だけ）")

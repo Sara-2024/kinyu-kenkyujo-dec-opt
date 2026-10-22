@@ -237,7 +237,7 @@ const server = createServer((req, res) => {
       claims.delete(account)
       log(`合図を渡しました: 口座 …${account.slice(-4)} → 部屋 ${short(c.room)}`)
       res.writeHead(200, CLAIM_HEADERS)
-      res.end(JSON.stringify({ ok: true, token: c.token, room: c.room, account }))
+      res.end(JSON.stringify({ ok: true, token: c.token, room: c.room, account, slot: c.slot === 2 ? 2 : 1 }))
       return
     }
     if (req.method === 'POST') {
@@ -267,8 +267,9 @@ const server = createServer((req, res) => {
             res.end(JSON.stringify({ ok: false }))
             return
           }
-          claims.set(account, { token, room: String(member.id), expires: Date.now() + CLAIM_TTL_MS })
-          log(`合図を預かりました: 口座 …${account.slice(-4)}（部屋 ${short(member.id)}）`)
+          const slot = Number(payload.slot) === 2 ? 2 : 1
+          claims.set(account, { token, room: String(member.id), expires: Date.now() + CLAIM_TTL_MS, slot })
+          log(`合図を預かりました: 口座 …${account.slice(-4)}（部屋 ${short(member.id)}）${slot === 2 ? '・2つ目' : ''}`)
           res.writeHead(200, CLAIM_HEADERS)
           res.end(JSON.stringify({ ok: true }))
         })

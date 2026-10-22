@@ -269,10 +269,16 @@ if plan_mig.is_file():
     check("合図の返事に口座番号を足す migration がある", acct_mig.is_file())
     if acct_mig.is_file():
         acct_sql = acct_mig.read_text(encoding="utf-8")
-        fn = acct_sql[acct_sql.index("create or replace function public.connect_token_redeem") :]
-        check("口座番号の migration の中身が schema.sql と同じ", fn.strip() in schema_all, "schema.sql の connect_token_redeem を 20261022 と同じにする")
         check("合図の返事に account が入る", "'account', v_member.account" in acct_sql)
         check("口座番号の migration は既存のテーブルを落とさない", "drop table" not in acct_sql.lower())
+    slot_mig = ROOT / "supabase" / "migrations" / "20261022_connect_token_slot.sql"
+    check("合図の返事に何番目の口座か（slot）を足す migration がある", slot_mig.is_file())
+    if slot_mig.is_file():
+        slot_sql = slot_mig.read_text(encoding="utf-8")
+        fn = slot_sql[slot_sql.index("create or replace function public.connect_token_redeem") :]
+        check("slot の migration の中身が schema.sql と同じ", fn.strip() in schema_all, "schema.sql の connect_token_redeem を 20261022_connect_token_slot と同じにする")
+        check("合図の返事に slot が入る", "'slot', v_slot" in slot_sql)
+        check("slot の migration は既存のテーブルを落とさない", "drop table" not in slot_sql.lower())
     check("合図の返事に plan が入る", "'plan', v_member.plan" in plan_sql[plan_sql.index("connect_token_redeem") :])
     check("プランを直せるのは管理者だけ", "_require_admin(p_token)" in plan_sql[plan_sql.index("admin_set_member_plan") :])
     check("プランは 3 つのどれか", "('first', 'crystal', 'premium')" in plan_sql[plan_sql.index("admin_set_member_plan") :])
