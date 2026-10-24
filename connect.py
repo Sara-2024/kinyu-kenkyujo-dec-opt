@@ -1133,6 +1133,38 @@ def pick_heading(which: int) -> str:
     return ""
 
 
+# 「2つ同時に」で、もう 1 つのパスポートに渡した 2 つ目の口座番号（確認の画面に「設定中」と出すため）
+HANDED_OVER_SECOND = ""
+
+
+def _terminal_label(account: str) -> str:
+    """「XMTrading-MT5 3（口座 75602463）」のような表示。MT5 が見つからなければ「口座 75602463」。"""
+    try:
+        t = terminal_for_account(account)
+    except Exception:  # noqa: BLE001
+        t = None
+    label = str(getattr(t, "label", "") or "")
+    return label if account in label else f"口座 {account}"
+
+
+def assignment_lines() -> list[str]:
+    """どの口座にどのユメックを入れたか（ロイヤルで 2 つあるときに、お客様が目で確かめられるように）。"""
+    first = primary_account()
+    seconds = [str(s.get("account")) for s in list_slots() if str(s.get("account") or "").isdigit()]
+    pending = HANDED_OVER_SECOND if HANDED_OVER_SECOND and HANDED_OVER_SECOND not in seconds else ""
+    if not seconds and not pending:
+        return []
+    out = ["── つないだ口座 ──"]
+    if first:
+        out.append(f"1つ目：{_terminal_label(first)}\n　　　… {EA_NAME}")
+    for acct in seconds:
+        if acct != first:
+            out.append(f"2つ目：{_terminal_label(acct)}\n　　　… 特別仕様のユメック（{GROWTH_EA_NAME}）")
+    if pending:
+        out.append(f"2つ目：{_terminal_label(pending)}\n　　　… 特別仕様のユメック（設定中。このあと自動で入ります）")
+    return out
+
+
 def connect_slot(room: str, account: str) -> int:
     """追加口座の連携。その口座の MT5 に「安定低月利ver」の EA を置き、口座専用のブリッジを起こす。1 本目は触らない。"""
     banner(f"追加口座の連携（口座 …{account[-4:]}）")
@@ -1156,6 +1188,14 @@ def connect_slot(room: str, account: str) -> int:
     (slot_dir(account) / "slot.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"追加口座の部屋: {room}（MT5: {target.data_path}）")
     start_slot_bridge(data)
+    lines = assignment_lines()
+    log("つないだ口座: " + " / ".join(x.replace("\n", " ") for x in lines[1:]))
+    if lines and "--startup" not in sys.argv:
+        ui = installer_ui.open_window()
+        if ui:
+            ui.finish(lines + ["", "MT5 で、それぞれのチャートに上のユメックが載っているか確かめてください。"], ok=True)
+        else:
+            installer_ui.message_box("設定が完了しました。\n\n" + "\n".join(lines))
     return 0
 
 
@@ -2604,6 +2644,9 @@ def connect_all(room: str = "", show: bool = False, ui=None, ask: bool | None = 
         # ブリッジは同じ exe をもう一度展開して起きるので、名乗り出るまで 6〜15 秒かかる。
         seen = relay_sees_us()
         lines = connect_result_lines(session, seen)
+        extra = assignment_lines()
+        if extra:
+            lines = list(lines) + [""] + extra
         release_single_instance()  # 窓を開いたままでも、次にサイトから呼ばれたら動けるように
         if ui:
             # MT5 につながっていれば設定は済んでいる。中継にまだ届いていないのは
@@ -2898,6 +2941,9 @@ def main() -> int:
             remember_slot(first_slot)
             for tok, acct, slot in claims[1:]:
                 hand_over_claim(tok, acct, slot)
+                if slot == 2:
+                    global HANDED_OVER_SECOND
+                    HANDED_OVER_SECOND = acct
 
     # サイトの「MT5と連携する」から呼ばれたとき。
     # 合図が正しいときだけ連携する（アプリ単体では連携できない）。
