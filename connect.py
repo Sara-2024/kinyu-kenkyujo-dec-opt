@@ -2956,3 +2956,20 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except KeyboardInterrupt:
         raise SystemExit(1)
+    except SystemExit:
+        raise
+    except Exception:  # noqa: BLE001
+        # 想定外のエラーでも、英語のエラー画面（PyInstaller の既定）を出さない。
+        # 記録に残して、日本語で「もう一度」とだけ出す。裏の呼び出しで何度も出ると、お客様には壊れて見える
+        import traceback
+
+        try:
+            log("想定外のエラー:\n" + traceback.format_exc())
+        except Exception:  # noqa: BLE001
+            pass
+        if "--run-bridge" not in sys.argv and "--wait-link" not in sys.argv and "--startup" not in sys.argv:
+            try:
+                installer_ui.message_box("うまく進めませんでした。\n\nサイトの画面に戻って、もう一度お試しください。\n直らないときはサポート LINE へご連絡ください。")
+            except Exception:  # noqa: BLE001
+                pass
+        raise SystemExit(1)
