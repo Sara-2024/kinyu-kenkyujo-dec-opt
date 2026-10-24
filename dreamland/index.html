@@ -84,6 +84,20 @@ a{color:inherit}
   -webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px);box-shadow:0 3px 18px rgba(85,109,134,.13);transition:transform .2s}
 .ready:hover{transform:translateY(-1px)}
 .ready b{color:var(--lav-text);font-weight:600}
+.accts{display:flex;align-items:center;gap:8px;height:43px;padding:0 14px;border-radius:30px;border:1px solid rgba(255,247,236,.8);
+  background:rgba(248,249,241,.84);color:#61667c;font-size:13px;letter-spacing:.02em;white-space:nowrap;cursor:pointer;
+  -webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px);box-shadow:0 3px 18px rgba(85,109,134,.13);transition:transform .2s}
+.accts:hover{transform:translateY(-1px)}
+.accts[hidden]{display:none}
+.acct{display:flex;align-items:center;gap:5px}
+.acct+.acct{padding-left:8px;border-left:1px solid #dcdde9}
+.acct b{color:var(--lav-text);font-weight:600}
+.acct i{width:8px;height:8px;border-radius:50%;background:#e2a3a3;box-shadow:0 0 0 2px rgba(226,163,163,.25)}
+.acct.is-on i{background:var(--teal);box-shadow:0 0 6px rgba(105,180,188,.8)}
+.acct small{font-size:12px}
+.acct.is-on small{color:#3f8d95}
+.acct:not(.is-on) small{color:#b4646a}
+@media (max-width:760px){.accts{height:36px;padding:0 10px;font-size:12px;gap:6px}.acct .nm{display:none}}
 .dots{display:flex;gap:4px}
 .dots i{width:8px;height:8px;border-radius:50%;background:#dcdde9;transition:background .3s,box-shadow .3s}
 .dots i.on{background:var(--teal);box-shadow:0 0 6px rgba(105,180,188,.8)}
@@ -461,6 +475,7 @@ a.enter{text-decoration:none}
       <button type="button" data-spot="gate">搭乗ゲート</button>
     </nav>
     <div class="top__end">
+      <button class="accts" type="button" id="accts" hidden aria-label="つないでいる口座の状況をひらく"></button>
       <button class="ready" type="button" id="ready" aria-label="搭乗準備の状況をひらく"><span class="lbl">搭乗準備</span><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b id="ready-count">0/4</b></button>
     </div>
   </header>
@@ -857,7 +872,41 @@ const SCRIPT = {
                     set: (v) => { try { if (v) sessionStorage.setItem("dreamland.entry", v); else sessionStorage.removeItem("dreamland.entry"); } catch (_) {} } };
   /* つないだ口座ごとの会員（サイトのセッションを含む。サイトのパスワードは覚えない） */
   members = (load("dreamland.members") || []).filter((m) => m && m.id && m.token);
-  const saveMembers = () => store("dreamland.members", members.length ? members : null);
+  setTimeout(() => {
+    renderAccounts();
+    pollAccounts();
+    const a = $("accts");
+    if (a) a.addEventListener("click", () => goTo("service", "members"));
+  }, 0);
+  const saveMembers = () => { store("dreamland.members", members.length ? members : null); renderAccounts(); };
+  /* 右上の口座の表示：口座ごとに「接続済み／未接続」。接続済みは、いまパスポートが中継につながっていること
+     （中継の /health で部屋ごとに確かめる。30 秒おき）。ロイヤルは何番目かも出す */
+  const accountLive = {};
+  function renderAccounts() {
+    const el = $("accts");
+    if (!el) return;
+    if (!members.length) { el.hidden = true; el.innerHTML = ""; return; }
+    el.hidden = false;
+    const many = currentPlan() === "crystal" || members.length > 1;
+    el.innerHTML = members.map((m, i) => {
+      const on = accountLive[m.id] === true || (accountLive[m.id] === undefined && m.done);
+      return `<span class="acct ${on ? "is-on" : ""}"><i aria-hidden="true"></i><span class="nm">${many ? `${i + 1}つ目 ` : ""}</span><b>口座 ${esc(tail2(m.account))}</b><small>${on ? "接続済み" : "未接続"}</small></span>`;
+    }).join("");
+  }
+  async function pollAccounts() {
+    if (members.length) {
+      const http = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
+      await Promise.all(members.map(async (m) => {
+        try {
+          const r = await fetch(`${http}/health?room=${encodeURIComponent(m.id)}`, { cache: "no-store" });
+          const b = await r.json();
+          accountLive[m.id] = !!(b && b.room && b.room.bridge);
+        } catch (_) {}
+      }));
+      renderAccounts();
+    }
+    setTimeout(pollAccounts, 30000);
+  }
   second = load("dreamland.second");
   const saveSecond = () => store("dreamland.second", second);
 
@@ -1316,6 +1365,7 @@ const SCRIPT = {
       const was = this.live;
       this.live = live;
       this.status = status;
+      if (this.room) { accountLive[this.room] = !!live; renderAccounts(); }
       if (this.onChange) this.onChange(live !== was);
     },
     send(command, extra = {}) {
