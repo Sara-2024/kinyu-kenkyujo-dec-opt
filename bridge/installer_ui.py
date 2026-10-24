@@ -255,7 +255,7 @@ class SetupWindow:
         self.root.update()
 
     # ── 画面のかたち ────────────────────────────
-    def choose_terminal(self, items: Sequence[tuple[str, str]]) -> str | None:
+    def choose_terminal(self, items: Sequence[tuple[str, str]], heading: str = "") -> str | None:
         """複数の MT5 があるときだけ出す選択画面。items は (値, 見せる名前)。
 
         ✕ で閉じられたら None を返す。呼び出し側は、そこでやめること
@@ -265,7 +265,7 @@ class SetupWindow:
             return None
         self.clear_body()
         self.clear_buttons()
-        self.say("設定するMT5を選んでください。")
+        self.say(heading or "設定するMT5を選んでください。")
         # 台数ぶん窓を高くする。画面に収まらないときは、そこで打ち止め
         need = 300 + 46 * len(items)
         self.root.update_idletasks()

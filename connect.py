@@ -1122,13 +1122,33 @@ def source_for_account(account: str):
     return ea_manager.load_source(BRIDGE_DIR)
 
 
+def pick_heading(which: int) -> str:
+    """MT5 を選ぶ画面の見出し。ロイヤル（口座 2 つ）のときは、何番目の口座かをはっきり出す。"""
+    if which == 2:
+        return ("2つ目の口座を入れる MT5 を選んでください。\n"
+                f"ロイヤルファーストクラス限定・特別仕様のユメック「{GROWTH_EA_NAME}」が入ります。")
+    if LAST_REDEEMED_PLAN in PLANS_WITH_SECOND_ACCOUNT:
+        return ("1つ目の口座を入れる MT5 を選んでください。\n"
+                f"ユメック「{EA_NAME}」が入ります（2つ目の口座は、このあと別に入ります）。")
+    return ""
+
+
 def connect_slot(room: str, account: str) -> int:
     """追加口座の連携。その口座の MT5 に「安定低月利ver」の EA を置き、口座専用のブリッジを起こす。1 本目は触らない。"""
     banner(f"追加口座の連携（口座 …{account[-4:]}）")
     target = terminal_for_account(account)
     if target is None:
-        log(f"口座 {account} でログインしている MT5 が見つかりません")
-        return show_failure(
+        # 口座番号で見つからなくても、MT5 があれば「2つ目の口座を入れる MT5」を選んでもらう
+        terminals = [t for t in mt5_detect.list_terminals() if account_of(t) != primary_account()]
+        ui = installer_ui.open_window() if terminals else None
+        if ui is not None:
+            picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals], heading=pick_heading(2))
+            target = next((t for t in terminals if str(t.data_path) == picked), None)
+            if ui.alive():
+                ui.say(f"口座 {account} に設定しています…")
+        if target is None:
+            log(f"口座 {account} でログインしている MT5 が見つかりません")
+            return show_failure(
             f"口座 {account} の MT5 が見つかりません。",
             "その口座で MT5 にログインしてから、サイトの「設置が終わった（つなぐ）」をもう一度押してください。",
         )
@@ -2016,7 +2036,7 @@ def setup_phase1() -> int:
     # 1台しか無くても選んでもらう。「どの口座に入れたか」をお客様の目で確かめるため
     # （口座番号が画面に出るので、違う口座なら気づける）
     if ui:
-        picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals])
+        picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals], heading=pick_heading(1))
         if not picked:
             log("選ばずに閉じられたので、何もしません")
             return 1
@@ -2625,7 +2645,7 @@ def choose_session(ui, log=log, always_ask: bool = False) -> tuple[dict | None, 
         if ui is None:
             return str(terminals[0].data_path) if terminals else ""
         ordered = sorted(terminals, key=lambda t: 0 if _same_path(t.data_path, chosen) else 1)
-        got = ui.choose_terminal([(str(t.data_path), t.label) for t in ordered])
+        got = ui.choose_terminal([(str(t.data_path), t.label) for t in ordered], heading=pick_heading(1))
         return str(got or "")
 
     if ui is not None and always_ask and terminals:
