@@ -251,6 +251,18 @@ check("ロビーの EA 名は mt5_terminal と同じ", f'"{GROWTH_EA_NAME}"' in 
 check("ロビーは 2 つ目の手続きで slot=2 を合図に付ける", "slot: memberSlot(m)" in LOBBY and "memberSlot" in LOBBY)
 check("2 つ目は合図を待つだけでなくパスポートを呼び出す（slot=2 を URL に載せる）",
       "memberSlot(m) === 2) issueAndLaunch()" in LOBBY)
+# ── 別の口座の EA が動かないこと（1 つ目の操作で 2 つ目が稼働／停止した事故から）──
+_gate_src = (BRIDGE / "TradingGate.mqh").read_text(encoding="utf-8")
+_bridge_src = (BRIDGE / "bridge.py").read_text(encoding="utf-8")
+_connect_src = (BRIDGE.parent / "connect.py").read_text(encoding="utf-8")
+check("EA は宛先の口座番号（AI_ACCOUNT）を見て、別の口座あての指令に従わない",
+      '"AI_ACCOUNT"' in _gate_src and "ACCOUNT_LOGIN" in _gate_src and "MathAbs(addressed - mine)" in _gate_src)
+check("ブリッジは指令に自分の口座番号を必ず付ける", 'f"AI_ACCOUNT={OWN_ACCOUNT}' in _bridge_src)
+check("ブリッジは担当と違う口座の MT5 に繋がったら繋ぎ直す", "担当の MT5 を探します" in _bridge_src)
+check("パスポートはサイトの口座の MT5 だけを使い、お客様に選ばせない", "site_acct = LAST_REDEEMED_ACCOUNT" in _connect_src)
+check("2 つ目の口座は見つからなければ止める（ほかの MT5 を選ばせない）", "heading=pick_heading(2)" not in _connect_src)
+check("ブリッジに担当の口座番号を渡す", 'env["BRIDGE_ACCOUNT"]' in _connect_src)
+
 check("連携済みでもロビーの合図を先に取る（1 年版の置き直しを防ぐ）",
       "take_all_claims()" in main_body)
 check("「2つ同時に」の 2 つ目は、もう 1 つのパスポートに渡す", "hand_over_claim(" in main_body)

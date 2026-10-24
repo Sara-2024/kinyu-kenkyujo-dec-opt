@@ -870,8 +870,12 @@ class MT5Controller:
         }
         for k in values.keys() - safe.keys():
             log.warning("指令ファイルに書けない名前を捨てました: %r", str(k)[:40])
-        path_values = safe
+        path_values = dict(safe)
+        # 宛先の口座番号を必ず付ける。EA は自分の口座あてでない指令には従わない（TradingGate.mqh）
+        path_values.pop("AI_ACCOUNT", None)
         body = "".join(f"{k}={v}\n" for k, v in sorted(path_values.items()))
+        if OWN_ACCOUNT.isdigit():
+            body = f"AI_ACCOUNT={OWN_ACCOUNT}\n" + body
         tmp = path.with_suffix(".tmp")
         tmp.write_text(body, encoding="utf-8")
         tmp.replace(path)

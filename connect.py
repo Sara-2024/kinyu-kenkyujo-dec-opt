@@ -1138,19 +1138,11 @@ def connect_slot(room: str, account: str) -> int:
     banner(f"追加口座の連携（口座 …{account[-4:]}）")
     target = terminal_for_account(account)
     if target is None:
-        # 口座番号で見つからなくても、MT5 があれば「2つ目の口座を入れる MT5」を選んでもらう
-        terminals = [t for t in mt5_detect.list_terminals() if account_of(t) != primary_account()]
-        ui = installer_ui.open_window() if terminals else None
-        if ui is not None:
-            picked = ui.choose_terminal([(str(t.data_path), t.label) for t in terminals], heading=pick_heading(2))
-            target = next((t for t in terminals if str(t.data_path) == picked), None)
-            if ui.alive():
-                ui.say(f"口座 {account} に設定しています…")
-        if target is None:
-            log(f"口座 {account} でログインしている MT5 が見つかりません")
-            return show_failure(
+        # 口座番号で見つからないときは、ほかの MT5 を選ばせない（選び間違えると別の口座の EA が動く）
+        log(f"口座 {account} でログインしている MT5 が見つかりません")
+        return show_failure(
             f"口座 {account} の MT5 が見つかりません。",
-            "その口座で MT5 にログインしてから、サイトの「設置が終わった（つなぐ）」をもう一度押してください。",
+            f"MT5 を開いて口座 {account} でログインしてから、サイトの「設置が終わった（つなぐ）」をもう一度押してください。",
         )
     source = growth_source()
     if source is None:
@@ -1870,9 +1862,9 @@ def bridge_env(session: dict | None) -> dict[str, str]:
         exe = resolve_terminal_exe(session)
         if exe is not None:
             env["MT5_PATH"] = str(exe)
-    # このブリッジが担当する口座番号。MT5 が同じ PC に何台もあると、別の MT5 に繋がって
+    # このブリッジが担当する口座番号（サイトが言った口座が最優先）。MT5 が同じ PC に何台もあると、別の MT5 に繋がって
     # 別の口座の EA を動かしてしまう（1 つ目の操作で 2 つ目の口座が稼働／停止した）。ブリッジはこれと照らし合わせる
-    acct = str((session or {}).get("account") or "").strip() or primary_account()
+    acct = LAST_REDEEMED_ACCOUNT or str((session or {}).get("account") or "").strip() or primary_account()
     if acct.isdigit():
         env["BRIDGE_ACCOUNT"] = acct
     else:
@@ -2640,6 +2632,24 @@ def choose_session(ui, log=log, always_ask: bool = False) -> tuple[dict | None, 
       ・覚えていなければ、選んでもらって覚える（1台でも画面に出して確かめてもらう）
     """
     terminals = mt5_detect.list_terminals()
+    # サイトがこの手続きの口座番号を言っているときは、その口座でログインしている MT5 だけを使う。
+    # お客様に選ばせない（選び間違えると、別の口座の EA が動く）。見つからなければ止める
+    site_acct = LAST_REDEEMED_ACCOUNT
+    if site_acct.isdigit():
+        target = terminal_for_account(site_acct)
+        if target is None:
+            log(f"口座 {site_acct} でログインしている MT5 が見つかりません（ほかの MT5 には繋ぎません）")
+            if ui is not None:
+                tell(ui, f"口座 {site_acct} の MT5 が見つかりません。",
+                     f"MT5 を開いて、口座 {site_acct} でログインしてから、サイトの「設置が終わった（つなぐ）」をもう一度押してください。")
+            return None
+        path = str(target.data_path)
+        connect_state.write(connect_state.current(), terminal=path)
+        session = find_logged_in_terminal(prefer_data_path=path)
+        if session and str(session.get("account") or "") != site_acct:
+            session = None
+        log(f"サイトの口座 {site_acct} の MT5 を使います: {path}")
+        return session, path
     chosen = str(connect_state.read().get("terminal") or "")
     if chosen and not any(_same_path(t.data_path, chosen) for t in terminals):
         log(f"覚えていた MT5 がもう無いので、選び直します: {chosen}")

@@ -72,6 +72,12 @@ void SyncGateFileToGlobals()
    // 指令ファイルから行が消えても古い合図が居座り、「連携済み」のままになるため
    GlobalVariableSet("AI_BRIDGE_AT", 0.0);
 
+   // いったん全部読む。指令には宛先の口座番号（AI_ACCOUNT）が付いている。
+   // 自分の口座あてでなければ一切従わず、新規を止める（同じ PC に MT5 が 2 台あっても、
+   // 別の口座の指令で動くことが絶対にないように。1 つ目の操作で 2 つ目が動いた事故から）
+   string keys[], vals[];
+   int n = 0;
+   double addressed = -1.0;
    while(!FileIsEnding(handle))
      {
       string line = FileReadString(handle);
@@ -82,9 +88,23 @@ void SyncGateFileToGlobals()
       int eq = StringFind(line, "=");
       if(eq <= 0)
          continue;
-      GlobalVariableSet(StringSubstr(line, 0, eq), StringToDouble(StringSubstr(line, eq + 1)));
+      string k = StringSubstr(line, 0, eq);
+      string v = StringSubstr(line, eq + 1);
+      if(k == "AI_ACCOUNT") { addressed = StringToDouble(v); continue; }
+      ArrayResize(keys, n + 1); ArrayResize(vals, n + 1);
+      keys[n] = k; vals[n] = v; n++;
      }
    FileClose(handle);
+   const double mine = (double)AccountInfoInteger(ACCOUNT_LOGIN);
+   if(addressed > 0 && MathAbs(addressed - mine) > 0.5)
+     {
+      g_gate_file_ok = false;
+      GlobalVariableSet(InpGateVariable, 0.0);   // 別の口座あての指令しか無い → 安全側（新規を止める）
+      DrawGateStatus();
+      return;
+     }
+   for(int i = 0; i < n; i++)
+      GlobalVariableSet(keys[i], StringToDouble(vals[i]));
    const double beat = GateNumber("AI_BRIDGE_AT", 0.0);
    if(beat != g_gate_prev_beat)
      {
