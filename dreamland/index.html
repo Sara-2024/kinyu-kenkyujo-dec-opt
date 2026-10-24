@@ -712,16 +712,16 @@ const SCRIPT = {
       choices: [["サポート LINE", "support"], ["ほかのもの", "start"]] },
     waiting: { say: () => (!pairMode && members.length >= 2 && currentFlowIdx() === 1 && members[0].done
         ? `2つ目の口座（${tail2(members[1].account)}）をつないでいます。パスポートは1つ目で入れたものをそのまま使うので、ダウンロードし直す必要はありません。\n2つ目の口座で MT5 にログインしたまま、そのままお待ちください（1 分ほど）。2つ目には、ロイヤルファーストクラス限定・特別仕様のユメック「${EA_SECOND}」が入ります。`
-        : "") || (pairMode && members.length >= 2 && currentFlowIdx() === 1 ? `1つ目の口座はつながりました。つづけて2つ目の口座（${tail2(members[1].account)}）を確かめています。そのままお待ちください。\n2つ目には、ロイヤルファーストクラス限定・特別仕様のユメック「${EA_SECOND}」が入ります。\n` : "") + "パスポートがこの口座につながるのを確かめています。そのままお待ちください（1 分ほど）。\nパスポートをまだ入れていない方は、下の「パスポートをダウンロード」から入れて開いてください。開くと自動でつながります。", docs: "launch", choices: [] },
+        : "") || (pairMode && members.length >= 2 && currentFlowIdx() === 1 ? `1つ目の口座はつながりました。つづけて2つ目の口座（${tail2(members[1].account)}）を確かめています。そのままお待ちください。\n2つ目には、ロイヤルファーストクラス限定・特別仕様のユメック「${EA_SECOND}」が入ります。\n` : "") + "パスポートがこの口座につながるのを確かめています。そのままお待ちください（1 分ほど）。\nパスポートをまだ入れていない方は、下の「パスポートをダウンロード」から入れて開いてください。開くと自動でつながります。", docs: "launch", choices: [["設置が終わった（次へ進む）", "manual!", "go"], ["サポート LINE", "support"]] },
     notyet: { say: "パスポートは、まだこの口座につながっていません。\nパスポートをまだ入れていなければ、下の「パスポートをダウンロード」から入れて開いてから、もう一度「設置が終わった（つなぐ）」を押してください。\n入れてあるのにつながらないときは「パスポートを呼び出す」を押してください（ブラウザに「開きますか？」と出たら「開く」）。", docs: "launch",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["パスポートを呼び出す", "relaunch"], ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
+      choices: [["設置が終わった（次へ進む）", "manual!", "go"], ["もう一度つなぐ", "launch"], ["パスポートを呼び出す", "relaunch"], ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     stuck: { say: "パスポートはこの口座につながっていますが、この画面が中継に入れていません。ページを再読み込み（F5）して、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "progress",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
+      choices: [["設置が終わった（次へ進む）", "manual!", "go"], ["もう一度つなぐ", "launch"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     download: { say: () => `パスポート（パソコン上の名前は DreamlandPassport）を、下のボタンからダウンロードして、手順どおりに設置してください。マニュアルも下にあります。\n設置が終わると、この画面が自動で次の案内に進みます。進まないときは「設置が終わった（つなぐ）」を押してください。${isSecondFlow() ? `\n※ 2つ目の口座です。この画面からパスポートを入れ直して開いてから、「設置が終わった（つなぐ）」を押してください。ブラウザに「開きますか？」と出たら「開く」。2つ目の口座でログインしている MT5 に、ロイヤルファーストクラス限定の特別仕様のユメック「${EA_SECOND}」が入ります（1つ目の「${EA_FIRST}」ではありません）。` : ""}`, docs: "download",
-      choices: [["設置が終わった（つなぐ）", "launch", "go"], ["ほかのもの", "start"]] },
+      choices: [["設置が終わった（次へ進む）", "manual!", "go"], ["つながったか確かめる", "launch"], ["ほかのもの", "start"]] },
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: () => `お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。${isSecondFlow() ? `\n2つ目の口座なので、載せるのはロイヤルファーストクラス限定の特別仕様のユメック「${EA_SECOND}」です（1つ目の「${EA_FIRST}」ではありません）。` : ""}\n終わると、この画面が自動で先に進みます。`, docs: "mt5steps",
-      choices: [["あとでやる（続きはこのカウンターで）", "start"]] },
+      choices: [["MT5 での操作が終わった（次へ進む）", "manual!", "go"], ["あとでやる（続きはこのカウンターで）", "start"]] },
     done: { say: () => canSecond()
         ? `口座（${tail2(members[members.length - 1].account)}）のパスポートが発行できました。お使いの MT5 とドリームランドがつながっています。\nロイヤルファーストクラスのお客様には、もうひとつ特別なご案内があります。${SECOND_SYSTEM}\n2つ目の口座を、今から設置しますか？ あとからでも、このサービスカウンター（「2つ目の口座をつなぐ」）で手続きできます。1つの口座だけでも搭乗ゲートへ進めます。${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}`
         : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : secondNote()}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}${PLAN().gate ? "\n次は搭乗ゲートで、搭乗券を受け取ってください。" : "\nお手続きは以上です。"}`,
@@ -731,7 +731,7 @@ const SCRIPT = {
     later: { say: () => `承知しました。2つ目の口座は、いつでもこのカウンターの「2つ目の口座をつなぐ」から発行できます（2つ目には、ロイヤルファーストクラス限定の特別仕様のユメック「${EA_SECOND}」をお入れします）。\nまずは1つ目の口座で、搭乗ゲートへどうぞ（搭乗口 ${PLAN().gate}）。`,
       choices: () => [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
     failed: { say: "パスポートからの応答がありません。ツールと MT5 が起動しているか確かめて、もう一度お試しください。", docs: "progress",
-      choices: [["もう一度つなぐ", "launch", "go"], ["ダウンロードからやり直す", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
+      choices: [["設置が終わった（次へ進む）", "manual!", "go"], ["もう一度つなぐ", "launch"], ["ダウンロードからやり直す", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     expired: { say: "前回のログインが切れています。口座番号をもう一度入力してください。", docs: "login",
       choices: [["ほかのもの", "start"]] },
     members: { say: () => `${PLAN().name}の、つないでいる口座です。${canSecond() ? `2つ目の口座は、まだ発行していません。\n${SECOND_SYSTEM}` : currentPlan() === "crystal" && doneMembers().length >= 2 ? `\n1つ目は「${EA_FIRST}」、2つ目はロイヤルファーストクラス限定の特別仕様「${EA_SECOND}」が入っています。` : secondNote()}`, docs: "members",
@@ -1744,6 +1744,11 @@ const SCRIPT = {
     if (to === "next") to = nextStep();
     if (to === "entry!") { plan = null; savePlan(); entryPw.set(""); renderGates(); return show("service", "connect"); }
     if (to === "later") { second = "later"; saveSecond(); return show("service", "later"); }
+    // 画面が自動で進まないとき、お客様の判断で次へ（パスポートの名乗りを待たない）
+    if (to === "manual!") {
+      if (flow.idx < 0) return show("service", "start");
+      return finishConnect();
+    }
     if (to === "reset!") {
       if (!confirm("この画面に覚えている口座とプランを消して、合言葉から最初にやり直します。\nサイトの会員や MT5 には触りません。よろしいですか？")) return;
       clearFlowTimers(); Bridge.close();
