@@ -252,7 +252,8 @@ check("ロビーは 2 つ目の手続きで slot=2 を合図に付ける", "slot
 check("2 つ目は合図を待つだけでなくパスポートを呼び出す（slot=2 を URL に載せる）",
       "memberSlot(m) === 2) issueAndLaunch()" in LOBBY)
 check("連携済みでもロビーの合図を先に取る（1 年版の置き直しを防ぐ）",
-      "take_any_claim()" in main_body)
+      "take_all_claims()" in main_body)
+check("「2つ同時に」の 2 つ目は、もう 1 つのパスポートに渡す", "hand_over_claim(" in main_body)
 
 if not SOURCES:
     print("  --   EA のソース（.mq5）が無いので省略します（配るのは .ex5 だけ）")

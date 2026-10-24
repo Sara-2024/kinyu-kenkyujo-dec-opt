@@ -592,6 +592,8 @@ let app = null;        // 受け付けた申込（受付番号・プラン・口
 let plan = null;       // 合言葉で決まったプラン（first / crystal）
 let members = [];      // つないだ（つなぐ）口座ごとの会員。{ id, token, account, name, plan, done, server }
 let second = null;     // ロイヤルの2つ目を「あとで」にしたら "later"
+let pairMode = false;  // ロイヤルで「口座を2つ同時につなぐ」を選んだか（パスポート1回で2つとも設定する）
+let currentFlowIdx = () => -1;   // いま手続き中の口座の番号（下の処理が差し替える。台詞から見る用）
 let gatePlan = null;   // いま立っている搭乗口のプラン
 let checks = {};       // 搭乗準備のチェック
 let mismatch = false;  // 口座の登録（申込）とつながった口座が一致しなかったか（台詞から見える）
@@ -684,9 +686,11 @@ const SCRIPT = {
     who: { say: () => `${PLAN().name}のお客様ですね。\n` + (currentPlan() === "crystal"
         ? (members.length >= 1 && members.length < PLAN().links
             ? `ロイヤルファーストクラスは、MT5 の口座を2つまでつなげます。次は2つ目の口座です。\n${SECOND_SYSTEM}`
-            : `ロイヤルファーストクラスは、MT5 の口座を2つまでつなげます。1つだけでも進めます。まず1つ目の口座からご案内します。\n${SECOND_SYSTEM}\n2つ目は、1つ目が済んだあと続けて、またはあとからこのサイトで手続きできます。`)
+            : `ロイヤルファーストクラスは、MT5 の口座を2つまでつなげます。\n・1つ目の口座 … ユメック「${EA_FIRST}」\n・2つ目の口座 … ロイヤルファーストクラス限定・特別仕様のユメック「${EA_SECOND}」\n2つ同時につなぐと、パスポートを1回開くだけで、2つの口座にそれぞれのユメックが入ります。1つだけつないで、2つ目はあとからでも大丈夫です。どちらにしますか？`)
         : "MT5 の口座を1つつなぎます。このまま進めましょう。"),
-      choices: () => [[!members.length ? "口座をつないでパスポートを発行する" : members.length >= PLAN().links ? "別の口座に替えてパスポートを発行する" : "次の口座をつないでパスポートを発行する", "terms", "go"], ["合言葉を入れ直す", "entry!"], ["ほかのもの", "start"]] },
+      choices: () => currentPlan() === "crystal" && !members.length && osPick !== "mac"
+        ? [["口座を2つ同時につなぐ（1つ目・2つ目をまとめて）", "pair:2", "go"], ["口座を1つだけつなぐ（2つ目はあとで）", "pair:1"], ["合言葉を入れ直す", "entry!"], ["ほかのもの", "start"]]
+        : [[!members.length ? "口座をつないでパスポートを発行する" : members.length >= PLAN().links ? "別の口座に替えてパスポートを発行する" : "次の口座をつないでパスポートを発行する", "terms", "go"], ["合言葉を入れ直す", "entry!"], ["ほかのもの", "start"]] },
     /* 口座 1 つのプラン（ファースト／プレミアム）で、別の口座番号を入れたとき。警告を読んでから替える。
        元の口座はサイト（ユメックAI）から制御できなくなる。パスポート側も、ロイヤル以外は 2 本目を足さず
        元の口座を「停止」にしてから 1 本目を替える（connect.py の second_account_allowed / stop_old_account） */
@@ -696,13 +700,15 @@ const SCRIPT = {
       choices: [["口座の登録や案内は、このまま見る", "start"], ["ロビーにもどる", "close"]] },
     terms: { say: "お手続きの前に、必ず下の注意事項をお読みください。\n2つの確認にチェックを入れると、次へ進めます。", docs: "terms",
       choices: [["ほかのもの", "start"]] },
-    signup: { say: () => `${members.length + 1}つ目の口座をつなぎます。\nMT5 の口座番号とお名前を入力してください。${currentPlan() === "crystal" && members.length === 1 ? `\n${SECOND_SYSTEM}` : ""}`, docs: "signup",
+    signup: { say: () => pairMode && currentPlan() === "crystal" && !members.length
+        ? `口座を2つ同時につなぎます。\n1つ目と2つ目の MT5 の口座番号、お名前を入力してください。\n1つ目には「${EA_FIRST}」、2つ目にはロイヤルファーストクラス限定・特別仕様の「${EA_SECOND}」が入ります。どちらの口座でも、MT5 を開いてログインしておいてください。`
+        : `${members.length + 1}つ目の口座をつなぎます。\nMT5 の口座番号とお名前を入力してください。${currentPlan() === "crystal" && members.length === 1 ? `\n${SECOND_SYSTEM}` : ""}`, docs: "signup",
       choices: [["登録済みの口座でログインする", "login"], ["ほかのもの", "start"]] },
     login: { say: "すでに登録した口座ですね。口座番号を入力してください。", docs: "login",
       choices: [["新しく登録する", "signup"], ["ほかのもの", "start"]] },
     loginpw: { say: "この口座は、以前にパスワード付きで登録されています。そのときのパスワードを入力してください。分からないときはサポート LINE へご連絡ください。", docs: "loginpw",
       choices: [["サポート LINE", "support"], ["ほかのもの", "start"]] },
-    waiting: { say: "パスポートがこの口座につながるのを確かめています。そのままお待ちください（1 分ほど）。\nパスポートをまだ入れていない方は、下の「パスポートをダウンロード」から入れて開いてください。開くと自動でつながります。", docs: "launch", choices: [] },
+    waiting: { say: () => (pairMode && members.length >= 2 && currentFlowIdx() === 1 ? `1つ目の口座はつながりました。つづけて2つ目の口座（${tail2(members[1].account)}）を確かめています。そのままお待ちください。\n2つ目には、ロイヤルファーストクラス限定・特別仕様のユメック「${EA_SECOND}」が入ります。\n` : "") + "パスポートがこの口座につながるのを確かめています。そのままお待ちください（1 分ほど）。\nパスポートをまだ入れていない方は、下の「パスポートをダウンロード」から入れて開いてください。開くと自動でつながります。", docs: "launch", choices: [] },
     notyet: { say: "パスポートは、まだこの口座につながっていません。\nパスポートをまだ入れていなければ、下の「パスポートをダウンロード」から入れて開いてから、もう一度「設置が終わった（つなぐ）」を押してください。\n入れてあるのにつながらないときは「パスポートを呼び出す」を押してください（ブラウザに「開きますか？」と出たら「開く」）。", docs: "launch",
       choices: [["設置が終わった（つなぐ）", "launch", "go"], ["パスポートを呼び出す", "relaunch"], ["ダウンロードの手順を見る", "download"], ["サポート LINE", "support"], ["ほかのもの", "start"]] },
     stuck: { say: "パスポートはこの口座につながっていますが、この画面が中継に入れていません。ページを再読み込み（F5）して、もう一度「設置が終わった（つなぐ）」を押してください。", docs: "progress",
@@ -968,11 +974,13 @@ const SCRIPT = {
       </form>`,
     signup: () => {
       const prefill = !members.length && app ? app : null;
+      const pair = pairMode && currentPlan() === "crystal" && !members.length;
       return `<form class="form" id="signup" novalidate autocomplete="off">
-        <label class="field"><span>MT5 の口座番号（ログイン ID）</span><input name="account" inputmode="numeric" pattern="[0-9]*" placeholder="例：12345678" required value="${esc(prefill && prefill.accountFull ? prefill.accountFull : "")}"></label>
+        <label class="field"><span>${pair ? `1つ目の口座番号（ログイン ID）<small>　${esc(EA_FIRST)}</small>` : "MT5 の口座番号（ログイン ID）"}</span><input name="account" inputmode="numeric" pattern="[0-9]*" placeholder="例：12345678" required value="${esc(prefill && prefill.accountFull ? prefill.accountFull : "")}"></label>
+        ${pair ? `<label class="field"><span>2つ目の口座番号（ログイン ID）<small>　ロイヤル限定・特別仕様 ${esc(EA_SECOND)}</small></span><input name="account2" inputmode="numeric" pattern="[0-9]*" placeholder="例：87654321" required></label>` : ""}
         <label class="field"><span>お名前</span><input name="name" autocomplete="name" required value="${esc(prefill ? prefill.name || "" : (lastMember() ? lastMember().name || "" : ""))}"></label>
         <p class="err" id="signup-err" aria-live="polite"></p>
-        <button class="enter" type="submit" data-submit>この口座をつなぐ <span aria-hidden="true">›</span></button>
+        <button class="enter" type="submit" data-submit>${pair ? "2つの口座をつなぐ" : "この口座をつなぐ"} <span aria-hidden="true">›</span></button>
       </form>`;
     },
     login: () => `<form class="form" id="login" novalidate autocomplete="off">
@@ -1168,6 +1176,17 @@ const SCRIPT = {
     if (members.some((m) => String(m.account) === account)) return (err.textContent = "この口座はもうつないでいます。「接続の状態を見る」からつなぎ直せます。");
     const entry = entryPw.get();
     if (!entry) { plan = null; savePlan(); return show("service", "connect"); }
+    if (pairMode && currentPlan() === "crystal" && !members.length) {
+      const account2 = normDigits(f.get("account2"));
+      if (!/^[0-9]{1,13}$/.test(account2)) return (err.textContent = "2つ目の口座番号を確かめてください。");
+      if (account2 === account) return (err.textContent = "1つ目と2つ目に同じ口座番号が入っています。別の口座を入れてください。");
+      setBusy(form, true, "2つの口座を登録しています…");
+      const i1 = await registerMember(account, name, entry);
+      if (typeof i1 !== "number") { setBusy(form, false); return i1 === "loginpw" ? show("service", "loginpw") : (err.textContent = i1); }
+      const i2 = await registerMember(account2, name, entry);
+      if (typeof i2 !== "number") { setBusy(form, false); return i2 === "loginpw" ? show("service", "loginpw") : (err.textContent = "2つ目の口座：" + i2); }
+      return startConnect(i1);
+    }
     // このプランでつなげる口座の数を超える（ファースト／プレミアムで 2 つ目）→ 警告を読んでから「替える」
     if (members.length >= PLAN().links) { pendingReplace = { account, name }; return show("service", "replace"); }
     await registerAndConnect(account, name, entry, form);
@@ -1184,6 +1203,19 @@ const SCRIPT = {
     members.length = 0; saveMembers(); flow.idx = -1;
     checks.tool = false; checks.ea = false; checks.algo = false; saveChecks(); renderReady();
     await registerAndConnect(next.account, next.name, entry, null);
+  };
+  /* 会員を作る（登録済みならその口座で入る）。成功なら members の番号、だめなら理由の文（"loginpw" はパスワード入力へ） */
+  const registerMember = async (account, name, entry) => {
+    const password = await derivedPassword(account, entry);
+    const { status, data } = await api({ action: "register", account, name, password, entry });
+    if (status === 200) return adoptMember(data.session, data.member);
+    if (data.error === "ACCOUNT_TAKEN") {
+      const again = await api({ action: "login", account, password });
+      if (again.status === 200) return adoptMember(again.data.session, again.data.member);
+      flow.retryAccount = account; return "loginpw";
+    }
+    if (data.error === "BAD_ENTRY") { plan = null; savePlan(); entryPw.set(""); show("service", "connect"); return "合言葉を入れ直してください。"; }
+    return errText(data.error);
   };
   const registerAndConnect = async (account, name, entry, form) => {
     const err = $("signup-err");
@@ -1300,6 +1332,7 @@ const SCRIPT = {
 
   /* ── 設置の流れ（サービスカウンターの中だけで進む） ── */
   let consented = false;   // このページを開いているあいだに、注意事項を読んでチェックしたか
+  currentFlowIdx = () => flow.idx;
   const flow = { idx: -1, phase: null, lines: [], note: "", mt5Index: 0, problem: "", timers: [], retryAccount: "", relaunched: false, startedAt: 0 };
   const FLOW_NODES = new Set(["waiting", "notyet", "stuck", "download", "connecting", "mt5", "failed"]);
   const clearFlowTimers = () => { flow.timers.forEach(clearTimeout); flow.timers = []; };
@@ -1337,8 +1370,11 @@ const SCRIPT = {
     setPhase("waiting");
     // 2 つ目は必ず呼び出す（slot=2）。預けた合図を待つだけだと、この PC が 2 本目を
     // 1 本目と覚えているとき 1 年版を置き直す（口座 198676996 で起きた）
-    if (mode === "launch" || memberSlot(m) === 2) issueAndLaunch();
-    if (mode !== "launch" || memberSlot(m) === 2) { handOverClaim(); keepClaimFresh(); }
+    // "verify"：「2つ同時に」の2つ目。パスポートは1つ目のときに2つ目の合図も受け取って設定済みなので、確かめるだけ
+    if (mode !== "verify") {
+      if (mode === "launch" || memberSlot(m) === 2) issueAndLaunch();
+      if (mode !== "launch" || memberSlot(m) === 2) { handOverClaim(); keepClaimFresh(); }
+    }
     verifyInstalled();
   }
 
@@ -1359,7 +1395,17 @@ const SCRIPT = {
     if (status === 401) { flow.retryAccount = String(m.account || ""); setPhase("expired"); return false; }
     if (status !== 200 || !data.token) return false;
     await postClaim(m, data.token);
+    await claimPairSecond();
     return true;
+  };
+  /* 「2つ同時に」：1つ目の手続きのあいだ、2つ目の合図も一緒に預ける。パスポートは開いたとき
+     両方を受け取り、1つ目には 1年版、2つ目には特別仕様のユメックを置く（パスポート 1 回で済む） */
+  const claimPairSecond = async () => {
+    if (!pairMode || flow.idx !== 0) return;
+    const m2 = members[1];
+    if (!m2 || m2.done) return;
+    const r = await api({ action: "connect_token", session: m2.token });
+    if (r.status === 200 && r.data.token) await postClaim(m2, r.data.token);
   };
   let claimTimer = null;
   const keepClaimFresh = () => {
@@ -1415,7 +1461,7 @@ const SCRIPT = {
       const tmp = document.createElement("a"); tmp.href = href; tmp.download = "DreamlandPassport.exe"; tmp.style.display = "none";
       document.body.appendChild(tmp); tmp.click(); tmp.remove();
       // 開いたパスポートが自分の口座番号で取りに来る合図を、この時点で預けておく
-      if (status === 200 && data.token) { await postClaim(m, data.token); keepClaimFresh(); }
+      if (status === 200 && data.token) { await postClaim(m, data.token); await claimPairSecond(); keepClaimFresh(); }
     } else if (m) {
       await handOverClaim(); keepClaimFresh();
     }
@@ -1498,6 +1544,10 @@ const SCRIPT = {
     checks.tool = true; checks.ea = true; checks.algo = true; saveChecks(); renderReady();
     clearFlowTimers();
     flow.phase = "done";
+    // 「2つ同時に」：1つ目が済んだら、そのまま2つ目の確認へ（パスポートはもう2つ目も設定している）
+    if (pairMode && flow.idx === 0 && members[1] && !members[1].done) {
+      return startConnect(1, "verify");
+    }
     show("service", "done");
   }
 
@@ -1687,6 +1737,7 @@ const SCRIPT = {
     if (to === "next") to = nextStep();
     if (to === "entry!") { plan = null; savePlan(); entryPw.set(""); renderGates(); return show("service", "connect"); }
     if (to === "later") { second = "later"; saveSecond(); return show("service", "later"); }
+    if (to === "pair:1" || to === "pair:2") { pairMode = to === "pair:2"; return show("service", "terms"); }
     if (to === "replace!") return void doReplace();
     // 「設置が終わった（つなぐ）」：つながっているかを確かめて、次へ（呼び出さない）
     if (to === "launch") { const i = flow.idx >= 0 ? flow.idx : members.length - 1; return i >= 0 ? startConnect(i, "wait") : show("service", "connect"); }

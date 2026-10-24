@@ -703,10 +703,18 @@ _CLAIM_ERR_LOGGED = False
 
 def relay_claim(account: str) -> str:
     """中継に預けられた合図（この口座番号あて）を取りに行く。無ければ空。"""
+    token, slot = relay_claim_with_slot(account)
+    if token:
+        remember_slot(slot)
+    return token
+
+
+def relay_claim_with_slot(account: str) -> tuple[str, int]:
+    """relay_claim と同じだが、何番目の口座か（1 / 2）も返す。覚えはしない。"""
     url = relay_url()
     origin = "http://127.0.0.1:8080" if relay_is_local(url) else relay_http_origin(url)
     if not origin or not account:
-        return ""
+        return "", 0
     try:
         with urllib.request.urlopen(f"{origin}/claim?account={urllib.parse.quote(account)}", timeout=6) as res:
             data = json.loads(res.read().decode("utf-8", errors="replace"))
@@ -715,12 +723,15 @@ def relay_claim(account: str) -> str:
         if not _CLAIM_ERR_LOGGED:
             _CLAIM_ERR_LOGGED = True
             log(f"中継に合図を取りに行けません: {type(exc).__name__} {getattr(exc, 'reason', exc)}")
-        return ""
+        return "", 0, 0
     token = str(data.get("token") or "") if isinstance(data, dict) and data.get("ok") else ""
     if TOKEN_RE.match(token) and isinstance(data, dict):
-        remember_slot(data.get("slot"))
-        return token
-    return ""
+        try:
+            slot = int(data.get("slot") or 0)
+        except (TypeError, ValueError):
+            slot = 0
+        return token, (slot if slot in (1, 2) else 0)
+    return "", 0
 
 
 def logged_in_accounts() -> list[str]:
@@ -742,6 +753,35 @@ def logged_in_accounts() -> list[str]:
         except Exception as exc:  # noqa: BLE001
             log(f"ログイン中の MT5 を読めませんでした: {exc}")
     return accounts
+
+
+def take_all_claims() -> list[tuple[str, str, int]]:
+    """ログイン中の MT5 の口座あての合図をすべて取る。[(合図, 口座番号, 何番目)]。1 つ目を先に並べる。
+
+    ロイヤルファーストクラスで「口座を 2 つ同時に」を選ぶと、ロビーは 1 つ目と 2 つ目の合図を
+    両方預ける。パスポート 1 回で両方つなぐために、まとめて取る。
+    """
+    out: list[tuple[str, str, int]] = []
+    for acct in logged_in_accounts():
+        token, slot = relay_claim_with_slot(acct)
+        if token:
+            log(f"ロビーからの合図を受け取りました（口座 …{acct[-4:]}{'・2つ目' if slot == 2 else ''}）")
+            out.append((token, acct, slot))
+    out.sort(key=lambda c: 1 if c[2] == 2 else 0)
+    return out
+
+
+def hand_over_claim(token: str, account: str, slot: int) -> None:
+    """取った合図を、パスポートをもう 1 つ起こして渡す（2 つ目の口座をつなぐ）。
+
+    1 つ目の画面が開いていても、2 つ目の口座の合図なら二重起動防止を通り抜けて connect_slot へ進む。
+    """
+    url = f"{PROTOCOL}://connect?token={token}&account={account}" + (f"&slot={slot}" if slot in (1, 2) else "")
+    log(f"口座 …{account[-4:]} の手続きを、もう 1 つのパスポートに渡します")
+    if FROZEN:
+        spawn_hidden([sys.executable, url], cwd=str(CONFIG_DIR))
+    else:
+        spawn_hidden([sys.executable, str(ROOT / "connect.py"), url], cwd=str(ROOT))
 
 
 def take_any_claim() -> str:
@@ -777,23 +817,19 @@ def wait_for_link() -> int:
         accounts = logged_in_accounts()
         if not accounts:
             log("ログイン中の MT5 が見つからないので、合図はまだ取りに行けません（MT5 にログインしてください）")
-        for acct in accounts:
-            token = relay_claim(acct)
-            if token:
-                log(f"合図を受け取りました（口座 …{acct[-4:]}）。連携します")
-                # 初回の設定の窓が開いたままだと、二重起動の防止に当たって何もできない。閉じるまで待つ
-                for _ in range(360):
-                    if not setup_window_open():
-                        break
-                    time.sleep(5)
-                url = f"{PROTOCOL}://connect?token={token}&account={acct}"
-                if LAST_REDEEMED_SLOT in (1, 2):
-                    url += f"&slot={LAST_REDEEMED_SLOT}"
-                if FROZEN:
-                    spawn_hidden([sys.executable, url], cwd=str(CONFIG_DIR))
-                else:
-                    spawn_hidden([sys.executable, str(ROOT / "connect.py"), url], cwd=str(ROOT))
-                return 0
+        claims = take_all_claims() if accounts else []
+        if claims:
+            # 初回の設定の窓が開いたままだと、二重起動の防止に当たって何もできない。閉じるまで待つ
+            for _ in range(360):
+                if not setup_window_open():
+                    break
+                time.sleep(5)
+            # 1 つ目から順に渡す（「口座を 2 つ同時に」なら 2 つ目も。2 つ目は 1 つ目の画面と並んで動ける）
+            for i, (tok, acct, slot) in enumerate(claims):
+                if i:
+                    time.sleep(3)
+                hand_over_claim(tok, acct, slot)
+            return 0
         time.sleep(LINK_POLL_SEC)
     log("合図は来なかったので、待つのをやめます")
     return 0
@@ -2776,7 +2812,9 @@ def main() -> int:
         prim = primary_account()
         second_token, second_acct = "", ""
         url_acct = account_from_args(raw_args)
-        if prim and connect_token and url_acct and url_acct != prim:
+        # 「2つ同時に」では 1 つ目の連携が終わる前に 2 つ目が来る（1 本目の口座がまだ記録に無い）。
+        # サイトが 2 つ目と言っている（slot=2）なら、それだけで進めてよい
+        if connect_token and url_acct and (slot_from_args(raw_args) == 2 or (prim and url_acct != prim)):
             second_token, second_acct = connect_token, url_acct
         elif prim and FROZEN and not connect_token and os.name == "nt":
             for acct in logged_in_accounts():
@@ -2813,10 +2851,15 @@ def main() -> int:
     # ロビーが預けた合図があれば、ファイル名の合図よりそちらを使う（slot=2 が付いている）。
     # 連携済みの PC で exe を開いただけだと connect_all が 1 年版を置き直すので、先に取る。
     # aitrader:// で呼ばれたときは URL の token / slot を使う（上書きしない）。
+    # 「口座を 2 つ同時に」なら合図が 2 つ来ている。1 つ目をここで、2 つ目はもう 1 つのパスポートに渡す
     if FROZEN and "--startup" not in args and not account_from_args(raw_args):
-        claimed = take_any_claim()
-        if claimed:
-            connect_token = claimed
+        claims = take_all_claims()
+        if claims:
+            first_token, _first_acct, first_slot = claims[0]
+            connect_token = first_token
+            remember_slot(first_slot)
+            for tok, acct, slot in claims[1:]:
+                hand_over_claim(tok, acct, slot)
 
     # サイトの「MT5と連携する」から呼ばれたとき。
     # 合図が正しいときだけ連携する（アプリ単体では連携できない）。
