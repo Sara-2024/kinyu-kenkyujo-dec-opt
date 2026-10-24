@@ -2770,6 +2770,36 @@ def main() -> int:
     # 同じアプリがもう開いていれば、そちらに任せる（二つ同時に置きに行かない）。
     # 合図（使い捨て）を確かめる前に見る。あとで見ると、合図だけ消えて何も起きない。
     if not hold_single_instance():
+        # 2 つ目の口座（ロイヤル）あての合図なら、1 つ目の画面が開いたままでも進める。
+        # 別の MT5・別の設定（accounts/<口座番号>/）・別のブリッジなので、1 つ目と取り合わない。
+        # ここで止めると「すでにパスポートを開いています」で 2 つ目がつなげなかった（実機で起きた）
+        prim = primary_account()
+        second_token, second_acct = "", ""
+        url_acct = account_from_args(raw_args)
+        if prim and connect_token and url_acct and url_acct != prim:
+            second_token, second_acct = connect_token, url_acct
+        elif prim and FROZEN and not connect_token and os.name == "nt":
+            for acct in logged_in_accounts():
+                if acct != prim:
+                    tok = relay_claim(acct)
+                    if tok:
+                        second_token, second_acct = tok, acct
+                        break
+        if second_token:
+            log(f"1 つ目の画面は開いたままだが、2 つ目の口座（…{second_acct[-4:]}）の合図なので進める")
+            room = redeem_connect_token(second_token)
+            if not room:
+                return show_failure(
+                    "サイトとつなげませんでした。",
+                    "サイトの画面に戻って、もう一度「設置が終わった（つなぐ）」を押してください。",
+                )
+            if second_account_allowed():
+                return connect_slot(room, second_acct)
+            installer_ui.message_box(
+                "パスポートの画面が開いたままです。\n\n"
+                "その画面を閉じてから、サイトの「設置が終わった（つなぐ）」をもう一度押してください。"
+            )
+            return 0
         log("すでに開いているので、こちらは何もしない")
         if connect_token:
             installer_ui.message_box(
