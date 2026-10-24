@@ -660,7 +660,7 @@ const SCRIPT = {
         ? `サービスカウンターのソラです。\n受付番号 ${app.no} で、MT5 口座（下2桁 ${tail2(app.accountFull || app.account)}）の登録を承っています。次は、パスポートの発行です。`
         : "サービスカウンターのソラです。\n口座開設のご案内、MT5 口座の登録、パスポートの発行を承ります。口座はもうお持ちですか？",
       choices: () => members.length
-        ? [["接続の状態を見る・つなぎ直す", "members", "go"], ...(canSecond() ? [["2つ目の口座をつなぐ", "terms"]] : []), ["口座の登録をし直す（申込の修正）", "register"], ["設置マニュアル", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
+        ? [["接続の状態を見る・つなぎ直す", "members", "go"], ...(canSecond() ? [["2つ目の口座をつなぐ", "terms"]] : []), ["最初からやり直す（この画面の記録を消す）", "reset!"], ["口座の登録をし直す（申込の修正）", "register"], ["設置マニュアル", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
         : app
         ? [["パスポートの発行（MT5 とつなぐ）", "connect", "go"], ["登録し直す（プランの変更など）", "register"], ["設置マニュアル", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]]
         : [["まだ持っていない（口座開設の案内）", "account"], ["持っている（MT5 口座を登録する）", "register", "go"], ["パスポートの発行（MT5 とつなぐ）", "connect"], ["設置マニュアル", "os"], ["サポート LINE", "support"], ["ありがとう", "close"]] },
@@ -702,6 +702,8 @@ const SCRIPT = {
       choices: [["ほかのもの", "start"]] },
     signup: { say: () => pairMode && currentPlan() === "crystal" && !members.length
         ? `口座を2つ同時につなぎます。\n1つ目と2つ目の MT5 の口座番号、お名前を入力してください。\n1つ目には「${EA_FIRST}」、2つ目にはロイヤルファーストクラス限定・特別仕様の「${EA_SECOND}」が入ります。どちらの口座でも、MT5 を開いてログインしておいてください。`
+        : members.length >= PLAN().links
+        ? `${PLAN().name}でつなげる口座は ${PLAN().links} つまでです。いまの口座を別の口座に替えます。\nMT5 の口座番号とお名前を入力してください。`
         : `${members.length + 1}つ目の口座をつなぎます。\nMT5 の口座番号とお名前を入力してください。${currentPlan() === "crystal" && members.length === 1 ? `\n${SECOND_SYSTEM}` : ""}`, docs: "signup",
       choices: [["登録済みの口座でログインする", "login"], ["ほかのもの", "start"]] },
     login: { say: "すでに登録した口座ですね。口座番号を入力してください。", docs: "login",
@@ -1737,6 +1739,15 @@ const SCRIPT = {
     if (to === "next") to = nextStep();
     if (to === "entry!") { plan = null; savePlan(); entryPw.set(""); renderGates(); return show("service", "connect"); }
     if (to === "later") { second = "later"; saveSecond(); return show("service", "later"); }
+    if (to === "reset!") {
+      if (!confirm("この画面に覚えている口座とプランを消して、合言葉から最初にやり直します。\nサイトの会員や MT5 には触りません。よろしいですか？")) return;
+      clearFlowTimers(); Bridge.close();
+      members.length = 0; saveMembers(); flow.idx = -1;
+      second = null; saveSecond(); pairMode = false;
+      plan = null; savePlan(); entryPw.set("");
+      checks.tool = false; checks.ea = false; checks.algo = false; saveChecks(); renderReady(); renderGates();
+      return show("service", "connect");
+    }
     if (to === "pair:1" || to === "pair:2") { pairMode = to === "pair:2"; return show("service", "terms"); }
     if (to === "replace!") return void doReplace();
     // 「設置が終わった（つなぐ）」：つながっているかを確かめて、次へ（呼び出さない）
