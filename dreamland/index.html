@@ -606,6 +606,10 @@ const needSecond = () => currentPlan() === "crystal" && doneMembers().length < 2
    Mac では導線を出さず、「Windows のパソコンで」と案内する。osPick は下の osNow と同じ値 */
 let osPick = null;
 const canSecond = () => needSecond() && osPick !== "mac";
+/* ロイヤルで、2つ目を登録したのにまだつながっていない（「2つ同時に」の途中など） */
+const secondPending = () => currentPlan() === "crystal" && members.length >= 2 && doneMembers().length < 2;
+/* 搭乗ゲートへ案内してよいか。ロイヤルは 2 つとも済むまで案内しない（「あとで」を自分で選んだときだけ 1 つで可） */
+const gateReady = () => !!PLAN().gate && (currentPlan() !== "crystal" || doneMembers().length >= 2 || (second === "later" && !secondPending()));
 const secondNote = () => (needSecond() && !canSecond() ? "\n2つ目の口座の手続きは、Windows のパソコンからこのサイトで行ってください（Mac では 1 つの口座だけつなげます）。" : "");
 /* ロイヤルファーストクラスの 2 つ目の口座に入るのは、1 つ目とは別のシステム。
    パスポートが口座ごとに置き分ける（2 つ目だけ安定低月利ver）ので、お客様がすることは
@@ -722,12 +726,16 @@ const SCRIPT = {
     connecting: { say: "MT5 の状態を読み取っています…", docs: "progress", choices: [] },
     mt5: { say: () => `お使いの MT5 とつながりました。あと少しだけ、MT5 の画面でお願いしたい操作があります。一度きりで、次からは要りません。${isSecondFlow() ? `\n2つ目の口座なので、載せるのはロイヤルファーストクラス限定の特別仕様のユメック「${EA_SECOND}」です（1つ目の「${EA_FIRST}」ではありません）。` : ""}\n終わると、この画面が自動で先に進みます。`, docs: "mt5steps",
       choices: [["MT5 での操作が終わった（次へ進む）", "manual!", "go"], ["あとでやる（続きはこのカウンターで）", "start"]] },
-    done: { say: () => canSecond()
+    done: { say: () => secondPending()
+        ? `口座（${tail2(members.find((m) => m.done) ? members.find((m) => m.done).account : members[0].account)}）の接続が済みました。\nつづけて2つ目の口座（${tail2((members.find((m) => !m.done) || members[1]).account)}）をつなぎます。2つ目には、ロイヤルファーストクラス限定・特別仕様のユメック「${EA_SECOND}」が入ります。\n2つ目の口座で MT5 にログインしたまま、「2つ目の口座をつなぐ」を押してください。`
+        : canSecond()
         ? `口座（${tail2(members[members.length - 1].account)}）のパスポートが発行できました。お使いの MT5 とドリームランドがつながっています。\nロイヤルファーストクラスのお客様には、もうひとつ特別なご案内があります。${SECOND_SYSTEM}\n2つ目の口座を、今から設置しますか？ あとからでも、このサービスカウンター（「2つ目の口座をつなぐ」）で手続きできます。1つの口座だけでも搭乗ゲートへ進めます。${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}`
-        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : secondNote()}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}${PLAN().gate ? "\n次は搭乗ゲートで、搭乗券を受け取ってください。" : "\nお手続きは以上です。"}`,
-      choices: () => canSecond()
-        ? [["2つ目の口座を今から設置する", "terms", "go"], [`あとで設置する（まず搭乗ゲートへ・搭乗口 ${PLAN().gate}）`, "later"], ["ほかのもの", "start"]]
-        : PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] : [["ほかのもの", "start"]] },
+        : `パスポートの発行が完了しました。お使いの MT5 とドリームランドがつながっています。${currentPlan() === "crystal" && doneMembers().length >= 2 ? "\n2つの口座とも、つながりました。" : secondNote()}${mismatch ? "\n※ 口座の登録で記入した口座と、つながっている口座が一致しないようです。サービスカウンターの「口座の登録をし直す」で直せます。" : ""}${gateReady() ? "\n次は搭乗ゲートで、搭乗券を受け取ってください。" : PLAN().gate ? "" : "\nお手続きは以上です。"}`,
+      choices: () => secondPending()
+        ? [["2つ目の口座をつなぐ", "reconnect:" + Math.max(0, members.findIndex((m) => !m.done)), "go"], ["ほかのもの", "start"]]
+        : canSecond()
+        ? [["2つ目の口座を今から設置する", "terms", "go"], ["2つ目はあとで設置する", "later"], ["ほかのもの", "start"]]
+        : gateReady() ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] : [["ほかのもの", "start"]] },
     later: { say: () => `承知しました。2つ目の口座は、いつでもこのカウンターの「2つ目の口座をつなぐ」から発行できます（2つ目には、ロイヤルファーストクラス限定の特別仕様のユメック「${EA_SECOND}」をお入れします）。\nまずは1つ目の口座で、搭乗ゲートへどうぞ（搭乗口 ${PLAN().gate}）。`,
       choices: () => [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), "go"], ["ほかのもの", "start"]] },
     failed: { say: "パスポートからの応答がありません。ツールと MT5 が起動しているか確かめて、もう一度お試しください。", docs: "progress",
@@ -735,16 +743,18 @@ const SCRIPT = {
     expired: { say: "前回のログインが切れています。口座番号をもう一度入力してください。", docs: "login",
       choices: [["ほかのもの", "start"]] },
     members: { say: () => `${PLAN().name}の、つないでいる口座です。${canSecond() ? `2つ目の口座は、まだ発行していません。\n${SECOND_SYSTEM}` : currentPlan() === "crystal" && doneMembers().length >= 2 ? `\n1つ目は「${EA_FIRST}」、2つ目はロイヤルファーストクラス限定の特別仕様「${EA_SECOND}」が入っています。` : secondNote()}`, docs: "members",
-      choices: () => [...(canSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), ...(PLAN().gate ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""]] : []), ["ほかのもの", "start"]] },
+      choices: () => [...(canSecond() ? [["2つ目の口座をつなぐ", "terms", "go"]] : []), ...(secondPending() ? [["2つ目の口座をつなぐ", "reconnect:" + Math.max(0, members.findIndex((m) => !m.done)), "go"]] : []), ...(gateReady() ? [[`搭乗ゲートへ（搭乗口 ${PLAN().gate}）`, "door:" + currentPlan(), doneMembers().length ? "go" : ""]] : []), ["ほかのもの", "start"]] },
   },
   gate: {
     start: { say: () => !planKey()
         ? "搭乗係のミナトです。\nドリームランド行きのご案内です。搭乗口はご契約のプランごとに分かれていますので、先にご契約時の「合言葉」を入力してください。"
+        : secondPending()
+        ? `搭乗係のミナトです。\n${PLAN().name}のお客様ですね。2つ目の口座の接続がまだ済んでいません。先にサービスカウンターで2つ目の口座をつないでから、こちらへお越しください。`
         : !PLAN().gate
         ? `搭乗係のミナトです。\n${PLAN().name}のお客様ですね。${PLAN().name}は、ドリームランドへの渡航の対象ではありません。お手続き（口座の登録・パスポートの発行）はサービスカウンターでどうぞ。`
         : `搭乗係のミナトです。\nドリームランド行きのご案内です。${PLAN().name}のお客様の搭乗口は ${PLAN().gate} 番です。搭乗口を押してお進みください。`,
-      docs: () => (!planKey() ? "entry" : "gates"),
-      choices: () => (!planKey() ? [["合言葉がわからない（サポート LINE）", "support"], ["ロビーにもどる", "close"]] : [["ロビーにもどる", "close"]]) },
+      docs: () => (!planKey() ? "entry" : secondPending() ? null : "gates"),
+      choices: () => (!planKey() ? [["合言葉がわからない（サポート LINE）", "support"], ["ロビーにもどる", "close"]] : secondPending() ? [["サービスカウンターで2つ目をつなぐ", "@service:members", "go"], ["ロビーにもどる", "close"]] : [["ロビーにもどる", "close"]]) },
     door: { say: () => !PLANS[gatePlan].gate
         ? `${PLANS[gatePlan].name}には搭乗口がありません。ドリームランドへの渡航の対象ではないプランです。`
         : `ここは搭乗口 ${PLANS[gatePlan].gate}、${PLANS[gatePlan].name}の搭乗口です。\n出発の前に、準備ができているか一緒に確かめましょう。済んだものにチェックを入れてください。`, docs: () => (PLANS[gatePlan].gate ? "checks" : null),
