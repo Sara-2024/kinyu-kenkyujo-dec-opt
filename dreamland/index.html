@@ -78,13 +78,13 @@ a{color:inherit}
 .nav button{display:flex;align-items:center;gap:7px;height:33px;padding:0 18px;border:0;border-radius:22px;background:transparent;color:#61667c;font-size:13px;letter-spacing:.04em;white-space:nowrap}
 .nav button.is-active{color:#f9ffff;background:var(--slate);box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),0 2px 5px rgba(71,101,120,.2)}
 .nav button:hover:not(.is-active){color:var(--lav-text)}
-.top__end{margin-left:auto;display:flex;align-items:center;gap:10px}
+.top__end{margin-left:auto;display:flex;align-items:center;gap:10px;position:relative}
 .ready{display:flex;align-items:center;gap:10px;height:43px;padding:0 18px 0 14px;border-radius:30px;border:1px solid rgba(255,247,236,.8);
   background:rgba(248,249,241,.84);color:#61667c;font-size:13px;letter-spacing:.04em;white-space:nowrap;
   -webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px);box-shadow:0 3px 18px rgba(85,109,134,.13);transition:transform .2s}
 .ready:hover{transform:translateY(-1px)}
 .ready b{color:var(--lav-text);font-weight:600}
-.accts{display:flex;align-items:center;gap:8px;height:43px;padding:0 14px;border-radius:30px;border:1px solid rgba(255,247,236,.8);
+.accts{position:absolute;top:calc(100% + 8px);right:0;display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:30px;border:1px solid rgba(255,247,236,.8);
   background:rgba(248,249,241,.84);color:#61667c;font-size:13px;letter-spacing:.02em;white-space:nowrap;cursor:pointer;
   -webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px);box-shadow:0 3px 18px rgba(85,109,134,.13);transition:transform .2s}
 .accts:hover{transform:translateY(-1px)}
@@ -475,8 +475,8 @@ a.enter{text-decoration:none}
       <button type="button" data-spot="gate">搭乗ゲート</button>
     </nav>
     <div class="top__end">
-      <button class="accts" type="button" id="accts" hidden aria-label="つないでいる口座の状況をひらく"></button>
       <button class="ready" type="button" id="ready" aria-label="搭乗準備の状況をひらく"><span class="lbl">搭乗準備</span><span class="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></span><b id="ready-count">0/4</b></button>
+      <button class="accts" type="button" id="accts" hidden aria-label="つないでいる口座の状況をひらく"></button>
     </div>
   </header>
 
