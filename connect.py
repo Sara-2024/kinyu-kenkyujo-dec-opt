@@ -1179,6 +1179,7 @@ def start_slot_bridge(slot: dict) -> None:
     env = bridge_env(None)
     env["BRIDGE_ID"] = str(slot.get("room") or "")
     env["BRIDGE_SLOT"] = account
+    env["BRIDGE_ACCOUNT"] = account
     # この口座が載せる EA（安定低月利ver）。ブリッジはこれと違う EA が載っていたら「○○を載せてください」と出す
     env["BRIDGE_EA_NAME"] = str(slot.get("ea") or GROWTH_EA_NAME)
     env["LOG_FILE"] = str(slot_dir(account) / "bridge.log")
@@ -1869,6 +1870,13 @@ def bridge_env(session: dict | None) -> dict[str, str]:
         exe = resolve_terminal_exe(session)
         if exe is not None:
             env["MT5_PATH"] = str(exe)
+    # このブリッジが担当する口座番号。MT5 が同じ PC に何台もあると、別の MT5 に繋がって
+    # 別の口座の EA を動かしてしまう（1 つ目の操作で 2 つ目の口座が稼働／停止した）。ブリッジはこれと照らし合わせる
+    acct = str((session or {}).get("account") or "").strip() or primary_account()
+    if acct.isdigit():
+        env["BRIDGE_ACCOUNT"] = acct
+    else:
+        env.pop("BRIDGE_ACCOUNT", None)
     return env
 
 

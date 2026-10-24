@@ -117,6 +117,9 @@ LOCK_NAMES = ("aitrader-bridge.lock", "trelab-bridge.lock")
 # 2 本目以降は BRIDGE_SLOT=<口座番号> で起動する。ロック・設定・指令ファイルを口座番号で分け、
 # 1 本目（SLOT 無し＝これまでどおり）とは互いに干渉しない。
 SLOT = os.environ.get("BRIDGE_SLOT", "").strip()
+# このブリッジが担当する口座番号（接続ツールが渡す。追加口座は SLOT と同じ）。
+# 繋いだ MT5 の口座がこれと違えば、担当の MT5 を探して繋ぎ直す。指令も担当の口座あてにしか書かない
+OWN_ACCOUNT = os.environ.get("BRIDGE_ACCOUNT", "").strip() or SLOT
 if not SLOT.isdigit():
     SLOT = ""
 # この口座のチャートに載っているべき EA の名前。1 本目は配っている EA（EA_NAMES[0]）、
@@ -597,6 +600,24 @@ def setup_logging(cfg: Config) -> None:
 #   MetaTrader5 は同期APIなので、専用スレッド1本に閉じ込めて
 #   イベントループからは run_in_executor 経由でのみ触る。
 # ============================================================
+def _terminal_exes() -> list[Path]:
+    """この PC の MT5（terminal64.exe）を全部。担当の口座の MT5 を探すのに使う。"""
+    out: list[Path] = []
+    try:
+        from mt5_terminal import iter_terminal_data_dirs, terminal_dir_from_data_path
+    except Exception:  # noqa: BLE001
+        return out
+    try:
+        for data_dir in iter_terminal_data_dirs():
+            folder = terminal_dir_from_data_path(data_dir)
+            exe = folder / "terminal64.exe" if folder is not None else None
+            if exe is not None and exe.is_file() and exe not in out:
+                out.append(exe)
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
 def _attach_to(exe: Path, timeout_ms: int) -> dict[str, Any] | None:
     """名指しした MT5（terminal64.exe）に繋ぐ。ログインしていなければ None。
 
@@ -647,6 +668,27 @@ class MT5Controller:
 
     # ---------- 初期化 ----------
     def _initialize_blocking(self) -> bool:
+        ok = self._initialize_any_blocking()
+        if not ok or not OWN_ACCOUNT:
+            return ok
+        if self._login() == OWN_ACCOUNT:
+            return True
+        # 担当と違う口座の MT5 に繋がった。担当の口座でログインしている MT5 を探して繋ぎ直す
+        log.warning("担当の口座 …%s ではない MT5（口座 …%s）に繋がりました。担当の MT5 を探します",
+                    OWN_ACCOUNT[-4:], (self._login() or "?")[-4:])
+        for exe in _terminal_exes():
+            session = _attach_to(exe, self.cfg.mt5_timeout)
+            if session and str(session.get("account") or "") == OWN_ACCOUNT:
+                log.info("担当の MT5 に繋ぎ直しました: 口座 …%s  %s", OWN_ACCOUNT[-4:], exe)
+                return True
+        try:
+            mt5.shutdown()
+        except Exception:  # noqa: BLE001
+            pass
+        log.error("担当の口座 …%s でログインしている MT5 が見つかりません（別の口座は操作しません）", OWN_ACCOUNT[-4:])
+        return False
+
+    def _initialize_any_blocking(self) -> bool:
         if mt5 is None:
             raise RuntimeError("MetaTrader5 パッケージが見つかりません（Windows + 64bit Python が必要です）")
 
@@ -837,6 +879,10 @@ class MT5Controller:
         # 同じ PC に追加口座（別の MT5）があっても、EA が別口座の指令を読むことがない
         if not SLOT:
             login = self._login()
+            if OWN_ACCOUNT and login and login != OWN_ACCOUNT:
+                # 別の口座の MT5 に繋がっているときは、その口座あてには書かない（別の口座の EA が動いてしまう）
+                log.warning("繋いでいる口座 …%s は担当（…%s）と違うので、口座番号付きの指令は書きません", login[-4:], OWN_ACCOUNT[-4:])
+                login = ""
             if login:
                 try:
                     mirror = path.with_name(f"trelab_gate_{login}.ini")
