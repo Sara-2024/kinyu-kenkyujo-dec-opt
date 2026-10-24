@@ -591,7 +591,7 @@ class PickUI(FakeUI):
         self.picks = list(picks)
         self.pick_calls = 0
 
-    def choose_terminal(self, items):
+    def choose_terminal(self, items, heading=""):
         self.pick_calls += 1
         return self.picks.pop(0) if self.picks else None
 
