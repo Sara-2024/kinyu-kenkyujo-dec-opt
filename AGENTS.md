@@ -199,6 +199,9 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - ブリッジは MT5 が閉じているあいだ `MT5_CLOSED_POLL_SEC`（5 秒）ごとに「開かれたか」だけを見て待ち、開いてログインしたらつながる。
   `connect_all` も MT5 を起動しない（連携済みならブリッジだけ先に動かす）。`launch_mt5` を呼んでよいのは、初回の設定で
   お客様が「開き直す」を選んだときだけ（`restart_mt5`）。initialize を新しく呼ぶときは、この確認を必ず通すこと。
+- **Windows の実機の試験は GitHub の Windows マシンで走る**（`.github/workflows/test-windows.yml` → `bridge/tests/windows_mt5_test.py`）。
+  偽の MT5（名前を変えた ping.exe）で「閉じているあいだ initialize を呼ばない・開いたらつながる」を、本物の MT5 を黙って入れて
+  「素の initialize は閉じた MT5 を起こす／直した繋ぎ方は起こさない」を確かめる。Mac の `npm test` では省かれる。
 
 ## ドリームランド・パスポート（お客様に配る接続ツール。旧称 MT5 Automatic）
 

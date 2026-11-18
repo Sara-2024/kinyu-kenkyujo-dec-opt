@@ -38,6 +38,7 @@ TESTS=(
   "中継の部屋分け・会員の確認（通し試験）|node server/tests/relay_test.mjs"
   "サブスク版：利用許可を中継が配る・承認中でなければ稼働を断る|node server/tests/subscription_test.mjs"
   "サブスク版の利用許可・閉じた MT5 を勝手に開かない|python3 bridge/tests/subscription_mt5_test.py"
+  "Windows の実機で：閉じた MT5 を開かない・開いたらつながる（Mac では省く）|python3 bridge/tests/windows_mt5_test.py"
   "判定の突き合わせ道具（通し試験）|node --experimental-strip-types tools/tests/compare_risk_models_test.mjs"
 )
 
