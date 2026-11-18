@@ -183,7 +183,7 @@ check("停止したら期限 0 を書く（EA は新規を止める）", ctl2._l
 mig = (ROOT / "supabase" / "migrations" / "20261118_subscription.sql").read_text(encoding="utf-8")
 check("DB の署名は 'YMKSUB|口座|期限|鍵' の sha256 先頭 12 桁",
       "'YMKSUB|' || p_account::text || '|' || p_until::text || '|' || s.secret" in mig and "substr(encode(" in mig and ", 1, 12)" in mig)
-ea_src_path = BRIDGE / "subscription" / "Yumekku【サブスク版】.mq5"
+ea_src_path = BRIDGE / "subscription" / "Yumekku【サブスク版】ver1.1.mq5"
 if ea_src_path.is_file():   # ソースはこの Mac にしか無い（.gitignore）
     ea = ea_src_path.read_text(encoding="utf-8")
     check("EA の署名も同じ文字列", '"YMKSUB|" + IntegerToString(account) + "|" + IntegerToString(until) + "|" + YMK_SUB_SECRET' in ea)
@@ -207,7 +207,7 @@ sfa = connect_src[connect_src.index("def source_for_account(") :]
 sfa = sfa[: sfa.index("\ndef ")]
 check("サブスクの判定がいちばん先", sfa.index("is_subscription()") < sfa.index("is_second_account("))
 check("合図の返事のプランを覚える", "remember_subscription()" in connect_src[connect_src.index("LAST_REDEEMED_PLAN = str(data.get"):][:400])
-ex5 = BRIDGE / "subscription" / "Yumekku【サブスク版】.ex5"
+ex5 = BRIDGE / "subscription" / "Yumekku【サブスク版】ver1.1.ex5"
 check("配布物（.ex5）がある", ex5.is_file())
 
 # ── 8) サブスクの名前で配ったときは「ドリームランド・パスポート」と見せない ──

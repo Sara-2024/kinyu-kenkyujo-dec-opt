@@ -392,6 +392,10 @@ PyInstaller の `--name` と `public/download/` の名前だけ変え、保存�
   （`bridge/mt5_detect.py` が AppData のデータフォルダを数えるだけ）。
   選択画面は MT5 が1台でも出す（口座番号を見て「どこに入れるか」を確かめてもらう）。
   画面を出せないときだけ、最後に使った MT5 を自動で選ぶ。
+- **EA の名前は 2026-11-18 に ver1.1 を付けた（Windows）。** 1 年版は `YumekkuEA-1年版-ver1.1`（v1.31。M1・M30・H1 の 3 軸）、
+  サブスク版は `Yumekku【サブスク版】ver1.1`。名前の唯一の定義は `mt5_terminal.EA_NAMES` / `SUB_EA_NAME`。前の名前は `OLD_EA_NAMES` で片づくので、
+  使っているお客様は新しい接続ツールを開いたあと、新しい名前の EA をチャートに載せ直す（マジックは同じなので建玉は引き継ぐ）。
+  **Mac 用（`bridge/mac/`）は中身が v1.20 のまま、名前も `YumekkuEA-1年版` のまま**（Mac に 3 軸を移すのは別の作業）。
 - **EA の置き場と名前は、軽々しく変えない。** いまは `MQL5/Experts/YumekkuEA-1年版.ex5`
   （Windows・Mac とも同じ名前。2026-10-14 に `YumekkuEA_win` / `YumekkuEA_mac` から改名）。
   変えると、すでに使っているお客様はチャートに新しい名前の EA を載せ直すことになる

@@ -97,6 +97,9 @@ EA_FILES = (f"{EA_NAME}{ea_manager.EA_SOURCE_SUFFIX}",)
 # 以前に配っていたもの。1つに絞ったので、見つけたら片づける。
 # 残っていると同じ指令ファイルを二重に読み書きして紛らわしい。
 OLD_EA_NAMES = (
+    # 2026-11-18 に名前へ ver1.1 を付けた（Windows）。前の名前は片づける（Mac は片づけない＝ connect_mac）
+    "YumekkuEA-1年版",
+    "Yumekku【サブスク版】",
     "TrelabEA",
     "TrelabGate",
     "SiteTestEA",

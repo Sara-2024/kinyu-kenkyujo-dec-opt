@@ -79,7 +79,7 @@ try:
         terminal_is_running,
     )
 except ImportError:
-    EA_NAMES = ("YumekkuEA-1年版",)
+    EA_NAMES = ("YumekkuEA-1年版-ver1.1",)
 
     def running_terminal_exes():  # type: ignore[misc]
         return None

@@ -18,7 +18,7 @@ except ImportError as exc:  # DLL が読めない等もここに来る。理由�
 # 名前の後半（版など）は変わることがあるので、見つけるときは EA_MATCH で探す。
 # EA_NAMES は「いま配っているもの」で、同梱の .ex5 から決まる（無ければこの既定値）。
 EA_MATCH = "Yumekku"
-EA_NAMES = ("YumekkuEA-1年版",)   # Windows・Mac とも同じ名前
+EA_NAMES = ("YumekkuEA-1年版-ver1.1",)   # Windows。Mac 用（bridge/mac/）は中身が v1.20 のまま、名前も YumekkuEA-1年版 のまま
 # ロイヤルファーストクラスの「2 つ目の口座」（connect.py の connect_slot。Windows だけ）に置く EA。
 # 安定低月利ver（育てる運用。複利ロット・1取引のリスク上限・月次ストップ）。配布物は bridge/growth/ に分けて同梱する
 # （bridge/ 直下に置くと 1 本目の配布物として拾われる）。名前に Yumekku を含むので is_our_ea は通る。
@@ -26,7 +26,7 @@ GROWTH_EA_NAME = "YumekkuEA1年版｜安定低月利ver"
 GROWTH_EA_DIRNAME = "growth"
 # Yumekku【サブスク版】（運営が承認しているあいだだけ新規エントリーする EA）。サブスクの会員の口座に置く。
 # 配布物は bridge/subscription/ に分けて同梱する。名前に Yumekku を含むので is_our_ea は通る
-SUB_EA_NAME = "Yumekku【サブスク版】"
+SUB_EA_NAME = "Yumekku【サブスク版】ver1.1"
 SUB_EA_DIRNAME = "subscription"
 
 

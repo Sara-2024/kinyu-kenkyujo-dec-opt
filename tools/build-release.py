@@ -39,7 +39,7 @@ def _current_ea_name() -> str:
     for q in found:
         if "yumekku" in q.stem.lower():
             return q.stem
-    return "YumekkuEA-1年版"  # 無いときの既定。ここで止まるのではなく、あとの案内に使う
+    return "YumekkuEA-1年版-ver1.1"  # 無いときの既定。ここで止まるのではなく、あとの案内に使う
 
 
 EA_NAME = _current_ea_name()
