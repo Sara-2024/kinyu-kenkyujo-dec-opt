@@ -224,14 +224,18 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     TAKEN: "この口座番号は、別のご契約ですでに登録されています。サポート LINE へお問い合わせください。",
     SUSPENDED: "この口座はご利用を止めています。サポート LINE へお問い合わせください。",
     BUSY: "混み合っています。少し時間をおいてもう一度お試しください。",
+    BLOCKED: "通信が一時的に制限されています。数分おいてから、もう一度お試しください。",
     DEFAULT: "うまく送れませんでした。少し時間をおいてもう一度お試しいただくか、サポート LINE へご連絡ください。",
   };
-  const errText = (code) => ERRORS[code] || (code === "SESSION_EXPIRED" ? "" : ERRORS.DEFAULT);
+  // 想定していない理由のときは、サポートで調べられるよう理由のコードを添える
+  const errText = (code) => ERRORS[code] || (code === "SESSION_EXPIRED" ? "" : `${ERRORS.DEFAULT}（${code || "OFFLINE"}）`);
 
   const api = async (body) => {
     try {
       const r = await fetch(LINKS.lobby, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const data = await r.json().catch(() => ({}));
+      // 窓口の返事が JSON でない（回線の一時的な制限・障害など）ときも、理由が分かるように番号を残す
+      if (!r.ok && !data.error) data.error = r.status === 403 ? "BLOCKED" : `HTTP_${r.status}`;
       return { status: r.status, data };
     } catch (_) {
       return { status: 0, data: { error: "OFFLINE" } };
