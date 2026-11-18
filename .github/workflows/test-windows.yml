@@ -42,3 +42,11 @@ jobs:
           if (Test-Path $exe) { "REAL_MT5=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8; Write-Host "MT5 を入れました" } else { Write-Host "::warning::MT5 を入れられませんでした（第 2 部は省きます）" }
       - name: 試験
         run: python bridge/tests/windows_mt5_test.py
+      - name: 接続ツールがサイトに届くか（Vercel の bot 対策で門前払いされていないか）
+        run: |
+          python -c "import urllib.request,urllib.error,json; req=urllib.request.Request('https://kinyu-kenkyujo-dec-opt.vercel.app/api/connect', data=json.dumps({'token':'0'*64}).encode(), headers={'Content-Type':'application/json'}, method='POST')
+          try:
+              code=urllib.request.urlopen(req, timeout=20).status
+          except urllib.error.HTTPError as e:
+              code=e.code; print(e.headers.get('x-vercel-mitigated'))
+          print('api/connect ->', code); assert code != 403, '接続ツールがサイトに門前払いされています（Vercel の bot 対策）'"
