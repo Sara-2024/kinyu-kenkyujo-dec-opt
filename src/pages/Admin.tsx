@@ -20,11 +20,38 @@ import { useFleet, type FleetCommand } from '../hooks/useFleet'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { CHARACTERS } from '../data/characters'
 import { DreamlandApplications } from '../components/DreamlandApplications'
-import { MEMBER_PLANS, PLAN_NAMES, type MemberPlan } from '../data/subscription'
+import { MEMBER_PLANS, PLAN_NAMES, subscriptionList, type MemberPlan } from '../data/subscription'
 import { SubscriptionApprovals } from '../components/SubscriptionApprovals'
 import { systemLabel } from '../data/fleet'
 
+/**
+ * 管理者画面のタブ。ページが長く、下のほうの欄（サブスク版の申請など）までスクロールが要ったので、上で切り替える。
+ * 選んだタブは URL の末尾（#subscription など）に残す（そのリンクを開けば、最初からそのタブ）。
+ */
+const ADMIN_TABS = [
+  { key: 'members', label: '会員' },
+  { key: 'subscription', label: 'サブスク版の申請' },
+  { key: 'applications', label: '口座の申込' },
+  { key: 'settings', label: '設定' },
+] as const
+type AdminTab = (typeof ADMIN_TABS)[number]['key']
+const tabFromHash = (): AdminTab => {
+  const h = typeof window === 'undefined' ? '' : window.location.hash.replace('#', '')
+  return (ADMIN_TABS.find((t) => t.key === h)?.key ?? 'members') as AdminTab
+}
+
 export function Admin() {
+  const [tab, setTabState] = useState<AdminTab>(tabFromHash)
+  const setTab = (next: AdminTab) => {
+    setTabState(next)
+    try {
+      window.history.replaceState(null, '', `#${next}`)
+    } catch {
+      /* 履歴を書けなくても切り替えは効く */
+    }
+  }
+  // 審査待ちの件数（タブに出す）。タブを切り替えるたびに数え直す
+  const [pendingSubs, setPendingSubs] = useState(0)
   const { member, token, ready } = useAuth()
   const [rows, setRows] = useState<Member[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -155,6 +182,7 @@ export function Admin() {
   }
 
   return (
+    <AdminTabsCounter token={token} tab={tab} onCount={setPendingSubs}>
     <div className="min-h-screen px-6 py-6" style={{ background: '#070b14', color: '#e8edf5' }}>
       <div className="mx-auto max-w-[1100px]">
         <div className="flex flex-wrap items-center gap-4">
@@ -172,12 +200,46 @@ export function Admin() {
           {fleet.phase === 'denied' ? ' 中継に入れていません（管理者のログインを確かめてください）。' : fleet.phase === 'connecting' ? ' 中継に接続中…' : ''}
         </p>
 
+        <div role="tablist" aria-label="管理者画面の切り替え" className="mt-4 flex flex-wrap gap-2 border-b pb-3" style={{ borderColor: 'var(--panel-border)' }}>
+          {ADMIN_TABS.map((t) => {
+            const on = tab === t.key
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setTab(t.key)}
+                className="h-11 rounded-[4px] border px-5 text-[15px] font-bold"
+                style={{
+                  borderColor: on ? 'var(--accent)' : 'var(--panel-border)',
+                  background: on ? 'var(--accent)' : 'var(--panel-bg)',
+                  color: on ? '#081018' : '#e2e8f0',
+                }}
+              >
+                {t.label}
+                {t.key === 'subscription' && pendingSubs > 0 && (
+                  <span
+                    className="ml-2 inline-flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-[13px]"
+                    style={{ background: '#f4c46a', color: '#081018' }}
+                    aria-label={`審査待ち ${pendingSubs} 件`}
+                  >
+                    {pendingSubs}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
         {error && (
           <p className="mt-4 text-[15px]" style={{ color: '#ff8484' }}>
             {error}
           </p>
         )}
 
+        {tab === 'members' && (
+          <>
         <div
           className="mt-5 overflow-x-auto rounded-[4px] border"
           style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
@@ -363,10 +425,15 @@ export function Admin() {
           </div>
         )}
 
-        <DreamlandApplications token={token} members={rows} />
+          </>
+        )}
 
-        <SubscriptionApprovals token={token} />
+        {tab === 'applications' && <DreamlandApplications token={token} members={rows} />}
 
+        {tab === 'subscription' && <SubscriptionApprovals token={token} />}
+
+        {tab === 'settings' && (
+          <>
         <NamesSection token={token} />
 
         <div
@@ -397,9 +464,30 @@ export function Admin() {
         <PlanPasswordsSection token={token} />
 
         <OperatorPasswordSection token={token} />
+          </>
+        )}
       </div>
     </div>
+    </AdminTabsCounter>
   )
+}
+
+/** 審査待ちの件数を数えて渡すだけ（画面には何も足さない） */
+function AdminTabsCounter({ token, tab, onCount, children }: { token: string | null; tab: string; onCount: (n: number) => void; children: React.ReactNode }) {
+  useEffect(() => {
+    if (!token) return
+    let alive = true
+    subscriptionList(token)
+      .then((rows) => {
+        if (alive) onCount(rows.filter((r) => r.status === 'pending').length)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, tab])
+  return <>{children}</>
 }
 
 /** 管理サイト（運営用の別サイト）に入るための合言葉 */
