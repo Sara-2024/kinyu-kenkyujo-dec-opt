@@ -35,6 +35,34 @@ except Exception:  # noqa: BLE001 - 画面が無い環境
 APP_NAME = "ドリームランド｜パスポート"
 APP_KICKER = "D R E A M L A N D   ·   P A S S P O R T"
 
+# Yumekku【サブスク版】のお客様に配るときの名前。中身は同じ exe で、ファイル名が Yumekku で始まるときだけ
+# （特別ゲートが YumekkuConnect.exe としてダウンロードさせる）、窓の名前と文言の「パスポート」を差し替える。
+# サブスクのお客様に「ドリームランド・パスポート」と見せないため。connect.py の SUB_BRAND と同じ判定
+SUB_APP_NAME = "Yumekku【サブスク版】接続ツール"
+SUB_APP_KICKER = "Y U M E K K U   ·   S U B S C R I P T I O N"
+
+
+def _is_sub_brand() -> bool:
+    import sys
+    from pathlib import Path
+
+    return bool(getattr(sys, "frozen", False)) and Path(sys.executable).stem.lower().startswith("yumekku")
+
+
+SUB_BRAND = _is_sub_brand()
+if SUB_BRAND:
+    APP_NAME = SUB_APP_NAME
+    APP_KICKER = SUB_APP_KICKER
+
+
+def brand(text: object) -> str:
+    """画面に出す文言。サブスクの名前で配ったときは「パスポート」を接続ツールの名前に言い換える。"""
+    out = str(text)
+    if SUB_BRAND:
+        out = out.replace("ドリームランド・パスポート", SUB_APP_NAME).replace("ドリームランド｜パスポート", SUB_APP_NAME)
+        out = out.replace("パスポート", "接続ツール").replace("ドリームランド", "サイト")
+    return out
+
 # ロビーの色（index.css / dreamland/index.html の CSS 変数と同じ）
 BG = "#fdf8ef"        # --cream
 PANEL = "#f3ede2"     # 札の地
@@ -64,13 +92,15 @@ def close_splash() -> None:
         pass
 
 
-def message_box(text: str, title: str = APP_NAME) -> bool:
+def message_box(text: str, title: str | None = None) -> bool:
     """窓を作れなかったときの、最後の知らせ方。
 
     tkinter を積み忘れた exe を作ってしまっても、「押しても何も起きない」
     だけは避ける。Windows が必ず持っているものなので、何も足さずに出せる。
     Windows 以外では何もしない（False を返す）。
     """
+    text = brand(text)
+    title = APP_NAME if title is None else brand(title)
     if os.name != "nt":
         return False
     close_splash()
@@ -139,7 +169,7 @@ class SetupWindow:
         tk.Frame(self.root, bg=GOLD, height=1, width=72).pack(pady=(8, 14))
 
         self.message = tk.Label(
-            self.root, text="MT5を確認しています…", bg=BG, fg=TEXT, font=self.f["body"], wraplength=440, justify="center"
+            self.root, text=brand("MT5を確認しています…"), bg=BG, fg=TEXT, font=self.f["body"], wraplength=440, justify="center"
         )
         self.message.pack(pady=(0, 12))
 
@@ -185,7 +215,7 @@ class SetupWindow:
         if not self.alive():
             return
         try:
-            self.message.configure(text=text)
+            self.message.configure(text=brand(text))
             self.root.update()
         except Exception:  # noqa: BLE001
             self._alive = False
@@ -218,7 +248,7 @@ class SetupWindow:
         row.pack(fill="x", pady=3, anchor="w")
         mark = tk.Label(row, text="…", bg=BG, fg=MUTED, font=self.f["step"], width=2)
         mark.pack(side="left")
-        tk.Label(row, text=text, bg=BG, fg=TEXT, font=self.f["step"], anchor="w").pack(side="left")
+        tk.Label(row, text=brand(text), bg=BG, fg=TEXT, font=self.f["step"], anchor="w").pack(side="left")
         self._steps.append((mark, key))
         self.root.update()
 
@@ -235,7 +265,7 @@ class SetupWindow:
             return
         btn = tk.Button(
             self.buttons,
-            text=text,
+            text=brand(text),
             command=command,
             font=self.f["button"],
             bg=ACCENT if primary else LAV_SOFT,
@@ -276,7 +306,7 @@ class SetupWindow:
         for value, label in items:
             tk.Radiobutton(
                 self.body,
-                text=label,
+                text=brand(label),
                 variable=var,
                 value=value,
                 bg=BG,
@@ -332,7 +362,7 @@ class SetupWindow:
         for line in lines:
             tk.Label(
                 self.body,
-                text=line,
+                text=brand(line),
                 bg=BG,
                 fg=TEXT if line and not line.startswith("（") else MUTED,
                 font=self.f["small"],
@@ -370,7 +400,7 @@ class SetupWindow:
         _center(self.root, 560, min(need, max(400, self.root.winfo_screenheight() - 120)))
         for line in lines:
             tk.Label(
-                self.body, text=line, bg=BG, fg=MUTED, font=self.f["small"], wraplength=480, justify="left"
+                self.body, text=brand(line), bg=BG, fg=MUTED, font=self.f["small"], wraplength=480, justify="left"
             ).pack(anchor="w", pady=3)
 
         answer = {"value": False}
@@ -415,7 +445,7 @@ class SetupWindow:
         _center(self.root, 560, min(need, max(400, self.root.winfo_screenheight() - 120)))
         for line in lines:
             tk.Label(
-                self.body, text=line, bg=BG, fg=MUTED, font=self.f["small"], wraplength=480, justify="left"
+                self.body, text=brand(line), bg=BG, fg=MUTED, font=self.f["small"], wraplength=480, justify="left"
             ).pack(anchor="w", pady=3)
 
         answer = {"value": "closed", "done": False}
@@ -474,7 +504,7 @@ class SetupWindow:
         self.say("設定が完了しました。" if ok else "設定が終わりませんでした。")
         for line in lines:
             tk.Label(
-                self.body, text=line, bg=BG, fg=MUTED if ok else WARN, font=self.f["small"], wraplength=440, justify="left"
+                self.body, text=brand(line), bg=BG, fg=MUTED if ok else WARN, font=self.f["small"], wraplength=440, justify="left"
             ).pack(anchor="w", pady=2)
         self.button("閉じる", self._on_close)
         try:
@@ -490,7 +520,7 @@ class SetupWindow:
         self.clear_buttons()
         self.say(message)
         if hint:
-            tk.Label(self.body, text=hint, bg=BG, fg=MUTED, font=self.f["small"], wraplength=440, justify="left").pack(
+            tk.Label(self.body, text=brand(hint), bg=BG, fg=MUTED, font=self.f["small"], wraplength=440, justify="left").pack(
                 anchor="w", pady=4
             )
         self.button("閉じる", self._on_close)

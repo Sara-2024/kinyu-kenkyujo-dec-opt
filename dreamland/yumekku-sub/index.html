@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yumekku【サブスク版】｜特別ゲート</title>
+<meta name="description" content="Yumekku【サブスク版】のご利用申請と、Yumekku 接続ツールの発行を行う特別ゲートです。">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#d1e4ee">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23789ea7'/%3E%3Cpath d='M32 12l4.4 13.6L50 30l-13.6 4.4L32 48l-4.4-13.6L14 30l13.6-4.4z' fill='%23fff6dc'/%3E%3C/svg%3E">
+<style>
+/* ロビー（dreamland/index.html）と同じ色・書体で組む */
+:root{
+  --ink:#30384f; --muted:#68718a; --soft:#787787;
+  --gold:#cbbb98; --gold-deep:#aa9461; --cream:#fffaf0; --cream-2:#fffdf2;
+  --lav:#7665a9; --lav-soft:#eeeaf6; --lav-text:#594986;
+  --teal:#69b4bc; --teal-a:#76b8be; --teal-b:#578d9a; --slate:#789ea7;
+  --ok:#3f8a6a; --ng:#b4533f; --wait:#a07a2c;
+  --line:#e4e5ee;
+  --serif-en:Georgia,"Times New Roman",serif;
+  --serif:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;
+  --sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","YuGothic",Meiryo,"Noto Sans JP",sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-family:var(--sans);font-size:16px;line-height:1.85;color:var(--ink);min-height:100dvh;
+  background:linear-gradient(165deg,#d1e4ee 0%,#dae2f4 40%,#eee6f6 75%,#fbf4e8 100%) fixed}
+button,input{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--teal);outline-offset:3px;border-radius:12px}
+[hidden]{display:none !important}
+
+.sky{position:fixed;inset:0;pointer-events:none;background:url("../assets/clouds-sm.webp") center 30%/cover no-repeat;opacity:.55}
+.wrap{position:relative;max-width:720px;margin:0 auto;padding:32px 16px 56px}
+
+/* 見出し：特別ゲートの門 */
+.gate-head{text-align:center;padding:24px 16px 20px;margin-bottom:20px;border-radius:22px;border:1px solid var(--gold);background:rgba(255,250,240,.9);box-shadow:0 18px 40px rgba(72,80,120,.16)}
+.gate-head__en{font-family:var(--serif-en);letter-spacing:.32em;font-size:13px;color:var(--gold-deep)}
+.gate-head__title{font-family:var(--serif);font-weight:600;font-size:clamp(26px,6vw,36px);line-height:1.4;margin:6px 0 4px;color:var(--ink)}
+.gate-head__lead{color:var(--ink);font-size:16px;margin:0}
+.rule{height:1px;margin:16px auto 0;width:min(320px,70%);background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+
+/* 窓口（1 枚の紙） */
+.desk{background:rgba(255,250,240,.94);border:1px solid var(--gold);border-radius:22px;padding:28px 24px;
+  box-shadow:0 18px 40px rgba(72,80,120,.16),inset 0 0 0 4px rgba(255,253,242,.9)}
+.desk + .desk{margin-top:20px}
+.desk__title{font-family:var(--serif);font-weight:600;font-size:21px;margin:0 0 6px}
+.desk__en{font-family:var(--serif-en);letter-spacing:.2em;font-size:12px;color:var(--gold-deep);text-transform:uppercase}
+.desk p{margin:8px 0}
+.note{font-size:15px;color:var(--muted)}
+
+/* 手続きの3段 */
+.steps{list-style:none;margin:14px 0 4px;padding:0;counter-reset:s}
+.steps li{position:relative;padding:8px 0 8px 52px;counter-increment:s;font-size:16px}
+.steps li::before{content:counter(s);position:absolute;left:0;top:8px;width:36px;height:36px;border-radius:50%;
+  display:grid;place-items:center;font-family:var(--serif-en);font-size:17px;color:var(--cream);background:var(--slate)}
+.steps li.is-now::before{background:var(--teal-b);box-shadow:0 0 0 4px rgba(105,180,188,.25)}
+.steps li.is-done::before{content:"✓";background:var(--ok)}
+.steps b{font-weight:600}
+
+/* 記入欄 */
+.field{display:block;margin:14px 0}
+.field span{display:block;font-size:15px;color:var(--muted);margin-bottom:4px}
+.field input{width:100%;min-height:48px;padding:10px 14px;font-size:17px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.field input:focus{border-color:var(--teal)}
+.consent{display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:15px}
+.consent input{width:22px;height:22px;margin-top:4px;flex:none;accent-color:var(--teal-b)}
+.notice{background:var(--lav-soft);border-radius:14px;padding:12px 16px;font-size:15px;color:var(--lav-text);margin:14px 0}
+.notice ul{margin:4px 0;padding-left:1.2em}
+.err{color:var(--ng);font-size:15px;min-height:1.5em;margin:6px 0 0}
+
+/* ボタン */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:10px 22px;border-radius:999px;
+  border:1px solid var(--teal-b);background:linear-gradient(180deg,var(--teal-a),var(--teal-b));color:#fff;font-weight:600;
+  font-size:16px;text-decoration:none;cursor:pointer}
+.btn:disabled{opacity:.55;cursor:wait}
+.btn--ghost{background:#fff;color:var(--teal-b)}
+.btn--wide{width:100%}
+.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.linklike{background:none;border:0;padding:0;color:var(--teal-b);text-decoration:underline;cursor:pointer;font-size:15px}
+
+/* 状態の札 */
+.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px;border-radius:999px;font-weight:600;font-size:16px}
+.badge--wait{background:#fbf1d9;color:var(--wait)}
+.badge--ok{background:#e1f2ea;color:var(--ok)}
+.badge--ng{background:#f8e3de;color:var(--ng)}
+.badge i{width:10px;height:10px;border-radius:50%;background:currentColor}
+.badge--wait i{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(.7);opacity:.5}50%{transform:scale(1);opacity:1}}
+.who{font-size:15px;color:var(--muted);margin-top:10px}
+
+/* つなぐ手順の進み */
+.checks{list-style:none;margin:14px 0 0;padding:0}
+.checks li{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px dashed var(--line);font-size:16px}
+.checks li:first-child{border-top:0}
+.checks li::before{content:"";flex:none;width:22px;height:22px;margin-top:3px;border-radius:50%;border:2px solid var(--gold)}
+.checks li.is-ok::before{content:"✓";display:grid;place-items:center;border-color:var(--ok);background:var(--ok);color:#fff;font-size:13px}
+.checks li.is-wait::before{border-color:var(--wait);border-top-color:transparent;animation:spin 1s linear infinite}
+.checks li.is-ng::before{border-color:var(--ng)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.howto{margin:10px 0 0;padding-left:1.4em;font-size:15px}
+.howto li{margin:4px 0}
+
+.foot{text-align:center;margin-top:26px;font-size:15px;color:var(--muted)}
+@media (max-width:520px){.desk{padding:22px 18px}.steps li{padding-left:48px}}
+@media (prefers-reduced-motion:reduce){.badge--wait i,.checks li.is-wait::before{animation:none}}
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true"></div>
+<main class="wrap">
+  <header class="gate-head">
+    <div class="gate-head__en">SPECIAL GATE · SUBSCRIPTION</div>
+    <h1 class="gate-head__title">Yumekku【サブスク版】</h1>
+    <p class="gate-head__lead">ご利用の申請と、Yumekku 接続ツールの発行はこちらで承ります。</p>
+    <div class="rule"></div>
+  </header>
+
+  <!-- 流れ -->
+  <section class="desk" aria-labelledby="flow-title">
+    <div class="desk__en">How it works</div>
+    <h2 class="desk__title" id="flow-title">ご利用までの流れ</h2>
+    <ol class="steps" id="steps">
+      <li data-step="apply"><b>ご利用を申請する</b><br><span class="note">ご契約時の合言葉・MT5 の口座番号・お名前を送ります。</span></li>
+      <li data-step="review"><b>運営が承認する</b><br><span class="note">承認されると、このページが自動で次へ進みます。</span></li>
+      <li data-step="connect"><b>接続ツールで MT5 とつなぐ</b><br><span class="note">Windows のパソコンで、接続ツールを開くだけで口座に紐づきます。</span></li>
+    </ol>
+    <p class="note">Yumekku【サブスク版】は、運営がご利用を承認しているあいだだけ新しい取引を行います。ご解約などで承認を止めると、新しい取引は止まります（お持ちのポジションは通常どおり決済されます）。</p>
+  </section>
+
+  <!-- 申請 -->
+  <section class="desk" id="apply" hidden aria-labelledby="apply-title">
+    <div class="desk__en">Application</div>
+    <h2 class="desk__title" id="apply-title">ご利用の申請</h2>
+    <form id="apply-form" novalidate>
+      <label class="field"><span>ご契約時の合言葉</span><input name="entry" type="password" autocomplete="off" required></label>
+      <label class="field"><span>MT5 の口座番号（数字）</span><input name="account" inputmode="numeric" autocomplete="off" required></label>
+      <label class="field"><span>お名前</span><input name="name" autocomplete="name" required></label>
+      <div class="notice">
+        <b>お申し込みの前にお読みください</b>
+        <ul>
+          <li>ご利用は、運営が承認しているあいだに限ります。承認の前と、承認を止めたあとは、新しい取引を行いません。</li>
+          <li>ご解約のお申し出があった場合は、運営が承認を止めます。</li>
+          <li>MT5 のパスワードは、このページでも接続ツールでも入力しません。</li>
+          <li>Yumekku【サブスク版】は将来の利益を約束するものではありません。お取引の判断と結果はご自身に帰属します。</li>
+        </ul>
+      </div>
+      <label class="consent"><input type="checkbox" name="c1" required><span>承認されているあいだだけ使えること、承認を止めると新しい取引が止まることを確認しました。</span></label>
+      <label class="consent"><input type="checkbox" name="c2" required><span>上のご案内を読み、内容に同意します。</span></label>
+      <p class="err" id="apply-err" role="alert"></p>
+      <button class="btn btn--wide" type="submit">申請を送る</button>
+    </form>
+  </section>
+
+  <!-- 状態 -->
+  <section class="desk" id="status" hidden aria-labelledby="status-title">
+    <div class="desk__en">Status</div>
+    <h2 class="desk__title" id="status-title">ご利用の状態</h2>
+    <p><span class="badge" id="badge"><i></i><span id="badge-text"></span></span></p>
+    <p id="status-text"></p>
+    <p class="who" id="who"></p>
+    <div class="row" id="status-actions"></div>
+    <p class="err" id="status-err" role="alert"></p>
+  </section>
+
+  <!-- ログインし直し（セッションが切れたとき・別の端末） -->
+  <section class="desk" id="relogin" hidden aria-labelledby="relogin-title">
+    <div class="desk__en">Sign in</div>
+    <h2 class="desk__title" id="relogin-title">もう一度、合言葉を入れてください</h2>
+    <p class="note">申請のときと同じ合言葉と口座番号で、続きから進めます。</p>
+    <form id="relogin-form" novalidate>
+      <label class="field"><span>ご契約時の合言葉</span><input name="entry" type="password" autocomplete="off" required></label>
+      <label class="field"><span>MT5 の口座番号（数字）</span><input name="account" inputmode="numeric" autocomplete="off" required></label>
+      <p class="err" id="relogin-err" role="alert"></p>
+      <div class="row"><button class="btn" type="submit">続きへ</button><button class="btn btn--ghost" type="button" data-act="new">はじめて申請する</button></div>
+    </form>
+  </section>
+
+  <!-- 接続ツールの発行（承認中だけ） -->
+  <section class="desk" id="connect" hidden aria-labelledby="connect-title">
+    <div class="desk__en">Passport</div>
+    <h2 class="desk__title" id="connect-title">接続ツールで MT5 とつなぐ</h2>
+    <div id="connect-body"></div>
+    <ul class="checks" id="checks"></ul>
+    <p class="err" id="connect-err" role="alert"></p>
+  </section>
+
+  <p class="foot">お困りのときは <a id="support" href="#" target="_blank" rel="noopener">サポート LINE</a> へどうぞ。画面の写真を添えていただくと、続きからご案内できます。</p>
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════
+   リンク・名前はここだけ直せばよい（ロビーと同じ送り先）
+   ═══════════════════════════════════════════════ */
+const SITE = "https://kinyu-kenkyujo-dec-opt.vercel.app";   // 合言葉の確認・会員・申請・接続の合図（/api/lobby）
+const RELAY = "wss://kinyu-relay.onrender.com/app";          // 接続ツールの様子はここから届く
+const LINKS = {
+  lobby: SITE + "/api/lobby",
+  winFile: "/download/DreamlandPassport.exe",   // dreamland/vercel.json の rewrite で本体サイトから取る（同じドメイン）
+  support: "https://lin.ee/V0ikrqq",
+};
+const EA_NAME = "Yumekku【サブスク版】";
+/* 接続ツールの呼び名とファイル名。中身はロビーの接続ツールと同じ exe だが、この名前（Yumekku で始まる）で保存すると、
+   ツールの窓・文言が「Yumekku【サブスク版】接続ツール」になり、最初からサブスク版の EA を置く（connect.py の SUB_BRAND） */
+const TOOL_NAME = "Yumekku 接続ツール";
+const SUB_FILE_NAME = "YumekkuConnect.exe";
+const STATUS_POLL_MS = 30000;      // 審査中に状態を見に行く間隔
+const CLAIM_REFRESH_MS = 4 * 60000; // 合図は 10 分で切れるので、待っているあいだ預け直す
+const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セッション・口座番号・お名前）。合言葉は覚えない
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const normDigits = (v) => String(v || "").replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)).replace(/\D/g, "");
+  const tail2 = (a) => (a == null ? "" : "…" + String(a).slice(-2));
+  $("support").href = LINKS.support;
+
+  const ERRORS = {
+    BAD_ENTRY: "合言葉が違います。ご契約時にお伝えした合言葉を確かめてください。",
+    NOT_SUB: "この合言葉は、Yumekku【サブスク版】の合言葉ではありません。ご契約時の合言葉を確かめてください。",
+    BAD_ACCOUNT: "口座番号を数字で入れてください。",
+    BAD_NAME: "お名前を入れてください。",
+    CONSENT: "2 つの確認にチェックを入れてください。",
+    TAKEN: "この口座番号は、別のご契約ですでに登録されています。サポート LINE へお問い合わせください。",
+    SUSPENDED: "この口座はご利用を止めています。サポート LINE へお問い合わせください。",
+    BUSY: "混み合っています。少し時間をおいてもう一度お試しください。",
+    DEFAULT: "うまく送れませんでした。少し時間をおいてもう一度お試しいただくか、サポート LINE へご連絡ください。",
+  };
+  const errText = (code) => ERRORS[code] || (code === "SESSION_EXPIRED" ? "" : ERRORS.DEFAULT);
+
+  const api = async (body) => {
+    try {
+      const r = await fetch(LINKS.lobby, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const data = await r.json().catch(() => ({}));
+      return { status: r.status, data };
+    } catch (_) {
+      return { status: 0, data: { error: "OFFLINE" } };
+    }
+  };
+  /* サイトのパスワードはお客様に決めさせない。ロビーと同じ作り方（口座番号と合言葉から作る） */
+  const derivedPassword = async (account, entry) => {
+    const bytes = new TextEncoder().encode(`${account}:${entry}:dreamland-passport`);
+    const hash = await crypto.subtle.digest("SHA-256", bytes);
+    return "dl" + Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+  };
+
+  const load = () => { try { return JSON.parse(localStorage.getItem(STORE) || "null"); } catch (_) { return null; } };
+  const save = (m) => { try { m ? localStorage.setItem(STORE, JSON.stringify(m)) : localStorage.removeItem(STORE); } catch (_) {} };
+  let me = load();            // { id, token, account, name }
+  let sub = null;             // { status, applied_at, approved_at, stopped_at }
+  let pollTimer = null;
+
+  const isPhone = (() => {
+    const ua = navigator.userAgent || "";
+    if (/iPhone|iPod|Android.+Mobile|Windows Phone/i.test(ua)) return true;
+    if (/iPad|Android/i.test(ua)) return true;
+    return /Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1;   // iPad は Mac を名乗る
+  })();
+  const isMac = !isPhone && /Mac/i.test(navigator.platform || navigator.userAgent || "");
+
+  const show = (id, on) => { $(id).hidden = !on; };
+  const setBusy = (form, busy, label) => {
+    const b = form.querySelector('button[type="submit"]');
+    if (!b) return;
+    if (!b.dataset.label) b.dataset.label = b.textContent;
+    b.disabled = busy; b.textContent = busy ? label : b.dataset.label;
+  };
+  const markSteps = (now) => {
+    const order = ["apply", "review", "connect"];
+    const at = order.indexOf(now);
+    document.querySelectorAll("#steps li").forEach((li) => {
+      const i = order.indexOf(li.dataset.step);
+      li.classList.toggle("is-done", i < at || (now === "done" && true));
+      li.classList.toggle("is-now", i === at);
+    });
+  };
+
+  /* ── 画面を状態に合わせる ── */
+  function render() {
+    clearTimeout(pollTimer);
+    if (!me) {
+      show("apply", true); show("status", false); show("relogin", false); show("connect", false);
+      markSteps("apply");
+      return;
+    }
+    show("apply", false); show("relogin", false); show("status", true);
+    const st = sub ? sub.status : "none";
+    const badge = $("badge");
+    badge.className = "badge " + (st === "active" ? "badge--ok" : st === "stopped" ? "badge--ng" : "badge--wait");
+    $("badge-text").textContent = st === "active" ? "ご利用中（承認済み）" : st === "stopped" ? "ご利用停止中" : st === "pending" ? "審査中" : "申請の確認中";
+    $("who").textContent = `口座 ${tail2(me.account)}　${me.name ? me.name + " 様" : ""}`;
+    const actions = $("status-actions");
+    actions.innerHTML = "";
+    const add = (label, fn, ghost = true) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "btn" + (ghost ? " btn--ghost" : ""); b.textContent = label;
+      b.addEventListener("click", fn); actions.appendChild(b);
+    };
+    if (st === "active") {
+      $("status-text").textContent = "ご利用が承認されています。接続ツールで MT5 とつなぐと、Yumekku【サブスク版】が動きます。";
+      markSteps("connect");
+      show("connect", true);
+      renderConnect();
+    } else if (st === "stopped") {
+      $("status-text").textContent = "ただいまご利用を停止しています。新しい取引は行いません（お持ちのポジションは通常どおり決済されます）。再開をご希望の場合は、もう一度申請してください。";
+      markSteps("review");
+      show("connect", false); Bridge.close();
+      add("もう一度申請する", reapply, false);
+    } else {
+      $("status-text").textContent = "申請を受け付けました。運営が確認しています。承認されると、このページが自動で次へ進みます（閉じてしまっても、このページを開き直せば続きから進めます）。";
+      markSteps("review");
+      show("connect", false); Bridge.close();
+      pollTimer = setTimeout(refresh, STATUS_POLL_MS);
+    }
+    add("状態を確かめる", () => refresh(true));
+    add("別の口座で申請する", () => { if (confirm("この端末の記録を消して、別の口座で申請し直しますか？（申請そのものは消えません）")) { Bridge.close(); me = null; sub = null; save(null); render(); } });
+  }
+
+  async function refresh(manual = false) {
+    if (!me) return render();
+    const { status, data } = await api({ action: "sub_status", session: me.token });
+    if (status === 401) { show("status", false); show("connect", false); show("relogin", true); $("relogin-form").account.value = me.account || ""; return; }
+    if (status !== 200) { $("status-err").textContent = manual ? errText(data.error) : ""; pollTimer = setTimeout(refresh, STATUS_POLL_MS); return; }
+    $("status-err").textContent = "";
+    sub = data.subscription;
+    render();
+  }
+
+  async function reapply() {
+    const { status, data } = await api({ action: "sub_apply", session: me.token });
+    if (status === 401) return refresh();
+    if (status !== 200) { $("status-err").textContent = errText(data.error); return; }
+    sub = data.subscription; render();
+  }
+
+  /* ── 申請：合言葉（サブスクのものか）→ 会員登録（済みならログイン）→ 申請 ── */
+  async function signIn(entry, account, name, form, errEl) {
+    setBusy(form, true, "確かめています…");
+    const plan = await api({ action: "plan", entry });
+    if (plan.status !== 200) { setBusy(form, false); errEl.textContent = plan.status === 401 ? ERRORS.BAD_ENTRY : errText(plan.data.error); return null; }
+    if (plan.data.plan !== "subscription") { setBusy(form, false); errEl.textContent = ERRORS.NOT_SUB; return null; }
+    const password = await derivedPassword(account, entry);
+    let r = name ? await api({ action: "register", account, name, password, entry }) : { status: 400, data: { error: "ACCOUNT_TAKEN" } };
+    if (r.status !== 200 && r.data.error === "ACCOUNT_TAKEN") r = await api({ action: "login", account, password });
+    if (r.status !== 200) {
+      setBusy(form, false);
+      errEl.textContent = r.data.error === "BAD_CREDENTIALS" ? (name ? ERRORS.TAKEN : "合言葉か口座番号が違います。申請のときと同じものを入れてください。") : r.data.error === "SUSPENDED" ? ERRORS.SUSPENDED : errText(r.data.error);
+      return null;
+    }
+    const m = r.data.member;
+    if (m.plan !== "subscription") { setBusy(form, false); errEl.textContent = ERRORS.TAKEN; return null; }
+    me = { id: m.id, token: r.data.session, account: m.account, name: m.name || name || "" };
+    save(me);
+    return me;
+  }
+
+  $("apply-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget; const err = $("apply-err"); err.textContent = "";
+    const f = new FormData(form);
+    const entry = String(f.get("entry") || "").trim();
+    const account = normDigits(f.get("account"));
+    const name = String(f.get("name") || "").trim();
+    if (!entry) return (err.textContent = ERRORS.BAD_ENTRY);
+    if (!/^[0-9]{1,13}$/.test(account)) return (err.textContent = ERRORS.BAD_ACCOUNT);
+    if (!name) return (err.textContent = ERRORS.BAD_NAME);
+    if (!f.get("c1") || !f.get("c2")) return (err.textContent = ERRORS.CONSENT);
+    if (!(await signIn(entry, account, name, form, err))) return;
+    setBusy(form, true, "申請を送っています…");
+    const r = await api({ action: "sub_apply", session: me.token });
+    setBusy(form, false);
+    if (r.status !== 200) { err.textContent = errText(r.data.error); return; }
+    form.reset();
+    sub = r.data.subscription;
+    render();
+  });
+
+  $("relogin-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget; const err = $("relogin-err"); err.textContent = "";
+    const f = new FormData(form);
+    const entry = String(f.get("entry") || "").trim();
+    const account = normDigits(f.get("account"));
+    if (!entry) return (err.textContent = ERRORS.BAD_ENTRY);
+    if (!/^[0-9]{1,13}$/.test(account)) return (err.textContent = ERRORS.BAD_ACCOUNT);
+    if (!(await signIn(entry, account, "", form, err))) return;
+    setBusy(form, false);
+    form.reset();
+    refresh();
+  });
+  document.querySelector('#relogin [data-act="new"]').addEventListener("click", () => { me = null; sub = null; save(null); render(); });
+
+  /* ── 接続ツール（ブリッジ）の様子を中継から受け取る（ロビーと同じしくみ） ── */
+  const Bridge = {
+    ws: null, live: false, status: null, room: null, closed: true, retry: null, seq: 0, waiting: new Map(), onChange: null,
+    open(room, session) {
+      if (!this.closed && this.room === room) return;
+      this.close(); this.closed = false; this.room = room;
+      const url = `${RELAY}?room=${encodeURIComponent(room)}&session=${encodeURIComponent(session)}`;
+      const connect = () => {
+        if (this.closed) return;
+        let ws;
+        try { ws = new WebSocket(url); } catch (_) { this.retry = setTimeout(connect, 5000); return; }
+        this.ws = ws;
+        ws.onmessage = (ev) => {
+          let p; try { p = JSON.parse(ev.data); } catch (_) { return; }
+          if (p.type === "welcome") { const mine = (p.bridges || []).find((b) => String(b.bridgeId) === room); return this.set(!!mine, mine || null); }
+          if (p.bridgeId && String(p.bridgeId) !== room) return;
+          if (p.type === "bridge_online" || p.type === "bridge_status") return this.set(true, { ...(this.status || {}), ...(p.status || {}) });
+          if (p.type === "bridge_offline") return this.set(false, null);
+          if (p.type === "ack") { const cb = p.id && this.waiting.get(p.id); if (cb) { this.waiting.delete(p.id); cb(p); } }
+        };
+        ws.onclose = () => { if (this.ws !== ws) return; this.ws = null; this.set(false, null); if (!this.closed) this.retry = setTimeout(connect, 5000); };
+        ws.onerror = () => {};
+      };
+      connect();
+    },
+    set(live, status) { this.live = live; this.status = status; if (this.onChange) this.onChange(); },
+    send(command) {
+      return new Promise((resolve) => {
+        const ws = this.ws;
+        if (!ws || ws.readyState !== WebSocket.OPEN || !this.live) return resolve({ ok: false });
+        const id = `sub-${++this.seq}`;
+        this.waiting.set(id, resolve);
+        ws.send(JSON.stringify({ id, command, bridgeId: this.room }));
+        setTimeout(() => { if (this.waiting.has(id)) { this.waiting.delete(id); resolve({ ok: false }); } }, 12000);
+      });
+    },
+    close() { this.closed = true; clearTimeout(this.retry); if (this.ws) { const ws = this.ws; this.ws = null; try { ws.close(); } catch (_) {} } this.live = false; this.status = null; this.room = null; },
+  };
+
+  /* ── 合図（使い捨て）を発行して、中継に「この口座の接続ツールに渡して」と預ける ── */
+  const relayHttp = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
+  const issueToken = async () => {
+    const { status, data } = await api({ action: "connect_token", session: me.token });
+    if (status === 401) { refresh(); return ""; }
+    return status === 200 && data.token ? data.token : "";
+  };
+  const postClaim = async (token) => {
+    try { await fetch(`${relayHttp}/claim`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session: me.token, token, account: me.account, slot: 1 }) }); } catch (_) {}
+  };
+  let claimTimer = null;
+  const keepClaimFresh = () => {
+    clearTimeout(claimTimer);
+    claimTimer = setTimeout(async () => {
+      if (!me || !sub || sub.status !== "active" || finished) return;
+      const t = await issueToken(); if (t) await postClaim(t);
+      keepClaimFresh();
+    }, CLAIM_REFRESH_MS);
+  };
+
+  let finished = false;
+  function renderConnect() {
+    const body = $("connect-body");
+    if (isPhone) {
+      body.innerHTML = `<p>MT5 と接続ツールはパソコンに入れます。このページを <b>Windows のパソコン</b>で開いてください。</p>
+        <div class="row"><button class="btn" type="button" id="share">このページのリンクを送る</button></div>`;
+      $("share").addEventListener("click", async () => {
+        const url = location.href.split("#")[0];
+        try { if (navigator.share) await navigator.share({ title: document.title, url }); else { await navigator.clipboard.writeText(url); alert("リンクをコピーしました。パソコンに送って開いてください。"); } } catch (_) {}
+      });
+      $("checks").innerHTML = "";
+      return;
+    }
+    if (isMac) {
+      body.innerHTML = `<p>Yumekku【サブスク版】は、いまは <b>Windows のパソコン</b>でご利用いただけます。Windows のパソコンでこのページを開いてください。</p>`;
+      $("checks").innerHTML = "";
+      return;
+    }
+    body.innerHTML = `<ol class="howto">
+        <li>MT5 を開いて、口座 ${esc(tail2(me.account))} にログインしておきます。</li>
+        <li>下のボタンで接続ツールをダウンロードし、ダウンロードしたファイルを開きます（パソコン上の名前は YumekkuConnect）。</li>
+        <li>接続ツールの案内どおりに進めると、この口座に自動で紐づきます。</li>
+        <li>MT5 のナビゲーターで「${esc(EA_NAME)}」を、ゴールド（XAUUSD または GOLD）のチャートに載せ、「アルゴ取引」ボタンを緑にします。</li>
+      </ol>
+      <div class="row">
+        <a class="btn" href="${LINKS.winFile}" id="dl" download="YumekkuConnect.exe">接続ツールをダウンロード（Windows 用） <span aria-hidden="true">↓</span></a>
+        <button class="btn btn--ghost" type="button" id="recheck">設置が終わった（確かめる）</button>
+      </div>
+      <p class="note">すでに接続ツールをお使いの方は、<button type="button" class="linklike" id="launch">接続ツールを呼び出す</button>だけでつながります。MT5 を閉じているあいだはつながりません（MT5 を開くと自動でつながります）。</p>`;
+    $("dl").addEventListener("click", async (e) => {
+      e.preventDefault();
+      const t = await issueToken();
+      const a = document.createElement("a");
+      a.href = t ? `${LINKS.winFile}?k=${t}` : LINKS.winFile; a.download = SUB_FILE_NAME; a.style.display = "none";
+      document.body.appendChild(a); a.click(); a.remove();
+      if (t) { await postClaim(t); keepClaimFresh(); }
+      $("connect-err").textContent = "";
+    });
+    $("recheck").addEventListener("click", async () => { const t = await issueToken(); if (t) { await postClaim(t); keepClaimFresh(); } checkNow(true); });
+    $("launch").addEventListener("click", async () => {
+      const t = await issueToken();
+      if (!t) return;
+      await postClaim(t); keepClaimFresh();
+      const params = new URLSearchParams({ from: SITE, token: t, account: String(me.account || ""), slot: "1" });
+      try { location.href = `aitrader://connect?${params.toString()}`; } catch (_) {}
+    });
+    Bridge.onChange = paintChecks;
+    Bridge.open(me.id, me.token);
+    paintChecks();
+  }
+
+  /* MT5 側がどこまで済んだか（接続ツールが返した状態だけを見る） */
+  function paintChecks() {
+    const s = Bridge.status || {};
+    const live = Bridge.live;
+    const mt5 = live && s.mt5_ready !== false && s.account != null;
+    const sameAcct = mt5 && String(s.account) === String(me.account);
+    const eaOk = sameAcct && s.ea_alive === true && s.ea_symbol_ok !== false && (!s.ea_name || s.ea_name === EA_NAME);
+    const algo = eaOk && s.terminal_trade_allowed !== false && s.ea_state !== "自動売買ボタンがオフ";
+    const row = (ok, wait, text) => `<li class="${ok ? "is-ok" : wait ? "is-wait" : "is-ng"}">${esc(text)}</li>`;
+    const items = [
+      row(live, !live, live ? "接続ツールがこの口座につながりました" : "接続ツールがつながるのを待っています"),
+      row(mt5 && sameAcct, live && !mt5, !live ? "MT5 との接続" : !mt5 ? (s.mt5_error ? `MT5 につながっていません（${s.mt5_error}）` : "MT5 を開いて、口座にログインしてください") : sameAcct ? `MT5 の口座 ${tail2(s.account)} を確認しました` : `つながっている MT5 の口座（${tail2(s.account)}）が、申請した口座（${tail2(me.account)}）と違います。その口座でログインしている MT5 を開いてください`),
+      row(eaOk, sameAcct && !eaOk && !s.ea_problem, eaOk ? `${EA_NAME} がチャートで動いています` : s.ea_problem ? String(s.ea_problem) : `MT5 のナビゲーターから「${EA_NAME}」をゴールドのチャートに載せてください`),
+      row(algo, eaOk && !algo, algo ? "「アルゴ取引」ボタンが緑になっています" : "MT5 の上にある「アルゴ取引」ボタンを押して緑にしてください"),
+    ];
+    $("checks").innerHTML = items.join("");
+    if (live && mt5 && sameAcct && eaOk && algo && !finished) {
+      finished = true;
+      clearTimeout(claimTimer);
+      $("connect-err").textContent = "";
+      const done = document.createElement("p");
+      done.innerHTML = `<span class="badge badge--ok"><i></i>準備が整いました</span>　Yumekku【サブスク版】がご利用いただける状態です。このページは閉じていただいて構いません。`;
+      $("connect-body").prepend(done);
+      markSteps("done");
+    }
+    if (live && !finished) pollStatus();
+  }
+  /* 押し出しが届かない環境でも進むよう、つながっているあいだは数秒ごとに自分から取りに行く */
+  let statusTimer = null;
+  function pollStatus() {
+    if (statusTimer) return;
+    statusTimer = setTimeout(async () => {
+      statusTimer = null;
+      if (!Bridge.live || finished) return;
+      const ack = await Bridge.send("get_status");
+      if (ack && ack.ok) { Bridge.status = { ...(Bridge.status || {}), ...ack }; paintChecks(); } else pollStatus();
+    }, 5000);
+  }
+  async function checkNow(manual) {
+    if (Bridge.live) { const ack = await Bridge.send("get_status"); if (ack && ack.ok) { Bridge.status = { ...(Bridge.status || {}), ...ack }; paintChecks(); return; } }
+    try {
+      const r = await fetch(`${relayHttp}/health?room=${encodeURIComponent(me.id)}`, { cache: "no-store" });
+      const b = await r.json();
+      if (manual) $("connect-err").textContent = b && b.room && b.room.bridge ? "接続ツールが来ています。この画面につないでいます…" : "まだ接続ツールがつながっていません。ダウンロードしたファイルを開いて、最後まで進めてください。MT5 が開いてログインしているかもご確認ください。";
+    } catch (_) {}
+  }
+
+  /* はじめに：この端末の申請があれば状態を見る */
+  render();
+  if (me) refresh();
+})();
+</script>
+</body>
+</html>

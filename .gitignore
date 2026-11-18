@@ -41,3 +41,8 @@ server/node_modules/
 build/
 MT5Automatic.spec
 DreamlandPassport.spec
+# Yumekku【サブスク版】。ソースと利用許可の鍵はリポジトリに入れない（.ex5 だけコミットする）
+bridge/subscription/*.mq5
+bridge/subscription/SubscriptionSecret.mqh
+bridge/subscription/ea_manifest.json
+supabase/secrets/

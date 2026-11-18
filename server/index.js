@@ -12,6 +12,7 @@
 
 import { createServer } from 'node:http'
 import { WebSocketServer } from 'ws'
+import { createSubscriptions } from './subscription.js'
 
 const PORT = Number(process.env.PORT) || 8080
 const TOKEN = (process.env.TRELAB_TOKEN || '').trim() // 空なら認証なし
@@ -130,6 +131,16 @@ const rooms = new Map()
 
 const now = () => new Date().toISOString().slice(11, 19)
 const log = (...args) => console.log(`[${now()}]`, ...args)
+
+// Yumekku【サブスク版】の利用許可を、つないでいるパスポートへ配る（subscription.js）
+const subscriptions = createSubscriptions({
+  rooms,
+  send: (ws, message) => send(ws, message),
+  log,
+  isMemberRoom: (id) => MEMBER_ROOM_RE.test(id),
+  supabaseUrl: SUPABASE_URL,
+  supabaseKey: SUPABASE_KEY,
+})
 
 /**
  * ログに残す用の短縮。部屋の名前は会員ID そのもので、
@@ -494,6 +505,8 @@ function handleBridge(ws, roomId) {
         log(`ブリッジ ${short(roomId)} に、待たせていた一斉指令を渡します: ${waiting.command}`)
         send(ws, { ...waiting, bridgeId: roomId })
       }
+      // サブスクの会員なら、いまの利用許可を渡す（承認中でなければ期限 0 ＝ EA は新規を止める）
+      void subscriptions.applyRoom(roomId)
       return
     }
 
@@ -564,6 +577,12 @@ function handleApp(ws, roomId, member) {
     if (member && member.can_trade === false && WRITE_COMMANDS.has(command)) {
       log(`売買を止めている会員の操作を断りました room=${short(roomId)}: ${command}`)
       refuse('この口座では自動売買の操作ができません。運営にお問い合わせください')
+      return
+    }
+    // Yumekku【サブスク版】で、運営が承認していない（審査中・停止中）口座は、稼働・設定変更を通さない
+    if (WRITE_COMMANDS.has(command) && !subscriptions.allowsWrite(roomId)) {
+      log(`サブスクが承認中でない口座の操作を断りました room=${short(roomId)}: ${command}`)
+      refuse('Yumekku【サブスク版】のご利用が承認されていないため、自動売買の操作ができません')
       return
     }
 
@@ -711,6 +730,12 @@ setInterval(() => {
   })
 }, BLOCK_SWEEP_MS).unref()
 
+// サブスクの利用許可を見回る（承認・停止を、つないでいるパスポートへ 1 分ほどで届ける）
+const LICENSE_SWEEP_MS = Math.max(200, Number(process.env.LICENSE_SWEEP_MS) || 60 * 1000)
+setInterval(() => {
+  void subscriptions.sweep()
+}, LICENSE_SWEEP_MS).unref()
+
 server.listen(PORT, () => {
   log('='.repeat(56))
   log(`トレラボ中継サーバー 起動  ポート ${PORT}`)
@@ -724,5 +749,6 @@ server.listen(PORT, () => {
     log('  会員の確認 : ★なし★ 部屋の名前（会員ID）を知っていれば誰でも入れます')
     log('               本番では SUPABASE_URL と SUPABASE_ANON_KEY を設定してください')
   }
+  log(subscriptions.enabled ? '  サブスク承認: 有効（承認中の口座だけ Yumekku【サブスク版】が動く）' : '  サブスク承認: なし（会員の確認が未設定）')
   log('='.repeat(56))
 })

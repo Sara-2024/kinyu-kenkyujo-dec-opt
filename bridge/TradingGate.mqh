@@ -245,6 +245,16 @@ void DrawGateStatus()
       statec = clrOrange;
       state  = "自動売買ボタンがオフ";
      }
+#ifdef TRADINGGATE_EXTRA_BLOCK
+   // EA 側の追加の止め（Yumekku【サブスク版】の「ご利用の承認」）。EA が GateExtraBlocked / GateExtraBlockText を持つ
+   else if(GateExtraBlocked())
+     {
+      fill   = C'52,12,12';
+      border = clrOrangeRed;
+      statec = clrOrangeRed;
+      state  = GateExtraBlockText();
+     }
+#endif
    else if(allowed)
      {
       fill   = C'6,42,28';

@@ -36,6 +36,8 @@ TESTS=(
   "ロビーの窓口：合言葉・会員登録・接続の合図（/api/lobby）|node --experimental-strip-types api/_lib/lobby.test.mjs"
   "ロビーの画面（JS の文法・CSS の対応）|bash tools/check-lobby.sh"
   "中継の部屋分け・会員の確認（通し試験）|node server/tests/relay_test.mjs"
+  "サブスク版：利用許可を中継が配る・承認中でなければ稼働を断る|node server/tests/subscription_test.mjs"
+  "サブスク版の利用許可・閉じた MT5 を勝手に開かない|python3 bridge/tests/subscription_mt5_test.py"
   "判定の突き合わせ道具（通し試験）|node --experimental-strip-types tools/tests/compare_risk_models_test.mjs"
 )
 

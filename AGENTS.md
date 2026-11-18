@@ -161,6 +161,45 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
 - **AI へ送る JSON は詰めて書く。** `buildUserPrompt` で整形（インデント）すると、
   改行と空白のぶんだけ入力トークンが増える。呼ぶ回数が多いので効いてくる。
 
+## Yumekku【サブスク版】（承認制。2026-11-18 から）
+
+運営が承認しているあいだだけ動く EA。お客様の入口はロビーとは別の特別ゲート `dreamland/yumekku-sub/`
+（https://dreamland-lobby.vercel.app/yumekku-sub/）。ロビーでサブスクの合言葉を打った人もここへ飛ばす。
+
+- **流れ。** 特別ゲートで「合言葉（プラン `subscription` の合言葉。管理サイトの「プランの合言葉」で決める）・口座番号・お名前」
+  → 会員登録（ロビーと同じ `derivedPassword`）→ `/api/lobby` の `sub_apply` で申請（`subscriptions`、審査中）
+  → 管理サイトの「Yumekku【サブスク版】の申請」（`SubscriptionApprovals.tsx`）で **承認／停止** → 承認されたらページが自動で
+  接続ツールのダウンロードと接続確認に進む（30 秒ごとに `sub_status`）。DB は `supabase/migrations/20261118_subscription.sql`。
+- **止め方は「利用許可」。** 承認中だけ DB（`subscription_licenses`）が期限 24〜25 時間の許可と署名
+  （sha256("YMKSUB|口座番号|期限|鍵") の先頭 48 ビット）を出す。中継（`server/subscription.js`）が名乗り時と 60 秒ごとに
+  `{type:"license"}` でブリッジへ渡し、ブリッジは指令ファイルに `SUB_UNTIL` / `SUB_SIG` を書くだけ（`take_license` / `apply_license`）。
+  EA は期限（ブローカーのサーバー時計）と署名が合わなければ新規とナンピン追加をしない。決済・SL/TP・トレールは止めない。
+  停止すると、つながっていれば約 1 分、切られていても最長 25 時間で止まる。中継は承認中でない口座の稼働・設定変更も断る（`allowsWrite`）。
+- **鍵はリポジトリに入れない。** `bash tools/make-subscription-secret.sh` が `bridge/subscription/SubscriptionSecret.mqh`（EA 用）と
+  `supabase/secrets/set_subscription_secret.sql`（DB 用。SQL Editor で 1 回流す）を作る。どちらも `.gitignore`。**この Mac にしか無い。消さないこと。**
+  鍵を作り直したら EA を作り直して配り直す（古い EA は許可を受け付けなくなる）。DB に鍵が無いあいだは、承認していても止まる側。
+- **EA は `bridge/subscription/Yumekku【サブスク版】.mq5`**（`.gitignore`。`.ex5` だけコミット）。売買ロジックは 1 年版
+  （＝ロット調整版 v1.31）と同じで、マジックは 20261201/02/03、固定の有効期限は無い。コンパイルは `bash tools/mac/compile-ea.sh sub`
+  （`all` にも入っている）。名前は `mt5_terminal.SUB_EA_NAME` が唯一の定義。パネルの「ご利用が承認されていません」は
+  `TradingGate.mqh` の `#ifdef TRADINGGATE_EXTRA_BLOCK`（他の EA には効かない）。
+- **接続ツールの名前はサブスクだけ変える。** 中身は同じ exe で、特別ゲートは `YumekkuConnect.exe` という名前で保存させる。
+  ファイル名が `Yumekku` で始まると（`connect.SUB_BRAND` / `installer_ui.SUB_BRAND`）、窓の名前は「Yumekku【サブスク版】接続ツール」、
+  画面の「パスポート」は `installer_ui.brand()` が「接続ツール」に言い換え、連携前から Yumekku【サブスク版】を置く（1 年版を渡さない）。
+  プロセスの見分けに `yumekku` を足してある（`BRIDGE_IMAGE_HINTS` / `_is_bridge_process`）。起動画像（splash）は共通のまま。
+- **パスポートが置く EA。** 合図の返事のプランが `subscription` なら `bridge.env` に `BRIDGE_EA_NAME=Yumekku【サブスク版】` を覚え
+  （`remember_subscription`）、以後 `source_for_account` はサブスク版を置き、1 年版は片づく。サブスク版が同梱されていなければ置かない（1 年版で代えない）。
+- **Windows だけ**（Mac 用のサブスク版は無い。ページも Mac では Windows を案内する）。
+- 試験：`server/tests/subscription_test.mjs`、`bridge/tests/subscription_mt5_test.py`、`api/_lib/lobby.test.mjs`、`phase2_test.py` 8-3s。
+
+## MT5 を勝手に開かない（2026-11-18 から）
+
+- **`mt5.initialize()` は、相手の MT5 が動いていなければ自分で起動する。** お客様が閉じた MT5 を、ブリッジの見張り（再接続）や
+  PC の起動時・つなぎ直しが何度でも開き直していた。いまは initialize の前に必ず `mt5_terminal.terminal_is_running()`
+  （Windows のプロセス一覧。`running_terminal_exes`）で確かめ、閉じている MT5 には繋ぎに行かない。
+- ブリッジは MT5 が閉じているあいだ `MT5_CLOSED_POLL_SEC`（5 秒）ごとに「開かれたか」だけを見て待ち、開いてログインしたらつながる。
+  `connect_all` も MT5 を起動しない（連携済みならブリッジだけ先に動かす）。`launch_mt5` を呼んでよいのは、初回の設定で
+  お客様が「開き直す」を選んだときだけ（`restart_mt5`）。initialize を新しく呼ぶときは、この確認を必ず通すこと。
+
 ## ドリームランド・パスポート（お客様に配る接続ツール。旧称 MT5 Automatic）
 
 配るのは1つの exe（`DreamlandPassport.exe`／表示名は「ドリームランド・パスポート」。2026-10-14 に MT5Automatic から改名。

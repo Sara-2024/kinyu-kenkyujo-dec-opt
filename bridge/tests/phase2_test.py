@@ -255,6 +255,21 @@ if ban_mig.is_file():
     check("ブリッジの確認は「止められているか」だけ返す", "status = 'active'" in ban_sql[ban_sql.index("bridges_blocked") :])
     check("削除・BAN の migration は既存のテーブルを落とさない", "drop table" not in ban_sql.lower())
 
+# ── 8-3s) Yumekku【サブスク版】の承認の migration も schema.sql とずれていないか ──
+sub_mig = ROOT / "supabase" / "migrations" / "20261118_subscription.sql"
+check("サブスク承認の migration がある", sub_mig.is_file())
+if sub_mig.is_file():
+    sub_sql = sub_mig.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("サブスク承認の migration の中身が schema.sql と同じ", sub_sql.strip() in schema_all)
+    check("サブスク承認の migration は表を落とさない", "drop table" not in sub_sql.lower())
+    check("承認の切り替えは管理者だけ", "_require_admin(p_token)" in sub_sql[sub_sql.index("function public.admin_set_subscription(") :])
+    check("署名の鍵は外から読めない", "revoke all on function public._subscription_secret()" in sub_sql)
+    check("鍵はリポジトリに入れない（migration に鍵の値を書かない）", "insert into public.subscription_secret" not in sub_sql)
+    lic = sub_sql[sub_sql.index("function public.subscription_licenses(") :]
+    check("承認中でなければ期限 0（止まる側）", "case when ok then v_until else 0 end" in lic)
+    check("署名は会員の口座番号で作る（ブリッジの名乗りを信じない）", "_subscription_sig(m.account, v_until)" in lic)
+
 # ── 8-3b) 「合図の返事にプラン」「管理者が会員のプランを直す」migration も schema.sql とずれていないか ──
 plan_mig = ROOT / "supabase" / "migrations" / "20261017_connect_plan_and_admin_set_plan.sql"
 check("プランの migration がある", plan_mig.is_file())

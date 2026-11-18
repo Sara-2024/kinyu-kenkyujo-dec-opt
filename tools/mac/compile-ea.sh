@@ -4,6 +4,8 @@
 #   bash tools/mac/compile-ea.sh mac    # Mac 用:     bridge/mac/<名前>.mq5 → .ex5
 #   bash tools/mac/compile-ea.sh win    # Windows 用: bridge/<名前>.mq5     → .ex5
 #   bash tools/mac/compile-ea.sh growth # 追加口座用（安定低月利ver）: bridge/growth/YumekkuEA1年版｜安定低月利ver.mq5 → .ex5
+#   bash tools/mac/compile-ea.sh sub    # Yumekku【サブスク版】: bridge/subscription/Yumekku【サブスク版】.mq5 → .ex5
+#                                       #   （利用許可の鍵 SubscriptionSecret.mqh が要る。tools/make-subscription-secret.sh）
 #   bash tools/mac/compile-ea.sh all    # 全部（引数なしも同じ）
 #
 # 名前は mac / win が同じ（EA_NAME。既定は bridge/mt5_terminal.py の EA_NAMES[0] と揃える）。
@@ -21,11 +23,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TARGET="${1:-all}"
 case "$TARGET" in
-  all)    bash "$0" mac && bash "$0" win && bash "$0" growth; exit $? ;;
+  all)    bash "$0" mac && bash "$0" win && bash "$0" growth && bash "$0" sub; exit $? ;;
   win)    SRC_DIR="$ROOT/bridge";        EA="${EA_NAME:-YumekkuEA-1年版}" ;;
   mac)    SRC_DIR="$ROOT/bridge/mac";    EA="${EA_NAME:-YumekkuEA-1年版}" ;;
   growth) SRC_DIR="$ROOT/bridge/growth"; EA="${EA_NAME:-YumekkuEA1年版｜安定低月利ver}" ;;
-  *)      echo "使い方: bash tools/mac/compile-ea.sh [mac|win|growth|all]" >&2; exit 2 ;;
+  sub)    SRC_DIR="$ROOT/bridge/subscription"; EA="${EA_NAME:-Yumekku【サブスク版】}" ;;
+  *)      echo "使い方: bash tools/mac/compile-ea.sh [mac|win|growth|sub|all]" >&2; exit 2 ;;
 esac
 REL="${SRC_DIR#$ROOT/}"
 APP="${MT5_APP:-/Applications/MetaTrader 5.app}"
@@ -47,6 +50,14 @@ fi
 mkdir -p "$WORK" "$PREFIX/drive_c/Program Files/MetaTrader 5/MQL5/Include"
 cp "$ROOT/bridge/TradingGate.mqh" "$PREFIX/drive_c/Program Files/MetaTrader 5/MQL5/Include/TradingGate.mqh"
 cp "$SRC_DIR/$EA.mq5" "$WORK/$EA.mq5"
+# サブスク版は利用許可の鍵を "SubscriptionSecret.mqh"（ソースと同じ場所）から読む
+if [ "$TARGET" = "sub" ]; then
+  if [ ! -f "$SRC_DIR/SubscriptionSecret.mqh" ]; then
+    echo "利用許可の鍵がありません。先に bash tools/make-subscription-secret.sh を実行してください" >&2
+    exit 1
+  fi
+  cp "$SRC_DIR/SubscriptionSecret.mqh" "$WORK/SubscriptionSecret.mqh"
+fi
 rm -f "$WORK/$EA.ex5" "$WORK/$EA.log"
 
 echo "== コンパイル $REL/$EA.mq5（MetaEditor / Wine）"

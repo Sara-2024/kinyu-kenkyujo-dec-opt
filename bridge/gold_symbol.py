@@ -87,6 +87,15 @@ def show_in_market_watch(
     """
     if mt5 is None:
         return ""
+    # 閉じている MT5 は起こさない（initialize は相手が動いていなければ起動してしまう）
+    try:
+        from mt5_terminal import terminal_is_running
+
+        if not terminal_is_running(terminal_exe):
+            log("MT5 が閉じているので、気配値への表示は省きます")
+            return ""
+    except ImportError:
+        pass
     try:
         kwargs = {"path": str(terminal_exe)} if terminal_exe else {}
         # 既定の 60 秒待つと、そのあいだ画面が固まって「応答なし」に見える

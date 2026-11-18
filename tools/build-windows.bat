@@ -87,6 +87,22 @@ if not exist bridge\growth\ea_manifest.json (
   pause
   exit /b 1
 )
+REM Yumekku【サブスク版】（サブスクの会員の口座に置く EA。承認中だけ動く）。bridge\subscription\ に分けて同梱する
+set SUB_EA=
+for %%f in (bridge\subscription\*Yumekku*.ex5) do set SUB_EA=%%f
+if "%SUB_EA%"=="" (
+  echo [ERROR] bridge\subscription\ にサブスク版の EA（*Yumekku*.ex5）がありません。
+  echo         Mac で bash tools/mac/compile-ea.sh sub を実行して .ex5 を入れてください。
+  pause
+  exit /b 1
+)
+echo   同梱する EA（サブスク版）: %SUB_EA%
+%PY% tools\make-ea-manifest.py --dir bridge\subscription --quiet
+if not exist bridge\subscription\ea_manifest.json (
+  echo [ERROR] bridge\subscription\ea_manifest.json を作れませんでした。
+  pause
+  exit /b 1
+)
 
 %PY% -m PyInstaller --noconfirm --clean %RISKARG% ^
   --onefile --noconsole ^
@@ -106,6 +122,8 @@ if not exist bridge\growth\ea_manifest.json (
   --add-data "bridge\ea_manifest.json;bridge" ^
   --add-data "%GROWTH_EA%;bridge\growth" ^
   --add-data "bridge\growth\ea_manifest.json;bridge\growth" ^
+  --add-data "%SUB_EA%;bridge\subscription" ^
+  --add-data "bridge\subscription\ea_manifest.json;bridge\subscription" ^
   --add-data "bridge\TradingGate.mqh;bridge" ^
   --hidden-import bridge ^
   --hidden-import mt5_terminal ^

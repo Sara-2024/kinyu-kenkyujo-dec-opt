@@ -47,6 +47,8 @@ ASSETS = Path(getattr(sys, "_MEIPASS", ROOT))
 BRIDGE_DIR = ASSETS / "bridge"
 # 追加口座（ロイヤルファーストクラスの 2 つ目）に置く EA の置き場。1 本目の配布物（bridge/ 直下）とは分ける
 GROWTH_EA_DIR = BRIDGE_DIR / "growth"
+# Yumekku【サブスク版】（サブスクの会員の口座に置く EA）の置き場。これも bridge/ 直下とは分ける
+SUB_EA_DIR = BRIDGE_DIR / "subscription"
 # 同梱の EA（.ex5）の置き場。普段は bridge/ と同じ。Mac 版が手元で動くときは bridge/mac/ に向ける
 EA_ASSETS_DIR = BRIDGE_DIR
 SERVER_DIR = ROOT / "server"
@@ -55,6 +57,7 @@ sys.path.insert(0, str(BRIDGE_DIR))
 from mt5_terminal import (  # noqa: E402
     EA_NAMES,
     GROWTH_EA_NAME,
+    SUB_EA_NAME,
     find_logged_in_terminal,
     probe_ea_files,
     resolve_terminal_exe,
@@ -109,6 +112,12 @@ INCLUDE_FILES = ("TradingGate.mqh",)
 
 # お客様に見える名前（aitrader:// の登録名・ブラウザの「開きますか？」）。ファイル名は DreamlandPassport.exe
 PRODUCT_NAME = "ドリームランド・パスポート"
+# Yumekku【サブスク版】のお客様には、同じ exe を YumekkuConnect.exe という名前で配る（特別ゲートのダウンロード）。
+# ファイル名が Yumekku で始まるときだけ、お客様に見える名前を差し替える（「ドリームランド・パスポート」と見せない）。
+# 窓の文言は installer_ui.brand() が言い換える。最初に置く EA もサブスク版にする（is_subscription）
+SUB_BRAND = bool(FROZEN) and Path(sys.executable).stem.lower().startswith("yumekku")
+if SUB_BRAND:
+    PRODUCT_NAME = "Yumekku【サブスク版】接続ツール"
 # Windows の自動起動（Run）に登録する名前。前の名前は LEGACY_APP_NAMES で片づける
 APP_NAME = "DreamlandPassport"
 PROTOCOL = "aitrader"
@@ -1114,8 +1123,46 @@ def is_second_account(account: str) -> bool:
     return bool(account.isdigit() and mine and account != mine and connect_state.is_connected())
 
 
+def is_subscription() -> bool:
+    """この PC の口座は Yumekku【サブスク版】の会員か。
+
+    合図を確かめた返事のプラン（subscription）で決め、bridge.env の BRIDGE_EA_NAME に覚える
+    （自動起動・つなぎ直しには合図が無いので、覚えたもので判断する）。
+    """
+    if LAST_REDEEMED_PLAN:
+        return LAST_REDEEMED_PLAN == "subscription"
+    if env_value("BRIDGE_EA_NAME") == SUB_EA_NAME:
+        return True
+    # まだ連携していなくても、サブスクの名前で配った exe なら最初からサブスク版を置く（1 年版を渡さない）
+    return SUB_BRAND and not connect_state.is_connected()
+
+
+def remember_subscription() -> None:
+    """合図の返事のプランを覚える。サブスクならブリッジに「Yumekku【サブスク版】を載せる口座」と伝える。"""
+    if not LAST_REDEEMED_PLAN:
+        return   # プランを返さない古いサイト。覚えているものを変えない
+    try:
+        write_env_key("BRIDGE_EA_NAME", SUB_EA_NAME if LAST_REDEEMED_PLAN == "subscription" else "")
+    except Exception as exc:  # noqa: BLE001
+        log(f"サブスクかどうかを覚えられませんでした: {exc}")
+
+
+def subscription_source():
+    """Yumekku【サブスク版】の配布物（bridge/subscription/）。同梱されていなければ置かない。
+
+    1 年版で代えない（代えると、承認していない人に承認の要らない EA が渡ってしまう）。
+    """
+    source = ea_manager.load_source(SUB_EA_DIR, include_dir=BRIDGE_DIR)
+    if source is None:
+        log(f"Yumekku【サブスク版】（{SUB_EA_NAME}）が同梱されていません。EA は置きません")
+    return source
+
+
 def source_for_account(account: str):
-    """置く EA を口座で分ける。1 本目は 1 年版、2 つ目は安定低月利ver。"""
+    """置く EA を口座で分ける。1 本目は 1 年版、2 つ目は安定低月利ver、サブスクの会員は Yumekku【サブスク版】。"""
+    if is_subscription():
+        log(f"口座 …{str(account)[-4:]} はサブスクの会員なので {SUB_EA_NAME} を置きます")
+        return subscription_source()
     if is_second_account(account):
         log(f"口座 …{account[-4:]} は 2 つ目なので {GROWTH_EA_NAME} を置きます")
         return growth_source()
@@ -1269,6 +1316,7 @@ def redeem_connect_token(token: str) -> str:
     acct = str(data.get("account") or "").strip()
     LAST_REDEEMED_ACCOUNT = acct if acct.isdigit() else ""
     remember_slot(data.get("slot"))
+    remember_subscription()
     log("連携の合図を確認しました" + (f"（プラン: {LAST_REDEEMED_PLAN}）" if LAST_REDEEMED_PLAN else "")
         + (f"（口座 …{acct[-4:]}）" if LAST_REDEEMED_ACCOUNT else "")
         + (f"（{LAST_REDEEMED_SLOT}つ目）" if LAST_REDEEMED_SLOT in (1, 2) else ""))
@@ -1493,7 +1541,7 @@ def process_image(pid: int) -> str:
 # （MT5Automatic に変えたとき足し忘れ、動いている古いブリッジを「触らない」と判定して
 #   止められず、新しいブリッジも起動しないまま「接続完了」と言っていた）
 BRIDGE_IMAGE_HINTS = tuple(
-    sorted({"python", "aitrader", "trelab", "mt5automatic", "dreamlandpassport", Path(sys.executable).stem.lower()})
+    sorted({"python", "aitrader", "trelab", "mt5automatic", "dreamlandpassport", "yumekku", Path(sys.executable).stem.lower()})
 )
 
 
@@ -1902,6 +1950,15 @@ def bridge_env(session: dict | None) -> dict[str, str]:
         exe = resolve_terminal_exe(session)
         if exe is not None:
             env["MT5_PATH"] = str(exe)
+    elif env_value("MT5_PATH"):
+        # MT5 が閉じたまま起こすとき（自動起動・つなぎ直し）。前に使った MT5 を名指しで待たせる
+        env["MT5_PATH"] = env_value("MT5_PATH")
+    # Yumekku【サブスク版】の口座は、ブリッジに「載せるべき EA」を教える（サイトの手順の名前に使う）
+    sub_ea = env_value("BRIDGE_EA_NAME")
+    if sub_ea:
+        env["BRIDGE_EA_NAME"] = sub_ea
+    else:
+        env.pop("BRIDGE_EA_NAME", None)
     # このブリッジが担当する口座番号（サイトが言った口座が最優先）。MT5 が同じ PC に何台もあると、別の MT5 に繋がって
     # 別の口座の EA を動かしてしまう（1 つ目の操作で 2 つ目の口座が稼働／停止した）。ブリッジはこれと照らし合わせる
     acct = LAST_REDEEMED_ACCOUNT or str((session or {}).get("account") or "").strip() or primary_account()
@@ -2209,10 +2266,15 @@ def setup_phase1() -> int:
     return 0
 
 
+def ea_label() -> str:
+    """お客様に「載せてください」と言う EA の名前。サブスクの会員は Yumekku【サブスク版】。"""
+    return SUB_EA_NAME if is_subscription() else EA_NAME
+
+
 def st_name(st) -> str:
     """お客様に見せる「入っているもの」。MT5 の一覧に出る名前で言う。"""
     version = st.installed_version or st.source_version
-    return f"{EA_NAME}（版 {version}）" if version else EA_NAME
+    return f"{ea_label()}（版 {version}）" if version else ea_label()
 
 
 def account_of(terminal) -> str:
@@ -2231,7 +2293,7 @@ def beat_hint(beat: dict) -> str:
     if beat.get("other_account"):
         return f"（いま動いているのは別のMT5（口座 {beat.get('account')}）です。このMT5のチャートに載せてください）"
     if beat.get("fresh") and beat.get("ours") is False:
-        return f"（載っているのは「{beat.get('ea')}」です。{EA_NAME} を載せてください）"
+        return f"（載っているのは「{beat.get('ea')}」です。{ea_label()} を載せてください）"
     if beat.get("fresh") and beat.get("gold") is False:
         return f"（{beat.get('symbol')} のチャートに載っています。ゴールドのチャートに載せてください）"
     if beat.get("seen") and not beat.get("fresh"):
@@ -2268,11 +2330,13 @@ def ask_what_to_do(ui, target, st, *, can_switch: bool) -> str | None:
 
 # MT5 でお願いする操作。ここだけは外から自動化できない
 # （チャートを開くことも、時間足を変えることも、MT5 は外部に開いていない）
-CHART_STEPS = (
-    "1. MT5の左側にある「ナビゲーター」を開きます。",
-    f"2. 「{EA_NAME}」を、ゴールドの1分足チャートにドラッグします。",
-    "3. 画面の上にある「アルゴ取引」のボタンを押して、緑色にします。",
-)
+def chart_steps() -> tuple[str, ...]:
+    """載せる EA の名前は、サブスクの会員かどうかで変わるので、その都度作る。"""
+    return (
+        "1. MT5の左側にある「ナビゲーター」を開きます。",
+        f"2. 「{ea_label()}」を、ゴールドの1分足チャートにドラッグします。",
+        "3. 画面の上にある「アルゴ取引」のボタンを押して、緑色にします。",
+    )
 
 
 def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool, account: str = "") -> None:
@@ -2286,16 +2350,16 @@ def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool, acc
     押してもらえば、その場で見て次へ進める。
     """
     if placed == ea_manager.NOT_INSTALLED:
-        head = f"「{EA_NAME}」をMT5に追加しました。"
+        head = f"「{ea_label()}」をMT5に追加しました。"
     elif placed == ea_manager.UPDATE_AVAILABLE:
-        head = f"「{EA_NAME}」を新しい内容に更新しました。"
+        head = f"「{ea_label()}」を新しい内容に更新しました。"
     else:
-        head = f"「{EA_NAME}」はすでにMT5に入っています。"
+        head = f"「{ea_label()}」はすでにMT5に入っています。"
 
     if ui is None:
         # 窓を作れなかったとき。せめて「何が起きたか」だけは見せる
         beat = ea_manager.heartbeat(account=account)
-        lines = [head] if ea_running_here(beat) else [head, "", *CHART_STEPS]
+        lines = [head] if ea_running_here(beat) else [head, "", *chart_steps()]
         installer_ui.message_box("\n".join(lines))
         return
 
@@ -2317,7 +2381,7 @@ def guide_after_install(ui, *, placed: str, shown: str, needs_restart: bool, acc
             return
 
         lines = [head, ""]
-        lines.extend(CHART_STEPS)
+        lines.extend(chart_steps())
         lines.append("")
         if shown:
             lines.append(f"（{shown} は、すぐ出せるように気配値表示に出してあります）")
@@ -2543,6 +2607,13 @@ LOGIN_MISSING_LINES = (
 # 押すと（または条件が整うと）確かめ直す
 LOGIN_RETRY_LABEL = ""
 LOGIN_WAIT_TEXT = "MT5 へのログインを待っています"
+# MT5 が閉じているとき。パスポートは MT5 を開かない（お客様が開くのを待つ）
+MT5_CLOSED_TEXT = "MT5を開いて、口座にログインしてください。開くと自動でつながります…"
+MT5_CLOSED_DONE_LINES = (
+    "MT5は閉じたままです。",
+    "MT5を開いて口座にログインすると、パスポートが自動でつながります。",
+    "このアプリは閉じていただいて構いません。",
+)
 LOGIN_TIMEOUT_MESSAGE = ("MT5にログインできていません。", "MT5で口座にログインしてから、もう一度このアプリを開いてください。")
 # 繋ぐ MT5 が決まった直後に呼ぶ（Mac は、ログインを読み取る前に EA を置いておく必要がある）
 PREPARE_TERMINAL = None
@@ -2600,18 +2671,25 @@ def connect_all(room: str = "", show: bool = False, ui=None, ask: bool | None = 
         return 1
     session, chosen = picked
     if session is None:
-        say("MT5を開いています…")
-        target = next((t for t in mt5_detect.list_terminals() if _same_path(t.data_path, chosen)), None) if chosen else None
-        exe = (target.exe if target else None) or find_mt5_exe() or ensure_mt5()
-        if exe is None:
-            return give_up(
-                "MT5が見つかりませんでした。",
-                "MT5を開いてログインしてから、もう一度このアプリを開いてください。",
-            )
-        launch_mt5(exe)
-        say(LOGIN_WAIT_TEXT + "…")
+        # MT5 が閉じている（またはログインしていない）。こちらから MT5 を開かない。
+        # 以前はここで MT5 を起動していたので、PC の起動時（--startup）やつなぎ直しのたびに、
+        # お客様が閉じた MT5 が勝手に開いた。いまは「お客様が MT5 を開いたら、そのときつながる」：
+        # 連携済みならブリッジだけ先に裏で動かし、ブリッジが MT5 の起動を待って自分でつなぐ。
+        if connect_state.is_connected() and env_value("BRIDGE_ID"):
+            log("MT5 が閉じているので、ブリッジだけ先に動かします（MT5 が開かれたら自動でつながります）")
+            run_pumping(lambda: start_bridge(None))
+            if not ui:
+                return 0
+        if not ui:
+            log("MT5 が閉じていて、まだ連携も済んでいないので、何もしません")
+            return 1
+        say(MT5_CLOSED_TEXT)
         session = wait_for_login(prefer=chosen or None)
         if session is None or (chosen and not _same_path(session.get("data_path", ""), chosen)):
+            if connect_state.is_connected() and env_value("BRIDGE_ID"):
+                release_single_instance()
+                ui.finish(list(MT5_CLOSED_DONE_LINES), ok=True)
+                return 0
             return give_up(*LOGIN_TIMEOUT_MESSAGE)
 
     try:

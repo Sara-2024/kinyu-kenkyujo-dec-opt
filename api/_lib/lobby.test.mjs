@@ -159,6 +159,25 @@ const ngRes = (text, status = 400) => ({ ok: false, status, text: async () => te
   check('合図を何度も出しても、合言葉はまだ打てる', guess.status === 200, String(guess.status))
 }
 
+// ── Yumekku【サブスク版】の申請と状態 ─────────────────
+{
+  resetRate()
+  const calls = []
+  const r = await handleLobby({ action: 'plan', entry: 'sub-pass' }, env, 'ip-sub', fakeSupabase(okRes({ plan: 'subscription' })))
+  check('サブスクの合言葉は subscription', r.status === 200 && r.body.plan === 'subscription', JSON.stringify(r.body))
+  const a = await handleLobby({ action: 'sub_apply', session: SESSION }, env, 'ip-sub', fakeSupabase(okRes({ status: 'pending', applied_at: '2026-11-18T00:00:00Z', note: '社内メモ' }), calls))
+  check('申請は subscription_apply をセッションで呼ぶ', calls[0]?.url.endsWith('/rpc/subscription_apply') && calls[0]?.body.p_token === SESSION)
+  check('申請の返事は状態だけ（運営のメモは返さない）', a.status === 200 && a.body.subscription.status === 'pending' && !('note' in a.body.subscription), JSON.stringify(a.body))
+  const st = await handleLobby({ action: 'sub_status', session: SESSION }, env, 'ip-sub', fakeSupabase(okRes({ status: 'active', approved_at: '2026-11-18T01:00:00Z' })))
+  check('状態は承認中を返す', st.status === 200 && st.body.subscription.status === 'active')
+  const odd = await handleLobby({ action: 'sub_status', session: SESSION }, env, 'ip-sub', fakeSupabase(okRes({ status: 'hacked' })))
+  check('知らない状態は none にする（使える扱いにしない）', odd.body.subscription.status === 'none')
+  const ng = await handleLobby({ action: 'sub_apply', session: SESSION }, env, 'ip-sub', fakeSupabase(ngRes('NOT_SUBSCRIPTION')))
+  check('サブスクでない会員の申請は 403', ng.status === 403 && ng.body.error === 'NOT_SUBSCRIPTION')
+  check('申請はセッションが要る', clean({ action: 'sub_apply' }).ok === false)
+  check('会員のプランに subscription を通す', publicMember({ id: MEMBER_ID, plan: 'subscription' })?.plan === 'subscription')
+}
+
 // ── 小さな道具 ─────────────────────────────────
 check('口座番号は下2桁だけ残す', maskAccount(12345678) === '******78' && maskAccount('') === '-' && maskAccount(undefined) === '-')
 check('理由コードは知っているものだけ拾う', errorCodeOf('x BAD_ENTRY y') === 'BAD_ENTRY' && errorCodeOf('DROP TABLE') === null)

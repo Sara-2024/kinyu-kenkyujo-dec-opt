@@ -107,7 +107,7 @@ export async function handleConnect(
   // パスポートが「どの口座の手続きか」を決めるのに使う。会員本人の合図でしか返らないので、口座番号は秘密ではない
   // slot は「何番目の口座か」（1 / 2）。サイトが 2 と言ったら、パスポートは手元の 1 本目と比べずに
   // 安定低月利ver を置く。口座 198676996 はサイトでは 2 本目なのに、PC 側が 1 本目と見て 1 年版を置いた
-  const plan = typeof data.plan === 'string' && ['first', 'crystal', 'premium'].includes(data.plan) ? data.plan : null
+  const plan = typeof data.plan === 'string' && ['first', 'crystal', 'premium', 'subscription'].includes(data.plan) ? data.plan : null
   const account = /^\d+$/.test(String(data.account ?? '')) ? String(data.account) : null
   const slot = Number(data.slot) === 2 ? 2 : Number(data.slot) === 1 ? 1 : null
   return {

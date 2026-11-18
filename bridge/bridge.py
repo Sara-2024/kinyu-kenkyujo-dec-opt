@@ -75,9 +75,17 @@ try:
         is_gold_symbol as _is_gold_symbol,
         is_our_ea as _is_our_ea,
         resolve_terminal_exe,
+        running_terminal_exes,
+        terminal_is_running,
     )
 except ImportError:
     EA_NAMES = ("YumekkuEA-1年版",)
+
+    def running_terminal_exes():  # type: ignore[misc]
+        return None
+
+    def terminal_is_running(_exe=None) -> bool:  # type: ignore[misc]
+        return True
 
     def _is_our_ea(stem: str) -> bool:
         return "yumekku" in str(stem).lower()
@@ -90,6 +98,9 @@ except ImportError:
 
 
 log = logging.getLogger("bridge")
+
+# MT5 が閉じているあいだ、開かれたかを見る間隔（秒）。プロセス一覧を見るだけなので軽い
+MT5_CLOSED_POLL_SEC = 5.0
 _LOCK_FH = None
 
 # どの版のブリッジが動いているかを画面とログで確認できるようにする。
@@ -218,7 +229,7 @@ def _is_bridge_process(pid: int) -> bool:
         return False
     # 前の名前（AITrader.exe）で動いている古いブリッジも、自分と同じ名前のものも相手にする。
     # exe の名前を変えたらここにも足す（connect.py の BRIDGE_IMAGE_HINTS と同じ考え方）
-    hints = ("python", "aitrader", "mt5automatic", "dreamlandpassport", "trelab", Path(sys.executable).name.lower())
+    hints = ("python", "aitrader", "mt5automatic", "dreamlandpassport", "yumekku", "trelab", Path(sys.executable).name.lower())
     return any(h in image for h in hints)
 
 
@@ -626,6 +637,10 @@ def _attach_to(exe: Path, timeout_ms: int) -> dict[str, Any] | None:
     """
     if mt5 is None:
         return None
+    # 閉じている MT5 には繋ぎに行かない。initialize(path=…) は、相手が動いていなければ
+    # その MT5 を起動してしまう（お客様が閉じた MT5 が何度でも開き直した原因）
+    if not terminal_is_running(exe):
+        return None
     try:
         mt5.shutdown()
     except Exception:  # noqa: BLE001
@@ -657,6 +672,8 @@ class MT5Controller:
         # 起動時は adopt_current_state() で MT5 側の実際の値を引き継ぐので、
         # ここでの初期値は「MT5 側にも記録が無かったとき」だけ使われる。
         self.desired_value: float = cfg.gv_default
+        # Yumekku【サブスク版】の利用許可（中継が渡す { until, sig, status }）。サブスクでなければ None のまま
+        self.license: dict[str, Any] | None = None
         # ブローカーのサーバー時刻と UTC の差（秒）。履歴の日付はこれで判断する
         self._server_offset: int = _load_clock_offset()
         self._server_offset_at: float = 0.0
@@ -725,6 +742,15 @@ class MT5Controller:
 
         kwargs: dict[str, Any] = {"timeout": self.cfg.mt5_timeout}
         terminal_path = self.cfg.mt5_path
+        running = running_terminal_exes()
+        if running is not None:
+            # Windows：動いている MT5 が無ければ、ここで止める（initialize が MT5 を起こしてしまう）。
+            # 名指しの MT5 が閉じていれば、動いているほうを名指しにする（path 無しの initialize も起動しうる）
+            if not running:
+                self.mt5_error = "MT5 が閉じています（MT5 を開いてログインすると、自動でつながります）"
+                return False
+            if not terminal_path or not terminal_is_running(terminal_path):
+                terminal_path = str(running[0])
         if terminal_path:
             kwargs["path"] = terminal_path
         if self.cfg.mt5_login:
@@ -744,6 +770,7 @@ class MT5Controller:
             ok = await self._call(self._initialize_blocking)
             self.ready = bool(ok)
             if ok:
+                self.mt5_error = ""
                 info = await self._call(mt5.account_info)
                 term = await self._call(mt5.terminal_info)
                 log.info(
@@ -758,9 +785,25 @@ class MT5Controller:
             return self.ready
 
     async def connect_with_retry(self, stop: asyncio.Event) -> None:
-        """MT5に繋がるまで諦めずに待つ（ターミナル起動待ちを想定）"""
+        """MT5に繋がるまで諦めずに待つ（ターミナル起動待ちを想定）
+
+        MT5 が閉じているあいだは、こちらから開かない。お客様が MT5 を開くのを
+        MT5_CLOSED_POLL_SEC ごとに見て待ち、開いてログインしたらすぐ繋ぐ。
+        """
         backoff = Backoff(self.cfg.reconnect_min, self.cfg.reconnect_max)
+        told_closed = False
         while not stop.is_set():
+            if not await self._call(terminal_is_running, None):
+                if not told_closed:
+                    log.info("MT5 が閉じています。開かれるのを待ちます（こちらからは開きません）")
+                    told_closed = True
+                self.mt5_error = "MT5 が閉じています（MT5 を開いてログインすると、自動でつながります）"
+                backoff = Backoff(self.cfg.reconnect_min, self.cfg.reconnect_max)
+                await _sleep_or_stop(MT5_CLOSED_POLL_SEC, stop)
+                continue
+            if told_closed:
+                log.info("MT5 が開かれました。つなぎます")
+                told_closed = False
             if await self.connect():
                 return
             delay = backoff.next()
@@ -1014,6 +1057,34 @@ class MT5Controller:
         async with self._lock:
             return await self._call(self._touch_gate_blocking)
 
+    # ---------- Yumekku【サブスク版】の利用許可 ----------
+    # 中継が { type: "license", until, sig, status } を渡してくる（運営が承認しているあいだだけ until > 0）。
+    # 指令ファイルに SUB_UNTIL（期限・UNIX 秒 UTC）と SUB_SIG（口座番号に結びついた署名）を書き、EA が確かめる。
+    # 許可を作るのは DB（鍵はパスポートにも中継にも無い）。ここは書き写すだけで、中身を作らない
+    LICENSE_KEYS = ("SUB_UNTIL", "SUB_SIG")
+
+    def take_license(self, payload: dict[str, Any]) -> bool:
+        try:
+            until = int(float(payload.get("until") or 0))
+            sig = int(float(payload.get("sig") or 0))
+        except (TypeError, ValueError):
+            return False
+        if until < 0 or sig < 0 or sig >= 2 ** 48:
+            return False
+        status = str(payload.get("status") or "")[:16]
+        self.license = {"until": until, "sig": sig, "status": status}
+        return True
+
+    async def apply_license(self) -> bool:
+        if self.license is None or not self.ready:
+            return False
+        values = {"SUB_UNTIL": float(self.license["until"]), "SUB_SIG": float(self.license["sig"])}
+        async with self._lock:
+            await self._call(self._set_gvs_blocking, values)
+        log.info("サブスクの利用許可を書きました（%s・期限 %s）", self.license["status"] or "?",
+                 time.strftime("%Y-%m-%d %H:%M", time.gmtime(self.license["until"])) + " UTC" if self.license["until"] else "なし＝停止")
+        return True
+
     async def set_variables(self, values: dict[str, float]) -> bool:
         if not self.ready or not values:
             return False
@@ -1233,7 +1304,9 @@ class MT5Controller:
         same_account = (ea_account == my_login) if (ea_account and my_login) else None
         # 1 本目は「うちの EA か」（名前の後半が変わっても拾う）。追加口座は載せる EA が決まっている
         # （安定低月利ver）ので、名前そのもので見る。1 年版が載っていたら「安定低月利ver を載せてください」と出す
-        if ea_name and SLOT:
+        # Yumekku【サブスク版】の口座（BRIDGE_EA_NAME で渡される）も名前そのもので見る。1 年版が載っていたら
+        # 「Yumekku【サブスク版】を載せてください」と出す（1 年版は承認を見ないので、載せたままにさせない）
+        if ea_name and (SLOT or os.environ.get("BRIDGE_EA_NAME", "").strip()):
             ours = (ea_name == EXPECTED_EA)
         else:
             ours = _is_our_ea(ea_name) if ea_name else None
@@ -1944,6 +2017,8 @@ class MT5Controller:
             "intent_by": self.intent_by,
             "intent_at": self.intent_at,
             "intent": self.desired_value,
+            # Yumekku【サブスク版】の利用許可（中継が渡したもの。サブスクでなければ None）
+            "subscription": (self.license or {}).get("status") or None,
             **ea,
             "server_time": server_now.isoformat(timespec="seconds") if server_now else None,
             "mt5_ready": self.ready,
@@ -2272,6 +2347,13 @@ class Bridge:
                     log.warning("辞書ではない受信データを無視します: %.120s", raw)
                     continue
 
+                # 中継からの知らせ：Yumekku【サブスク版】の利用許可（指令ではない。画面からは来ない）
+                if payload.get("type") == "license":
+                    if self.mt.take_license(payload):
+                        await self.mt.apply_license()
+                        await self._push_status_if_changed(force=True)
+                    continue
+
                 # 指令ではなく、中継からの知らせ（画面が何枚開いているか）
                 if payload.get("type") == "apps":
                     before = self.watchers
@@ -2467,6 +2549,7 @@ class Bridge:
                     if self.mt.ready:
                         # 再接続後も、記録してある指示に合わせるだけ
                         await self.mt.adopt_current_state()
+                        await self.mt.apply_license()
                     continue
 
                 # 1 本目だけ：同じ PC の別の MT5（追加口座）あてにサイトが預けた合図を取りに行く。
@@ -2540,6 +2623,8 @@ class Bridge:
                 await self.mt.adopt_current_state()
             except Exception as exc:  # noqa: BLE001
                 log.exception("起動時の状態引き継ぎに失敗しました（中継への接続は続けます）: %s", exc)
+            # MT5 につながる前に届いていたサブスクの利用許可を、いま書く
+            await self.mt.apply_license()
             if self._active_ws is not None:
                 await self.mt.touch_gate()
                 try:

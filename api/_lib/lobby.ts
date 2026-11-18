@@ -8,6 +8,8 @@
 //   me            … セッションの合言葉から会員（プランを含む）
 //   connect_token … 接続ツールを呼び出すための短命の合図（connect_token_issue）
 //   platform      … お使いのパソコン（windows / mac）を記録する
+//   sub_apply     … Yumekku【サブスク版】の利用を申請する（サブスクの合言葉で登録した会員だけ）
+//   sub_status    … その申請の状態（none / pending＝審査中 / active＝承認中 / stopped＝停止）
 //
 //   ・ロビーは別のドメインに置かれるので CORS を開ける（DREAMLAND_ORIGIN で絞れる）
 //   ・1台あたりの回数を数えて、合言葉やパスワードの総当たりを止める（サーバーレスなので目安）
@@ -21,7 +23,10 @@ const RATE_LIMIT_GUESS = 20
 const RATE_LIMIT_SESSION = 200
 const RATE_WINDOW_MS = 10 * 60_000
 const GUESS_ACTIONS = new Set(['plan', 'register', 'login'])
-const ACTIONS = ['plan', 'register', 'login', 'me', 'connect_token', 'platform'] as const
+const ACTIONS = ['plan', 'register', 'login', 'me', 'connect_token', 'platform', 'sub_apply', 'sub_status'] as const
+const PLANS = ['first', 'crystal', 'premium', 'subscription'] as const
+const SUB_STATUSES = ['none', 'pending', 'active', 'stopped'] as const
+const isPlan = (v: unknown): v is (typeof PLANS)[number] => typeof v === 'string' && (PLANS as readonly string[]).includes(v)
 const PLATFORMS = ['windows', 'mac'] as const
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -89,7 +94,7 @@ export function publicMember(raw: unknown): Record<string, unknown> | null {
     id: m.id,
     account: m.account ?? null,
     name: typeof m.name === 'string' ? m.name : '',
-    plan: m.plan === 'first' || m.plan === 'crystal' || m.plan === 'premium' ? m.plan : null,
+    plan: isPlan(m.plan) ? m.plan : null,
     status: m.status ?? 'active',
   }
 }
@@ -137,6 +142,8 @@ export function clean(req: LobbyRequest | null): Clean {
   if (missing) return { ok: false, error: missing }
   if (action === 'me') return { ok: true, action, rpc: 'auth_me', args: { p_token: session } }
   if (action === 'connect_token') return { ok: true, action, rpc: 'connect_token_issue', args: { p_token: session } }
+  if (action === 'sub_apply') return { ok: true, action, rpc: 'subscription_apply', args: { p_token: session } }
+  if (action === 'sub_status') return { ok: true, action, rpc: 'subscription_status', args: { p_token: session } }
   // platform
   const platform = str(req.platform, 16).trim()
   if (!(PLATFORMS as readonly string[]).includes(platform)) return { ok: false, error: 'BAD_PLATFORM' }
@@ -144,7 +151,7 @@ export function clean(req: LobbyRequest | null): Clean {
 }
 
 /** Supabase が raise した理由コードを、そのまま返してよいものだけ拾う */
-const KNOWN_ERRORS = ['BAD_ENTRY', 'ACCOUNT_TAKEN', 'WEAK_PASSWORD', 'BAD_NAME', 'BAD_ACCOUNT', 'BAD_CREDENTIALS', 'SUSPENDED', 'SESSION_EXPIRED', 'FORBIDDEN', 'BAD_PLATFORM']
+const KNOWN_ERRORS = ['BAD_ENTRY', 'ACCOUNT_TAKEN', 'WEAK_PASSWORD', 'BAD_NAME', 'BAD_ACCOUNT', 'BAD_CREDENTIALS', 'SUSPENDED', 'SESSION_EXPIRED', 'FORBIDDEN', 'BAD_PLATFORM', 'NOT_SUBSCRIPTION']
 
 export function errorCodeOf(text: string): string | null {
   const m = text.match(new RegExp(`\\b(${KNOWN_ERRORS.join('|')})\\b`))
@@ -153,7 +160,7 @@ export function errorCodeOf(text: string): string | null {
 
 function statusOf(code: string): number {
   if (code === 'BAD_CREDENTIALS' || code === 'SESSION_EXPIRED' || code === 'BAD_ENTRY') return 401
-  if (code === 'SUSPENDED' || code === 'FORBIDDEN') return 403
+  if (code === 'SUSPENDED' || code === 'FORBIDDEN' || code === 'NOT_SUBSCRIPTION') return 403
   return 400
 }
 
@@ -194,7 +201,7 @@ export async function handleLobby(
 
   if (input.action === 'plan') {
     const plan = data?.plan
-    if (plan !== 'first' && plan !== 'crystal' && plan !== 'premium') return { status: 401, body: { error: 'BAD_ENTRY' } }
+    if (!isPlan(plan)) return { status: 401, body: { error: 'BAD_ENTRY' } }
     return { status: 200, body: { ok: true, plan } }
   }
   if (input.action === 'register' || input.action === 'login') {
@@ -212,6 +219,15 @@ export async function handleLobby(
     const token = typeof data?.token === 'string' ? data.token : ''
     if (!/^[0-9a-f]{64}$/i.test(token)) return { status: 502, body: { error: 'UPSTREAM_ERROR' } }
     return { status: 200, body: { ok: true, token, expires_in: typeof data?.expires_in === 'number' ? data.expires_in : 300 } }
+  }
+  if (input.action === 'sub_apply' || input.action === 'sub_status') {
+    // 返すのは状態と日時だけ（運営のメモは返さない）
+    const status = (SUB_STATUSES as readonly string[]).includes(String(data?.status)) ? String(data?.status) : 'none'
+    const when = (v: unknown) => (typeof v === 'string' ? v : null)
+    return {
+      status: 200,
+      body: { ok: true, subscription: { status, applied_at: when(data?.applied_at), approved_at: when(data?.approved_at), stopped_at: when(data?.stopped_at) } },
+    }
   }
   return { status: 200, body: { ok: true } }
 }

@@ -20,7 +20,8 @@ import { useFleet, type FleetCommand } from '../hooks/useFleet'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { CHARACTERS } from '../data/characters'
 import { DreamlandApplications } from '../components/DreamlandApplications'
-import { DREAMLAND_PLAN_NAMES } from '../data/dreamland'
+import { MEMBER_PLANS, PLAN_NAMES, type MemberPlan } from '../data/subscription'
+import { SubscriptionApprovals } from '../components/SubscriptionApprovals'
 import { systemLabel } from '../data/fleet'
 
 export function Admin() {
@@ -215,9 +216,9 @@ export function Admin() {
                       value={row.plan ?? ''}
                       disabled={busyId === row.id}
                       onChange={(e) => {
-                        const next = e.target.value as 'first' | 'crystal' | 'premium' | ''
+                        const next = e.target.value as MemberPlan | ''
                         if (!next || next === row.plan) return
-                        if (!window.confirm(`${memberLabel(row)} のプランを「${DREAMLAND_PLAN_NAMES[next]}」にします。よろしいですか？`)) return
+                        if (!window.confirm(`${memberLabel(row)} のプランを「${PLAN_NAMES[next]}」にします。よろしいですか？`)) return
                         void act(row.id, async () => {
                           await adminSetMemberPlan(token!, row.id, next)
                           await reload()
@@ -231,8 +232,8 @@ export function Admin() {
                       }}
                     >
                       <option value="">—（未設定）</option>
-                      {(['first', 'crystal', 'premium'] as const).map((p) => (
-                        <option key={p} value={p}>{DREAMLAND_PLAN_NAMES[p]}</option>
+                      {MEMBER_PLANS.map((p) => (
+                        <option key={p} value={p}>{PLAN_NAMES[p]}</option>
                       ))}
                     </select>
                   </td>
@@ -364,6 +365,8 @@ export function Admin() {
 
         <DreamlandApplications token={token} members={rows} />
 
+        <SubscriptionApprovals token={token} />
+
         <NamesSection token={token} />
 
         <div
@@ -452,11 +455,11 @@ function OperatorPasswordSection({ token }: { token: string | null }) {
  * お客様が打ち込むもの。合った合言葉のプランに振り分けられ、会員登録でもそのプランが付く。
  */
 function PlanPasswordsSection({ token }: { token: string | null }) {
-  const [values, setValues] = useState<Record<'first' | 'crystal' | 'premium', string>>({ first: '', crystal: '', premium: '' })
-  const [busy, setBusy] = useState<'first' | 'crystal' | 'premium' | null>(null)
+  const [values, setValues] = useState<Record<MemberPlan, string>>({ first: '', crystal: '', premium: '', subscription: '' })
+  const [busy, setBusy] = useState<MemberPlan | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  const save = async (plan: 'first' | 'crystal' | 'premium') => {
+  const save = async (plan: MemberPlan) => {
     if (!token) return
     const pw = values[plan].trim()
     if (pw.length < 8) {
@@ -468,7 +471,7 @@ function PlanPasswordsSection({ token }: { token: string | null }) {
     try {
       await adminSetPlanPassword(token, plan, pw)
       setValues((v) => ({ ...v, [plan]: '' }))
-      setMessage(`${DREAMLAND_PLAN_NAMES[plan]}の合言葉を更新しました。`)
+      setMessage(`${PLAN_NAMES[plan]}の合言葉を更新しました。`)
     } catch (err) {
       setMessage(authErrorMessage(err))
     } finally {
@@ -481,17 +484,17 @@ function PlanPasswordsSection({ token }: { token: string | null }) {
       <p className="text-[16px] font-bold">プランの合言葉</p>
       <p className="mt-1 text-[14px] text-slate-400">
         ロビーの「パスポートの設置」でお客様が打ち込む合言葉です。打った合言葉のプランにしか案内されません（ロイヤルの方がファーストへ、
-        ファーストの方がロイヤルへ行くのを防ぎます）。8文字以上。
+        ファーストの方がロイヤルへ行くのを防ぎます）。Yumekku【サブスク版】の合言葉は、特別ゲート（ロビーの yumekku-sub/）の申請で使います。8文字以上。
       </p>
       {message && (
         <p className="mt-3 text-[15px]" style={{ color: message.includes('更新しました') ? 'var(--accent)' : '#ff8484' }}>
           {message}
         </p>
       )}
-      {(['first', 'crystal', 'premium'] as const).map((plan) => (
+      {MEMBER_PLANS.map((plan) => (
         <div key={plan} className="mt-3 flex flex-wrap items-end gap-3">
           <label className="text-[14px] text-slate-300">
-            <span className="block">{DREAMLAND_PLAN_NAMES[plan]}</span>
+            <span className="block">{PLAN_NAMES[plan]}</span>
             <input
               type="password"
               value={values[plan]}

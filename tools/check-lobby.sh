@@ -4,8 +4,9 @@
 #   ・HTML と JS で使っているクラスに、CSS の定義があるか（消し飛んだまま公開しないため）
 set -u
 cd "$(dirname "$0")/.."
-node -e '
-const fs=require("fs");const s=fs.readFileSync("dreamland/index.html","utf8");
+for PAGE in dreamland/index.html dreamland/yumekku-sub/index.html; do
+PAGE="$PAGE" node -e '
+const fs=require("fs");const s=fs.readFileSync(process.env.PAGE,"utf8");
 const js=s.match(/<script>([\s\S]*)<\/script>/)[1];
 try{new Function(js)}catch(e){console.log("  NG   JS の文法:",e.message);process.exit(1)}
 const css=s.slice(s.indexOf("<style>")+7,s.indexOf("</style>"));
@@ -16,5 +17,6 @@ const names=new Set();
 for(const m of s.matchAll(/class="([^"]+)"/g)) for(const c of m[1].split(/[\s$]+/)) if(/^[a-z][a-z0-9_-]*$/.test(c)&&!ignore.has(c)) names.add(c);
 const missing=[...names].filter(c=>!css.includes("."+c)).sort();
 if(missing.length){console.log("  NG   CSS の無いクラス:",missing.join(", "));process.exit(1)}
-console.log("  ok   JS の文法・CSS の対応（"+names.size+" クラス）  1 ok / 0 NG");
-'
+console.log("  ok   "+process.env.PAGE+" JS の文法・CSS の対応（"+names.size+" クラス）  1 ok / 0 NG");
+' || exit 1
+done
