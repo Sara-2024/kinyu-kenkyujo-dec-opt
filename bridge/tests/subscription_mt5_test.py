@@ -244,6 +244,8 @@ check("名前を変えた exe のブリッジも止められる（bridge.py の�
 page = (ROOT / "dreamland" / "yumekku-sub" / "index.html").read_text(encoding="utf-8")
 check("特別ゲートは YumekkuLink.exe を配る（ファイルそのものが別。名前の上書きに左右されない）", 'winFile: "/download/YumekkuLink.exe"' in page and 'const SUB_FILE_NAME = "YumekkuLink.exe"' in page)
 check("特別ゲートの画面に「パスポート」と出さない", "パスポート" not in page)
+check("申請が届いていない（none）なら、ページが自動で送り直す", 'sub.status === "none"' in page and 'action: "sub_apply", session: me.token' in page[page.index('sub.status === "none"'):][:300])
+check("届いていないのに「受け付けました」と出さない", "申請がまだ運営に届いていません" in page)
 
 # ── 9) 中継に届かなくても、合図の取りに行きで落ちない ──
 rc = connect_src[connect_src.index("def relay_claim_with_slot("):]

@@ -291,7 +291,7 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     const st = sub ? sub.status : "none";
     const badge = $("badge");
     badge.className = "badge " + (st === "active" ? "badge--ok" : st === "stopped" ? "badge--ng" : "badge--wait");
-    $("badge-text").textContent = st === "active" ? "ご利用中（承認済み）" : st === "stopped" ? "ご利用停止中" : st === "pending" ? "審査中" : "申請の確認中";
+    $("badge-text").textContent = st === "active" ? "ご利用中（承認済み）" : st === "stopped" ? "ご利用停止中" : st === "pending" ? "審査中" : "申請が届いていません";
     $("who").textContent = `口座 ${tail2(me.account)}　${me.name ? me.name + " 様" : ""}`;
     const actions = $("status-actions");
     actions.innerHTML = "";
@@ -310,6 +310,11 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
       markSteps("review");
       show("connect", false); Bridge.close();
       add("もう一度申請する", reapply, false);
+    } else if (st === "none") {
+      $("status-text").textContent = "申請がまだ運営に届いていません。下の「申請を送り直す」を押してください。";
+      markSteps("apply");
+      show("connect", false); Bridge.close();
+      add("申請を送り直す", reapply, false);
     } else {
       $("status-text").textContent = "申請を受け付けました。運営が確認しています。承認されると、このページが自動で次へ進みます（閉じてしまっても、このページを開き直せば続きから進めます）。";
       markSteps("review");
@@ -327,6 +332,13 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     if (status !== 200) { $("status-err").textContent = manual ? errText(data.error) : ""; pollTimer = setTimeout(refresh, STATUS_POLL_MS); return; }
     $("status-err").textContent = "";
     sub = data.subscription;
+    // 会員登録のあと申請だけが届いていない（申請を送る途中で通信が切れた）ときは、ここで送り直す。
+    // 以前は「申請を受け付けました」と出したまま、運営側には何も届いていなかった（2026-11-19）
+    if (sub && sub.status === "none") {
+      const again = await api({ action: "sub_apply", session: me.token });
+      if (again.status === 200) sub = again.data.subscription;
+      else $("status-err").textContent = errText(again.data.error);
+    }
     render();
   }
 
