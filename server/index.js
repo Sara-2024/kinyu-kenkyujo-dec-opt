@@ -300,6 +300,8 @@ const server = createServer((req, res) => {
       ok: true,
       bridges: liveRooms.length,
       apps: [...rooms.values()].reduce((n, room) => n + room.apps.size, 0),
+      // Yumekku【サブスク版】の利用許可を配っているか（この版の中継が動いているかの目印にもなる）
+      subscription: subscriptions.enabled,
     }
     // 画面は、初回起動で既定の部屋に入ったブリッジを「いるか／いつ来たか」だけ見に来る。
     // 口座の中身は返さないので、どこからでも読める（CORS）。
