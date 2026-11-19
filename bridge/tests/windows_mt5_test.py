@@ -170,6 +170,22 @@ calls.clear()
 check("閉じかけの MT5 には、ブリッジがつなぎに行かない（initialize を呼ばない＝起こさない）",
       ctl._initialize_any_blocking() is False and calls == [] and closing_proc.poll() is None, str(calls))
 closing_proc.wait(timeout=30)
+
+# この接続ツールとつないでいない別の MT5 が画面に出ていても、選んだ MT5 が閉じていれば触らない
+other_dir = py_dir / "OtherMT5"
+other_dir.mkdir(exist_ok=True)
+other_running = other_dir / "terminal64.exe"
+shutil.copy2(py_dir / "pythonw.exe", other_running)
+op = subprocess.Popen([str(other_running), "-c", FAKE_SCRIPT, str(work / "never")])
+for _ in range(80):
+    if mt5_terminal.terminal_is_running(other_running):
+        break
+    time.sleep(0.25)
+calls.clear()
+check("つないでいない別の MT5 が画面に出ていても、そちらにはつなぎに行かない",
+      mt5_terminal.terminal_is_running(other_running) and ctl._initialize_any_blocking() is False and calls == [], str(calls))
+op.kill()
+op.wait()
 time.sleep(0.5)
 check("閉じかけの MT5 は、そのまま終わる（勝手に立ち上がらない）", not all_terminal_pids(), str(all_terminal_pids()))
 

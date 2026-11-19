@@ -714,8 +714,8 @@ class MT5Controller:
         # 別のターミナルに繋がり、EA を載せた側の「アルゴ取引」が ON でも
         # サイトには OFF と見えたまま（terminal_trade_allowed は繋いだ側の値）になる。
         chosen = Path(self.cfg.mt5_path) if self.cfg.mt5_path else None
-        if chosen is not None and chosen.is_file():
-            session = _attach_to(chosen, self.cfg.mt5_timeout)
+        if chosen is not None:
+            session = _attach_to(chosen, self.cfg.mt5_timeout) if chosen.is_file() else None
             if session:
                 log.info(
                     "MT5 接続成功（初回に選んだターミナル）  口座=%s  サーバー=%s  %s",
@@ -724,7 +724,30 @@ class MT5Controller:
                     chosen,
                 )
                 return True
-            log.warning("初回に選んだ MT5 に繋げません（ログインしていない？）: %s。ほかを探します", chosen)
+            # 選んだ MT5 が閉じている／ログインしていないときは、ほかの MT5 にはつなぎに行かない。
+            # この接続ツールとつないでいない MT5 が画面に出ていても触らない（2026-11-19）。
+            # 例外は「選んだ MT5 がもう無い（入れ直して場所が変わった）」ときだけで、担当の口座番号で
+            # ログインしている MT5 を探す（別の口座の MT5 には繋がない）。選んだ MT5 が閉じているだけなら、待つだけ
+            if OWN_ACCOUNT and not chosen.is_file():
+                for exe in _terminal_exes():
+                    if os.path.normcase(str(exe)) == os.path.normcase(str(chosen)) or not terminal_is_running(exe):
+                        continue
+                    other = _attach_to(exe, self.cfg.mt5_timeout)
+                    if other and str(other.get("account") or "") == OWN_ACCOUNT:
+                        log.info("担当の口座 …%s の MT5 を、別の場所で見つけました: %s", OWN_ACCOUNT[-4:], exe)
+                        self.mt5_error = ""
+                        return True
+                    try:
+                        mt5.shutdown()
+                    except Exception:  # noqa: BLE001
+                        pass
+            self.mt5_error = (
+                "選んだ MT5 が閉じています（MT5 を開いてログインすると、自動でつながります）"
+                if not terminal_is_running(chosen)
+                else "選んだ MT5 にログインしていません（口座にログインすると、自動でつながります）"
+            )
+            log.info("初回に選んだ MT5 を待ちます（ほかの MT5 には繋ぎません）: %s", chosen)
+            return False
 
         # いまログインしている MT5 を優先（複数ターミナル・古い MT5_PATH より信頼できる）
         if find_logged_in_terminal is not None:

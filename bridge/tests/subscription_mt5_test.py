@@ -137,7 +137,7 @@ bridge_mod.running_terminal_exes = lambda: [other]
 bridge_mod.terminal_is_running = lambda exe=None: exe is None or pathlib.Path(str(exe)) == other
 calls.clear()
 ctl._initialize_any_blocking()
-check("最後の手段の initialize も、動いている MT5 を名指しにする", calls and calls[-1].get("path") == str(other), str(calls))
+check("選んだ MT5 が閉じていれば、ほかの MT5 が開いていてもつなぎに行かない", calls == [] and "選んだ MT5 が閉じています" in ctl.mt5_error, str(calls))
 
 
 # 再接続の待ちは、閉じているあいだ initialize を呼ばずに回る

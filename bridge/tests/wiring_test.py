@@ -144,7 +144,9 @@ b3 = bridge_mod.Bridge(cfg3)
 fake.initialize = lambda *a, **k: (init_calls.append(k), False)[1]
 fake.last_error = lambda: (-1, "test")
 b3.mt._initialize_blocking()
-check("選んだ MT5 が無ければ、まず名指しせずにほかを探す", bool(init_calls) and init_calls[0].get("path") != cfg3.mt5_path, str(init_calls))
+# 2026-11-19 から：選んだ MT5 が無い・閉じているときは、ほかの MT5 には繋がない
+#（この接続ツールとつないでいない MT5 が画面に出ていても触らない）。担当の口座が分かるときだけ、その口座の MT5 を探す
+check("選んだ MT5 が無ければ、担当の口座が分からない限りほかの MT5 には繋がない", init_calls == [], str(init_calls))
 
 # ── 5-3) 古いブリッジを exe の名前で見分けられる（名前を変えても止められる） ──
 real_image = bridge_mod._process_image
