@@ -179,6 +179,25 @@ ctl2.take_license({"until": 0, "sig": 0, "status": "stopped"})
 asyncio.run(ctl2.apply_license())
 check("停止したら期限 0 を書く（EA は新規を止める）", ctl2._load_gate().get("SUB_UNTIL") == 0.0)
 
+# ── 5b) 入金・出金・トータル損益（管理者画面の「口座と損益」） ──
+D = types.SimpleNamespace
+fake.DEAL_TYPE_BALANCE = 2
+deals = [
+    D(type=2, profit=100000.0),   # 入金
+    D(type=0, profit=5000.0),     # 取引の損益（入金には数えない）
+    D(type=2, profit=50000.0),    # 追加の入金
+    D(type=2, profit=-20000.0),   # 出金
+    D(type=3, profit=30000.0),    # クレジット（ボーナス。入金に数えない）
+]
+ctl2._deals_between = lambda *_a, **_k: deals  # type: ignore[method-assign]
+fake.account_info = lambda: types.SimpleNamespace(login=123456, server="X", balance=135000.0, equity=172000.0, credit=30000.0, currency="JPY")  # type: ignore[method-assign]
+funds = ctl2._funds_blocking()
+check("入金は「入出金」のプラスだけを足す（取引の損益・ボーナスは入れない）", funds.get("deposit") == 150000.0, str(funds))
+check("出金は「入出金」のマイナスを足す", funds.get("withdrawal") == 20000.0, str(funds))
+check("トータル損益 ＝ 有効証拠金 − クレジット − 入金 ＋ 出金", funds.get("total_profit") == 172000.0 - 30000.0 - 150000.0 + 20000.0, str(funds))
+deals.append(D(type=2, profit=999.0))
+check("入出金は 5 分は数え直さない（全期間の履歴は重い）", ctl2._funds_blocking().get("deposit") == 150000.0)
+
 # ── 6) 署名の作り方が DB と EA で同じ ──
 mig = (ROOT / "supabase" / "migrations" / "20261118_subscription.sql").read_text(encoding="utf-8")
 check("DB の署名は 'YMKSUB|口座|期限|鍵' の sha256 先頭 12 桁",

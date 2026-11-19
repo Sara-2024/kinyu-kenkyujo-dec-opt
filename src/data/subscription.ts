@@ -59,3 +59,14 @@ export function subscriptionList(token: string): Promise<SubscriptionRow[]> {
 export function subscriptionSet(token: string, memberId: string, status: SubscriptionStatus, note?: string): Promise<unknown> {
   return rpc('admin_set_subscription', { p_token: token, p_member_id: memberId, p_status: status, p_note: note ?? null })
 }
+
+/** その口座は Yumekku【サブスク版】か（会員のプラン、無ければパスポートが名乗った EA の名前で見る） */
+export function isSubscriptionAccount(plan: unknown, status: unknown): boolean {
+  if (plan === 'subscription') return true
+  const s = (status ?? null) as { ea_expected?: unknown; ea_name?: unknown; subscription?: unknown } | null
+  const ea = String(s?.ea_expected ?? s?.ea_name ?? '')
+  return ea.includes('サブスク版') || (typeof s?.subscription === 'string' && s.subscription !== '')
+}
+
+/** 管理者画面の「通常プラン／サブスク版」の切り替え */
+export type PlanView = 'all' | 'normal' | 'subscription'

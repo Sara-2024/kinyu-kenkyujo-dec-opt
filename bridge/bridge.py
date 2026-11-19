@@ -1743,6 +1743,51 @@ class MT5Controller:
         rows.sort(key=lambda r: r["opened_at"], reverse=True)
         return rows
 
+    # 入金・出金は全期間の履歴を読むので重い。数え直すのはこの間隔ごと（損益は毎回いまの有効証拠金で出す）
+    FUNDS_REFRESH_SEC = 300
+
+    def _funds_blocking(self) -> dict[str, Any]:
+        """口座の入金・出金の合計と、トータル損益（管理者画面に出す）。
+
+        入金・出金は MT5 の履歴の「入出金」（DEAL_TYPE_BALANCE）だけを数える。取引の損益・クレジット（ボーナス）は入れない。
+        トータル損益 ＝ 有効証拠金 − クレジット − 入金 ＋ 出金（含み損益も入った、いまの時点の損益）。
+        数字は MT5 が返したものだけで作る。読めなければ None（画面は「—」）。
+        """
+        try:
+            info = mt5.account_info()
+        except Exception:  # noqa: BLE001
+            info = None
+        login = int(getattr(info, "login", 0) or 0) if info is not None else 0
+        if not login:
+            return {}
+        cache = getattr(self, "_funds_cache", None)
+        if not cache or cache.get("login") != login or time.time() - cache.get("at", 0) > self.FUNDS_REFRESH_SEC:
+            try:
+                deals = self._deals_between(datetime(2000, 1, 1), self._server_now(), open_end=True)
+            except Exception as exc:  # noqa: BLE001
+                log.debug("入出金の履歴を読めません: %s", exc)
+                deals = None
+            if deals is None:
+                return {}
+            balance_type = getattr(mt5, "DEAL_TYPE_BALANCE", 2)
+            deposit = withdrawal = 0.0
+            for deal in deals:
+                if getattr(deal, "type", None) != balance_type:
+                    continue
+                amount = float(getattr(deal, "profit", 0) or 0)
+                if amount >= 0:
+                    deposit += amount
+                else:
+                    withdrawal += -amount
+            cache = {"login": login, "at": time.time(), "deposit": round(deposit, 2), "withdrawal": round(withdrawal, 2)}
+            self._funds_cache = cache
+        equity = getattr(info, "equity", None)
+        credit = float(getattr(info, "credit", 0) or 0)
+        total = None
+        if equity is not None and cache["deposit"] > 0:
+            total = round(float(equity) - credit - cache["deposit"] + cache["withdrawal"], 2)
+        return {"deposit": cache["deposit"], "withdrawal": cache["withdrawal"], "total_profit": total, "credit": round(credit, 2)}
+
     def _history_stats_blocking(self, days: int = 30) -> dict[str, Any]:
         """過去 N 日の決済実績。口座の履歴をそのまま集計する。"""
         try:
@@ -2008,6 +2053,7 @@ class MT5Controller:
         probe = await self._call(self._ea_probe_blocking) if (self.ready and include_probe) else {}
         gate = await self._call(self._load_gate) if self.ready else {}
         today = await self._call(self._today_stats_blocking) if (self.ready and include_today) else {}
+        funds = await self._call(self._funds_blocking) if (self.ready and include_today) else {}
         server_now = await self._call(self._server_now) if self.ready else None
         ea = await self._call(self._ea_state_blocking) if self.ready else {}
         return {
@@ -2037,6 +2083,8 @@ class MT5Controller:
             "terminal_name": getattr(term, "name", None),
             "gate": gate,
             "today": today,
+            # 入金・出金・トータル損益（管理者画面の「口座と損益」）
+            "funds": funds or None,
             **probe,
         }
 
@@ -2284,6 +2332,8 @@ class Bridge:
                 today.get("today_profit"),
                 today.get("open_positions"),
                 today.get("open_profit"),
+                (status.get("funds") or {}).get("deposit"),
+                (status.get("funds") or {}).get("withdrawal"),
                 # MT5 側の準備（チャートに載ったか・自動売買ボタンが押されたか）。
                 # 初期設定でユイがここを見て、次の案内に進む。
                 status.get("ea_alive"),

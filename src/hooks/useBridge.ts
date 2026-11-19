@@ -26,6 +26,10 @@ export interface BridgeStatus {
   today?: TodayStats
   /** ブリッジが数秒ごとに送ってくる建玉。画面はこれを見るだけでよい */
   positions?: PositionRow[]
+  /** 入金・出金の合計とトータル損益（有効証拠金 − クレジット − 入金 ＋ 出金）。古いパスポートは送らない */
+  funds?: { deposit?: number; withdrawal?: number; total_profit?: number | null; credit?: number } | null
+  /** Yumekku【サブスク版】の利用許可の状態（サブスクの口座だけ） */
+  subscription?: string | null
   /** ブローカーのサーバー時刻 */
   server_time?: string
   /** 動いているブリッジの版 */
@@ -109,6 +113,8 @@ const STATUS_KEYS: (keyof BridgeStatus)[] = [
   'gate',
   'today',
   'positions',
+  'funds',
+  'subscription',
   'server_time',
   'version',
   'platform',

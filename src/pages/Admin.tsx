@@ -20,7 +20,8 @@ import { useFleet, type FleetCommand } from '../hooks/useFleet'
 import { useSiteSettings } from '../hooks/SiteSettingsContext'
 import { CHARACTERS } from '../data/characters'
 import { DreamlandApplications } from '../components/DreamlandApplications'
-import { MEMBER_PLANS, PLAN_NAMES, subscriptionList, type MemberPlan } from '../data/subscription'
+import { MEMBER_PLANS, PLAN_NAMES, isSubscriptionAccount, subscriptionList, type MemberPlan, type PlanView } from '../data/subscription'
+import { AccountsPnL } from '../components/AccountsPnL'
 import { SubscriptionApprovals } from '../components/SubscriptionApprovals'
 import { systemLabel } from '../data/fleet'
 
@@ -30,6 +31,7 @@ import { systemLabel } from '../data/fleet'
  */
 const ADMIN_TABS = [
   { key: 'members', label: '会員' },
+  { key: 'accounts', label: '口座と損益' },
   { key: 'subscription', label: 'サブスク版の申請' },
   { key: 'applications', label: '口座の申込' },
   { key: 'settings', label: '設定' },
@@ -73,6 +75,11 @@ export function Admin() {
         return { id: room, name: '（連携のみ）', account: acct, server: String((st.status as { server?: unknown } | null)?.server ?? ''), role: 'user', status: 'active', can_trade: true } as unknown as Member
       }),
   ]
+  // 通常プランとサブスク版を分けて見る（会員・口座と損益のタブ）
+  const [planView, setPlanView] = useState<PlanView>('all')
+  const isSub = (r: Member) => isSubscriptionAccount(r.plan, fleet.states[r.id]?.status)
+  const viewRows = shownRows.filter((r) => planView === 'all' || (planView === 'subscription') === isSub(r))
+  const planCount = (v: PlanView) => shownRows.filter((r) => r.role !== 'admin' && (v === 'all' || (v === 'subscription') === isSub(r))).length
   const [sent, setSent] = useState<Record<string, string>>({})
   const sendTo = async (row: Member, command: FleetCommand) => {
     const label: Record<FleetCommand, string> = { stop_trading: '停止', start_trading: '稼働', close_all: '全決済', stop_system: 'システム停止' }
@@ -232,6 +239,29 @@ export function Admin() {
           })}
         </div>
 
+        {(tab === 'members' || tab === 'accounts') && (
+          <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="プランで分けて見る">
+            {([['all', 'すべて'], ['normal', '通常プラン'], ['subscription', 'サブスク版']] as const).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={planView === v}
+                onClick={() => setPlanView(v)}
+                className="h-11 rounded-full border px-4 text-[15px]"
+                style={{
+                  borderColor: planView === v ? (v === 'subscription' ? '#f4c46a' : 'var(--accent)') : 'var(--panel-border)',
+                  color: planView === v ? (v === 'subscription' ? '#f4c46a' : 'var(--accent)') : '#cbd5e1',
+                  background: 'var(--panel-bg)',
+                }}
+              >
+                {label}（{planCount(v)}）
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === 'accounts' && <AccountsPnL rows={viewRows} states={fleet.states} />}
+
         {error && (
           <p className="mt-4 text-[15px]" style={{ color: '#ff8484' }}>
             {error}
@@ -262,7 +292,7 @@ export function Admin() {
               </tr>
             </thead>
             <tbody>
-              {shownRows.map((row) => (
+              {viewRows.map((row) => (
                 <tr key={row.id} className="border-b" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
                   <td className="px-3 py-3">
                     {row.name || <span className="text-slate-500">{row.email ?? '—'}</span>}
@@ -371,7 +401,7 @@ export function Admin() {
                   </td>
                 </tr>
               ))}
-              {shownRows.length === 0 && (
+              {viewRows.length === 0 && (
                 <tr>
                   <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
                     まだアカウントがありません。
