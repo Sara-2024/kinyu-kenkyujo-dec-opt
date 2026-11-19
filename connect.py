@@ -1140,12 +1140,14 @@ def is_subscription() -> bool:
     合図を確かめた返事のプラン（subscription）で決め、bridge.env の BRIDGE_EA_NAME に覚える
     （自動起動・つなぎ直しには合図が無いので、覚えたもので判断する）。
     """
+    # Yumekku Link（サブスク版の接続ツール）は、いつでもサブスク版だけを置く。1 年版は承認なしで動くので、
+    # この exe からは決して渡さない。前にドリームランド・パスポートでつないだ PC（連携済みの記録が残っている）でも同じ
+    #（連携済みの記録を優先していたので、テストの PC に 1 年版が置かれた。2026-11-19）
+    if SUB_BRAND:
+        return True
     if LAST_REDEEMED_PLAN:
         return LAST_REDEEMED_PLAN == "subscription"
-    if env_value("BRIDGE_EA_NAME") == SUB_EA_NAME:
-        return True
-    # まだ連携していなくても、サブスクの名前で配った exe なら最初からサブスク版を置く（1 年版を渡さない）
-    return SUB_BRAND and not connect_state.is_connected()
+    return env_value("BRIDGE_EA_NAME") == SUB_EA_NAME
 
 
 def remember_subscription() -> None:
@@ -1153,7 +1155,7 @@ def remember_subscription() -> None:
     if not LAST_REDEEMED_PLAN:
         return   # プランを返さない古いサイト。覚えているものを変えない
     try:
-        write_env_key("BRIDGE_EA_NAME", SUB_EA_NAME if LAST_REDEEMED_PLAN == "subscription" else "")
+        write_env_key("BRIDGE_EA_NAME", SUB_EA_NAME if (LAST_REDEEMED_PLAN == "subscription" or SUB_BRAND) else "")
     except Exception as exc:  # noqa: BLE001
         log(f"サブスクかどうかを覚えられませんでした: {exc}")
 

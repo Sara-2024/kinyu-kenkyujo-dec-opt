@@ -238,5 +238,9 @@ check("目印と起動画像のファイルがある", (ROOT / "tools" / "brand_
 wf = (ROOT / ".github" / "workflows" / "build-exe.yml").read_text(encoding="utf-8")
 check("自動ビルドはサブスク版の exe も commit する", "public/download/YumekkuLink.exe" in wf)
 
+isb = connect_src[connect_src.index("def is_subscription("):]
+isb = isb[: isb.index("\ndef ")]
+check("Yumekku Link は連携済みの PC でもサブスク版を置く（いちばん先に SUB_BRAND を見る）", isb.index("if SUB_BRAND:") < isb.index("LAST_REDEEMED_PLAN"))
+
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)
