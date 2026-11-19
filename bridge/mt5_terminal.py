@@ -105,12 +105,17 @@ def _norm_exe(path: str | Path) -> str:
 
 
 def running_terminal_exes() -> list[Path] | None:
-    """いま動いている MT5（terminal64.exe）の実行ファイル。調べられなければ None。
+    """いま開いている MT5（terminal64.exe）の実行ファイル。調べられなければ None。
 
     mt5.initialize() は、相手の MT5 が動いていなければ**自分で起動してしまう**
     （path を渡さなければ、最後に使った MT5 を起こす）。お客様が閉じた MT5 を
     パスポートが開き直し続ける事故（2026-11）の原因だったので、initialize の前に
-    必ずここで「動いているか」を確かめる。Windows 以外（Mac は mt5_files で、起動しない）は None。
+    必ずここで「開いているか」を確かめる。Windows 以外（Mac は mt5_files で、起動しない）は None。
+
+    「開いている」＝プロセスがあって、**画面（見えているウィンドウ）を持っている**こと。
+    MT5 は × を押すと先に画面を消し、そのあと数秒〜十数秒プロセスだけ残ってデータを保存する。
+    プロセスだけを見ていると、その閉じかけの MT5 に initialize して、つながらずに新しい MT5 を
+    起動してしまった（2026-11-19。「閉じても勝手に立ち上がる」が直っていなかった原因）。
     """
     if os.name != "nt":
         return None
@@ -162,6 +167,12 @@ def running_terminal_exes() -> list[Path] | None:
         finally:
             k32.CloseHandle(snap)
 
+        # 画面を持っているプロセス。閉じかけ（画面が消えてプロセスだけ残っている）MT5 を外すため
+        if pids:
+            shown = _pids_with_visible_window()
+            if shown is not None:
+                pids = [pid for pid in pids if pid in shown]
+
         # 場所（どの MT5 か）。読めないものが 1 つでもあれば「分からない」（None）にして、これまでどおり動かす
         out: list[Path] = []
         buf = ctypes.create_unicode_buffer(1024)
@@ -177,6 +188,37 @@ def running_terminal_exes() -> list[Path] | None:
             finally:
                 k32.CloseHandle(handle)
         return out
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _pids_with_visible_window() -> set[int] | None:
+    """見えているトップレベルのウィンドウを持つプロセスの番号。調べられなければ None。"""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        proc_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        user32.EnumWindows.argtypes = [proc_type, wintypes.LPARAM]
+        user32.EnumWindows.restype = wintypes.BOOL
+        user32.IsWindowVisible.argtypes = [wintypes.HWND]
+        user32.IsWindowVisible.restype = wintypes.BOOL
+        user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+        found: set[int] = set()
+
+        def visit(hwnd, _lparam):  # noqa: ANN001
+            if user32.IsWindowVisible(hwnd):
+                pid = wintypes.DWORD(0)
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value:
+                    found.add(int(pid.value))
+            return True
+
+        if not user32.EnumWindows(proc_type(visit), 0):
+            return None
+        return found
     except Exception:  # noqa: BLE001
         return None
 

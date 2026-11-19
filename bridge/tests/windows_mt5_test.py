@@ -76,40 +76,55 @@ def kill_all_terminals() -> None:
 import mt5_terminal  # noqa: E402
 
 # ══════════ 第 1 部：偽の MT5 ══════════
-print("── 第 1 部：偽の MT5（プロセスの見つけ方とブリッジの待ち方）")
+# 偽の MT5 は「画面を持つ terminal64.exe」（pythonw.exe を名前だけ変えて、小さな窓を出す）。
+# 合図のファイルができたら窓を消し、15 秒だけプロセスを残してから終わる（＝ × を押したあと保存している MT5 と同じ）
+print("── 第 1 部：偽の MT5（画面で見分ける・閉じかけを起こさない・開いたらつながる）")
 kill_all_terminals()
 work = pathlib.Path(tempfile.mkdtemp(prefix="mt5fake-"))
-fake_dir = work / "MetaTrader 5 Fake"
-fake_dir.mkdir()
-fake_exe = fake_dir / "terminal64.exe"
-shutil.copy2(pathlib.Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "PING.EXE", fake_exe)
+py_dir = pathlib.Path(sys.executable).parent
+fake_exe = py_dir / "terminal64.exe"
+shutil.copy2(py_dir / "pythonw.exe", fake_exe)
 other_exe = work / "Other MT5" / "terminal64.exe"
+FAKE_SCRIPT = (
+    "import os,sys,tkinter as tk\n"
+    "flag=sys.argv[1]\n"
+    "r=tk.Tk(); r.title('MetaTrader 5 (test)'); r.geometry('320x120')\n"
+    "def tick():\n"
+    "    if os.path.exists(flag):\n"
+    "        r.withdraw(); r.after(15000, r.destroy); return\n"
+    "    r.after(200, tick)\n"
+    "r.after(200, tick); r.mainloop()\n"
+)
 
 
-def start_fake() -> subprocess.Popen:
-    p = subprocess.Popen([str(fake_exe), "-n", "600", "127.0.0.1"], creationflags=NO_WINDOW,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(40):
-        if p.pid in all_terminal_pids():
+def start_fake(flag: pathlib.Path) -> subprocess.Popen:
+    p = subprocess.Popen([str(fake_exe), "-c", FAKE_SCRIPT, str(flag)])
+    for _ in range(80):
+        if mt5_terminal.terminal_is_running(fake_exe):
             break
         time.sleep(0.25)
     return p
 
 
-check("はじめは MT5 が 1 つも動いていない", mt5_terminal.running_terminal_exes() == [], str(mt5_terminal.running_terminal_exes()))
-check("閉じていれば「動いていない」", mt5_terminal.terminal_is_running(fake_exe) is False)
-check("どれも動いていなければ「動いていない」", mt5_terminal.terminal_is_running(None) is False)
+check("はじめは MT5 が 1 つも開いていない", mt5_terminal.running_terminal_exes() == [], str(mt5_terminal.running_terminal_exes()))
+check("閉じていれば「開いていない」", mt5_terminal.terminal_is_running(fake_exe) is False)
+check("どれも開いていなければ「開いていない」", mt5_terminal.terminal_is_running(None) is False)
 
-proc = start_fake()
+flag1 = work / "close1"
+proc = start_fake(flag1)
 running = mt5_terminal.running_terminal_exes() or []
-check("開いた MT5 をプロセス一覧から見つける（場所まで）",
+check("開いた MT5（画面あり）を見つける（場所まで）",
       any(os.path.normcase(str(p)) == os.path.normcase(str(fake_exe)) for p in running), str(running))
-check("開いた MT5 は「動いている」", mt5_terminal.terminal_is_running(fake_exe) is True)
-check("別の場所の MT5 は「動いていない」", mt5_terminal.terminal_is_running(other_exe) is False)
-proc.kill()
-proc.wait()
-time.sleep(0.5)
-check("閉じたら、また「動いていない」", mt5_terminal.terminal_is_running(fake_exe) is False)
+check("開いた MT5 は「開いている」", mt5_terminal.terminal_is_running(fake_exe) is True)
+check("別の場所の MT5 は「開いていない」", mt5_terminal.terminal_is_running(other_exe) is False)
+flag1.write_text("x")                       # × を押した
+for _ in range(40):
+    if not mt5_terminal.terminal_is_running(fake_exe):
+        break
+    time.sleep(0.1)
+check("× を押したあと、プロセスが残っていても「開いていない」（閉じかけ）",
+      mt5_terminal.terminal_is_running(fake_exe) is False and proc.pid in all_terminal_pids(), f"pids={all_terminal_pids()}")
+closing_proc = proc
 
 # ブリッジ：MetaTrader5 は身代わり（呼ばれたら記録する）。プロセスの判定だけ本物を使う
 calls: list[dict] = []
@@ -151,6 +166,14 @@ cfg.mt5_path = str(fake_exe)
 ctl = bridge_mod.MT5Controller(cfg)
 
 
+calls.clear()
+check("閉じかけの MT5 には、ブリッジがつなぎに行かない（initialize を呼ばない＝起こさない）",
+      ctl._initialize_any_blocking() is False and calls == [] and closing_proc.poll() is None, str(calls))
+closing_proc.wait(timeout=30)
+time.sleep(0.5)
+check("閉じかけの MT5 は、そのまま終わる（勝手に立ち上がらない）", not all_terminal_pids(), str(all_terminal_pids()))
+
+
 async def closed_then_open() -> tuple[int, bool, float]:
     stop = asyncio.Event()
     calls.clear()
@@ -158,7 +181,7 @@ async def closed_then_open() -> tuple[int, bool, float]:
     await asyncio.sleep(2.0)
     while_closed = len(calls)           # 閉じているあいだに initialize を呼んだ回数（0 であるべき）
     opened_at = time.time()
-    p = await asyncio.get_running_loop().run_in_executor(None, start_fake)
+    p = await asyncio.get_running_loop().run_in_executor(None, start_fake, work / "close2")
     try:
         await asyncio.wait_for(task, 15)
         connected = ctl.ready
@@ -205,6 +228,35 @@ if real and pathlib.Path(real).is_file():
         session = mt5_terminal.find_logged_in_terminal()
         time.sleep(8)
         check("直した探し方：閉じた MT5 は起動しない", session is None and not all_terminal_pids(), f"pids={all_terminal_pids()}")
+
+        # いちばん大事な場面：お客様が MT5 を開き、× で閉じる。閉じている最中も、ブリッジは
+        # 見張りと同じつなぎ直しを 1 秒ごとに試す。新しい MT5 が 1 つも立ち上がらないこと
+        opened = subprocess.Popen([real])
+        shown = False
+        for _ in range(240):
+            if mt5_terminal.terminal_is_running(real):
+                shown = True
+                break
+            time.sleep(0.5)
+        check("お客様が開いた本物の MT5 を「開いている」と見る（画面が出たら）", shown)
+        time.sleep(5)
+        subprocess.run(["taskkill", "/PID", str(opened.pid)], capture_output=True)   # × と同じ（窓に閉じる指示）
+        born: set[int] = set()
+        t0 = time.time()
+        while time.time() - t0 < 30:
+            try:
+                ctl2._initialize_any_blocking()
+            except Exception:  # noqa: BLE001
+                pass
+            born |= set(all_terminal_pids()) - {opened.pid}
+            time.sleep(1)
+        if opened.poll() is None:
+            print("     （MT5 が × で閉じきらなかったので、終わらせます）")
+            subprocess.run(["taskkill", "/F", "/PID", str(opened.pid)], capture_output=True)
+        time.sleep(10)
+        born |= set(all_terminal_pids()) - {opened.pid}
+        check("× で閉じている最中にブリッジがつなぎ直しても、新しい MT5 は立ち上がらない", not born, f"新しく立ち上がった={sorted(born)}")
+        kill_all_terminals()
 
         # 直す前の繋ぎ方（素の initialize）：閉じた MT5 を起こしてしまう
         try:

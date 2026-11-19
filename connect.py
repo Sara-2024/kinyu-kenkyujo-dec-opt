@@ -133,6 +133,10 @@ PROTOCOL = "aitrader"
 LEGACY_PROTOCOL = "trelab"
 # 前の版が自動起動に登録していた名前。見つけたら消して、いまの名前で登録し直す
 LEGACY_APP_NAMES = ("MT5 Automatic", "AIトレーダー", "TrelabConnect")
+# Yumekku Link の PC では、ドリームランド・パスポートの自動起動も片づける（同じ PC で 2 つが起動時に動かないように。
+# 古いパスポートが残っていると、起動のたびに古い仕組みで MT5 を開いてしまう）
+if SUB_BRAND:
+    LEGACY_APP_NAMES = LEGACY_APP_NAMES + ("DreamlandPassport",)
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 # このPCの「部屋」は会員ID（UUID）だけ。ここを緩くしていたので、
 # 悪意あるページが `aitrader://connect?room=<自分のID>` を開かせるだけで、
