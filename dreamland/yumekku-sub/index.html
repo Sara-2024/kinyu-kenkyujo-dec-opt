@@ -485,11 +485,15 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
       $("checks").innerHTML = "";
       return;
     }
-    body.innerHTML = `<ol class="howto">
+    body.innerHTML = `<p class="notice"><b>VPS で設置する方へ</b><br>VPS で設置する方は、このページの手続きを VPS 上で行ってください（VPS の中のブラウザでこのページを開き、ダウンロードも VPS の中で行います）。</p>
+      <ol class="howto">
         <li>MT5 を開いて、口座 ${esc(tail2(me.account))} にログインしておきます。</li>
         <li>下のボタンで Yumekku Link をダウンロードし、ダウンロードしたファイルを開きます（ファイル名は YumekkuLink）。</li>
         <li>Yumekku Link の案内どおりに進めると、この口座に自動で紐づきます。</li>
-        <li>MT5 のナビゲーターで「${esc(EA_NAME)}」を、ゴールド（XAUUSD または GOLD）のチャートに載せ、「アルゴ取引」ボタンを緑にします。</li>
+        <li>MT5 の「ナビゲーター」で「エキスパートアドバイザ」を<b>右クリックして「更新」</b>を押すか、<b>MT5 を再起動</b>します（「${esc(EA_NAME)}」が一覧に出てきます）。</li>
+        <li>ゴールド（XAUUSD または GOLD）のチャートを開き、時間足を<b>1分足（M1）</b>にします。</li>
+        <li>「${esc(EA_NAME)}」をそのチャートに載せ、MT5 の上にある「アルゴ取引」ボタンを緑にします。</li>
+        <li>設置が終わったら、公式 LINE で設置の確認を行います。<b>MT5 の画面（チャートと左上の表示が見えるように）を撮って、<a href="${LINKS.support}" target="_blank" rel="noopener">公式 LINE</a> に画像を送ってください。</b></li>
       </ol>
       <div class="row">
         <a class="btn" href="${LINKS.winFile}" id="dl" download="YumekkuLink.exe">Yumekku Link をダウンロード（Windows 用） <span aria-hidden="true">↓</span></a>
@@ -539,7 +543,7 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
       clearTimeout(claimTimer);
       $("connect-err").textContent = "";
       const done = document.createElement("p");
-      done.innerHTML = `<span class="badge badge--ok"><i></i>準備が整いました</span>　Yumekku【サブスク版】がご利用いただける状態です。このページは閉じていただいて構いません。`;
+      done.innerHTML = `<span class="badge badge--ok"><i></i>準備が整いました</span>　Yumekku【サブスク版】がご利用いただける状態です。最後に、MT5 の画面を撮って<a href="${LINKS.support}" target="_blank" rel="noopener">公式 LINE</a>に送ってください（設置の確認を行います）。`;
       $("connect-body").prepend(done);
       markSteps("done");
     }
