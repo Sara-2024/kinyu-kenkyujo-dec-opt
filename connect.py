@@ -115,14 +115,20 @@ INCLUDE_FILES = ("TradingGate.mqh",)
 
 # お客様に見える名前（aitrader:// の登録名・ブラウザの「開きますか？」）。ファイル名は DreamlandPassport.exe
 PRODUCT_NAME = "ドリームランド・パスポート"
-# Yumekku【サブスク版】のお客様には、同じ exe を YumekkuConnect.exe という名前で配る（特別ゲートのダウンロード）。
-# ファイル名が Yumekku で始まるときだけ、お客様に見える名前を差し替える（「ドリームランド・パスポート」と見せない）。
-# 窓の文言は installer_ui.brand() が言い換える。最初に置く EA もサブスク版にする（is_subscription）
-SUB_BRAND = bool(FROZEN) and Path(sys.executable).stem.lower().startswith("yumekku")
+# Yumekku【サブスク版】のお客様には、別に作った YumekkuLink.exe を配る（特別ゲートのダウンロード）。
+# 中身は同じで、ビルドのときに目印（bridge/brand_subscription.txt）と別の起動画像を入れる。
+# 目印があるか、ファイル名が Yumekku で始まるとき、お客様に見える名前を「Yumekku Link」にする
+# （「ドリームランド・パスポート」と見せない）。窓の文言は installer_ui.brand() が言い換える。最初に置く EA もサブスク版（is_subscription）。
+# ファイル名だけに頼らない：サーバーがダウンロード名を DreamlandPassport.exe に固定して返し、名前で見分けられなかった（2026-11-19）
+SUB_BRAND = bool(FROZEN) and (
+    (BRIDGE_DIR / "brand_subscription.txt").is_file() or Path(sys.executable).stem.lower().startswith("yumekku")
+)
 if SUB_BRAND:
-    PRODUCT_NAME = "Yumekku【サブスク版】接続ツール"
+    PRODUCT_NAME = "Yumekku Link"
 # Windows の自動起動（Run）に登録する名前。前の名前は LEGACY_APP_NAMES で片づける
 APP_NAME = "DreamlandPassport"
+if SUB_BRAND:
+    APP_NAME = "YumekkuLink"   # サブスク版の自動起動の登録名
 PROTOCOL = "aitrader"
 LEGACY_PROTOCOL = "trelab"
 # 前の版が自動起動に登録していた名前。見つけたら消して、いまの名前で登録し直す

@@ -104,10 +104,91 @@ if not exist bridge\subscription\ea_manifest.json (
   exit /b 1
 )
 
+REM 接続ツールは 2 つ作る。中身は同じで、名前と起動画像だけが違う。
+REM   DreamlandPassport.exe … ドリームランドのお客様（ロビーで配る）
+REM   YumekkuLink.exe       … Yumekku【サブスク版】のお客様（特別ゲートで配る）。目印の brand_subscription.txt を
+REM                            同梱し、窓の名前・文言・最初に置く EA をサブスク版にする（connect.SUB_BRAND）
+set "PYI_NAME=DreamlandPassport"
+set "PYI_SPLASH=tools\splash.png"
+set "BRANDARG="
+call :pyi
+if errorlevel 1 (
+  echo [ERROR] ビルドに失敗しました。
+  pause
+  exit /b 1
+)
+set "PYI_NAME=YumekkuLink"
+set "PYI_SPLASH=tools\splash-yumekku.png"
+set BRANDARG=--add-data "tools\brand_subscription.txt;bridge"
+call :pyi
+if errorlevel 1 (
+  echo [ERROR] サブスク版（YumekkuLink.exe）のビルドに失敗しました。
+  pause
+  exit /b 1
+)
+
+echo.
+echo [3/3] 確認...
+if not exist dist\DreamlandPassport.exe (
+  echo [ERROR] dist\DreamlandPassport.exe ができていません。
+  pause
+  exit /b 1
+)
+if not exist dist\YumekkuLink.exe (
+  echo [ERROR] dist\YumekkuLink.exe ができていません。
+  pause
+  exit /b 1
+)
+
+REM 画面の部品（tkinter）が入っているか確かめる。
+REM 入っていないと、お客様がダブルクリックしても窓が出ない（無言で終わる）。
+%PY% -c "import sys;d=open(r'dist\DreamlandPassport.exe','rb').read();sys.exit(0 if b'_tkinter' in d else 1)"
+if errorlevel 1 (
+  echo [ERROR] 画面の部品が入っていません。この exe は配らないでください。
+  echo         %PY% -m pip install --upgrade pyinstaller を試してから、もう一度実行してください。
+  pause
+  exit /b 1
+)
+
+REM サイトが配る場所へそのまま置く（あとは commit と push だけ）
+if not exist public\download mkdir public\download
+copy /Y dist\DreamlandPassport.exe public\download\DreamlandPassport.exe >nul
+if errorlevel 1 (
+  echo [ERROR] public\download\DreamlandPassport.exe に置けませんでした。
+  pause
+  exit /b 1
+)
+copy /Y dist\YumekkuLink.exe public\download\YumekkuLink.exe >nul
+if errorlevel 1 (
+  echo [ERROR] public\download\YumekkuLink.exe に置けませんでした。
+  pause
+  exit /b 1
+)
+
+REM 3_リリースする.bat から呼ばれたときは、ここで止まらない。
+REM （途中で「キーを押してください」と出ると、終わったように見えてしまう）
+if "%~1"=="--from-release" exit /b 0
+
+echo.
+echo ================================================================
+echo   できました: public\download\DreamlandPassport.exe
+echo   表示名: ドリームランド・パスポート
+echo.
+echo   あとは、このファイルを commit して push すれば、サイトから配られます。
+echo     git add public/download/DreamlandPassport.exe public/download/YumekkuLink.exe
+echo     git commit -m "exe を作り直す"
+echo     git push
+echo ================================================================
+echo.
+pause
+exit /b 0
+
+REM ── 接続ツールを 1 つ作る（名前 PYI_NAME・起動画像 PYI_SPLASH・目印 BRANDARG）──
+:pyi
 %PY% -m PyInstaller --noconfirm --clean %RISKARG% ^
   --onefile --noconsole ^
-  --name DreamlandPassport ^
-  --splash tools\splash.png ^
+  --name %PYI_NAME% ^
+  --splash %PYI_SPLASH% %BRANDARG% ^
   --add-data "bridge\bridge.py;bridge" ^
   --add-data "bridge\mt5_terminal.py;bridge" ^
   --add-data "bridge\mt5_detect.py;bridge" ^
@@ -155,52 +236,4 @@ if not exist bridge\subscription\ea_manifest.json (
   --hidden-import certifi ^
   --collect-data certifi ^
   connect.py
-if errorlevel 1 (
-  echo [ERROR] ビルドに失敗しました。
-  pause
-  exit /b 1
-)
-
-echo.
-echo [3/3] 確認...
-if not exist dist\DreamlandPassport.exe (
-  echo [ERROR] dist\DreamlandPassport.exe ができていません。
-  pause
-  exit /b 1
-)
-
-REM 画面の部品（tkinter）が入っているか確かめる。
-REM 入っていないと、お客様がダブルクリックしても窓が出ない（無言で終わる）。
-%PY% -c "import sys;d=open(r'dist\DreamlandPassport.exe','rb').read();sys.exit(0 if b'_tkinter' in d else 1)"
-if errorlevel 1 (
-  echo [ERROR] 画面の部品が入っていません。この exe は配らないでください。
-  echo         %PY% -m pip install --upgrade pyinstaller を試してから、もう一度実行してください。
-  pause
-  exit /b 1
-)
-
-REM サイトが配る場所へそのまま置く（あとは commit と push だけ）
-if not exist public\download mkdir public\download
-copy /Y dist\DreamlandPassport.exe public\download\DreamlandPassport.exe >nul
-if errorlevel 1 (
-  echo [ERROR] public\download\DreamlandPassport.exe に置けませんでした。
-  pause
-  exit /b 1
-)
-
-REM 3_リリースする.bat から呼ばれたときは、ここで止まらない。
-REM （途中で「キーを押してください」と出ると、終わったように見えてしまう）
-if "%~1"=="--from-release" exit /b 0
-
-echo.
-echo ================================================================
-echo   できました: public\download\DreamlandPassport.exe
-echo   表示名: ドリームランド・パスポート
-echo.
-echo   あとは、このファイルを commit して push すれば、サイトから配られます。
-echo     git add public/download/DreamlandPassport.exe
-echo     git commit -m "exe を作り直す"
-echo     git push
-echo ================================================================
-echo.
-pause
+exit /b %errorlevel%

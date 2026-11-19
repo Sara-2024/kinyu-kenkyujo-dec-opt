@@ -182,10 +182,14 @@ Cursor / Claude Code などのAIアシスタント向けの指示。人間が読
   （＝ロット調整版 v1.31）と同じで、マジックは 20261201/02/03、固定の有効期限は無い。コンパイルは `bash tools/mac/compile-ea.sh sub`
   （`all` にも入っている）。名前は `mt5_terminal.SUB_EA_NAME` が唯一の定義。パネルの「ご利用が承認されていません」は
   `TradingGate.mqh` の `#ifdef TRADINGGATE_EXTRA_BLOCK`（他の EA には効かない）。
-- **接続ツールの名前はサブスクだけ変える。** 中身は同じ exe で、特別ゲートは `YumekkuConnect.exe` という名前で保存させる。
-  ファイル名が `Yumekku` で始まると（`connect.SUB_BRAND` / `installer_ui.SUB_BRAND`）、窓の名前は「Yumekku【サブスク版】接続ツール」、
-  画面の「パスポート」は `installer_ui.brand()` が「接続ツール」に言い換え、連携前から Yumekku【サブスク版】を置く（1 年版を渡さない）。
-  プロセスの見分けに `yumekku` を足してある（`BRIDGE_IMAGE_HINTS` / `_is_bridge_process`）。起動画像（splash）は共通のまま。
+- **サブスク版の接続ツールは別の exe「Yumekku Link」（`YumekkuLink.exe`）。** 中身は DreamlandPassport.exe と同じで、
+  `tools/build-windows.bat` が 2 回目のビルドで、目印 `tools/brand_subscription.txt`（→ exe の中の `bridge/`）と
+  起動画像 `tools/splash-yumekku.png` を入れて作る。特別ゲートは `/download/YumekkuLink.exe` を配る。
+  目印があるか、ファイル名が `Yumekku` で始まると（`connect.SUB_BRAND` / `installer_ui.SUB_BRAND`）、窓の名前は「Yumekku Link」、
+  画面の「パスポート」は `installer_ui.brand()` が「Yumekku Link」に言い換え、連携前から Yumekku【サブスク版】を置く（1 年版を渡さない）。
+  **ファイル名だけに頼らないこと**：サーバー（Vercel）がダウンロード名を `filename="DreamlandPassport.exe"` に固定して返すので、
+  同じ exe を別の名前で保存させる方式では見分けられなかった（2026-11-19）。
+  プロセスの見分けに `yumekku` を足してある（`BRIDGE_IMAGE_HINTS` / `_is_bridge_process`）。自動起動の登録名は `YumekkuLink`。
 - **パスポートが置く EA。** 合図の返事のプランが `subscription` なら `bridge.env` に `BRIDGE_EA_NAME=Yumekku【サブスク版】` を覚え
   （`remember_subscription`）、以後 `source_for_account` はサブスク版を置き、1 年版は片づく。サブスク版が同梱されていなければ置かない（1 年版で代えない）。
 - **Windows だけ**（Mac 用のサブスク版は無い。ページも Mac では Windows を案内する）。

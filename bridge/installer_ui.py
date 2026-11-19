@@ -35,18 +35,22 @@ except Exception:  # noqa: BLE001 - 画面が無い環境
 APP_NAME = "ドリームランド｜パスポート"
 APP_KICKER = "D R E A M L A N D   ·   P A S S P O R T"
 
-# Yumekku【サブスク版】のお客様に配るときの名前。中身は同じ exe で、ファイル名が Yumekku で始まるときだけ
-# （特別ゲートが YumekkuConnect.exe としてダウンロードさせる）、窓の名前と文言の「パスポート」を差し替える。
-# サブスクのお客様に「ドリームランド・パスポート」と見せないため。connect.py の SUB_BRAND と同じ判定
-SUB_APP_NAME = "Yumekku【サブスク版】接続ツール"
-SUB_APP_KICKER = "Y U M E K K U   ·   S U B S C R I P T I O N"
+# Yumekku【サブスク版】のお客様に配る接続ツールの名前（YumekkuLink.exe。特別ゲートで配る）。
+# 中身は DreamlandPassport.exe と同じで、ビルドのときに目印（bridge/brand_subscription.txt）と別の起動画像を入れて作る。
+# 目印があるか、ファイル名が Yumekku で始まるとき、窓の名前と文言の「パスポート」を差し替える
+# （サブスクのお客様に「ドリームランド・パスポート」と見せない）。connect.py の SUB_BRAND と同じ判定
+SUB_APP_NAME = "Yumekku Link"
+SUB_APP_KICKER = "Y U M E K K U   ·   L I N K"
 
 
 def _is_sub_brand() -> bool:
     import sys
     from pathlib import Path
 
-    return bool(getattr(sys, "frozen", False)) and Path(sys.executable).stem.lower().startswith("yumekku")
+    if not getattr(sys, "frozen", False):
+        return False
+    marker = Path(getattr(sys, "_MEIPASS", "")) / "bridge" / "brand_subscription.txt"
+    return marker.is_file() or Path(sys.executable).stem.lower().startswith("yumekku")
 
 
 SUB_BRAND = _is_sub_brand()
@@ -60,7 +64,7 @@ def brand(text: object) -> str:
     out = str(text)
     if SUB_BRAND:
         out = out.replace("ドリームランド・パスポート", SUB_APP_NAME).replace("ドリームランド｜パスポート", SUB_APP_NAME)
-        out = out.replace("パスポート", "接続ツール").replace("ドリームランド", "サイト")
+        out = out.replace("パスポート", SUB_APP_NAME).replace("ドリームランド", "サイト")
     return out
 
 # ロビーの色（index.css / dreamland/index.html の CSS 変数と同じ）

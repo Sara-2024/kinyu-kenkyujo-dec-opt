@@ -215,21 +215,28 @@ import installer_ui  # noqa: E402
 
 installer_ui.SUB_BRAND = True
 said = installer_ui.brand("ドリームランド・パスポートを開いてください。パスポートが自動でつながります")
-check("サブスクの名前では「パスポート」を言い換える", "パスポート" not in said and "ドリームランド" not in said and "接続ツール" in said, said)
+check("サブスクの名前では「パスポート」を言い換える", "パスポート" not in said and "ドリームランド" not in said and "Yumekku Link" in said, said)
 installer_ui.SUB_BRAND = False
 check("ふだんの名前では言い換えない", installer_ui.brand("パスポート") == "パスポート")
-check("サブスクの名前の判定はファイル名が Yumekku で始まるか", 'Path(sys.executable).stem.lower().startswith("yumekku")' in connect_src)
+check("サブスクの判定は同梱の目印か、ファイル名が Yumekku で始まるか", '(BRIDGE_DIR / "brand_subscription.txt").is_file()' in connect_src and 'Path(sys.executable).stem.lower().startswith("yumekku")' in connect_src)
 check("名前を変えた exe のブリッジも止められる（connect.py のヒント）", '"yumekku"' in connect_src[connect_src.index("BRIDGE_IMAGE_HINTS = tuple("):][:300])
 bsrc = (BRIDGE / "bridge.py").read_text(encoding="utf-8")
 check("名前を変えた exe のブリッジも止められる（bridge.py のヒント）", '"yumekku"' in bsrc[bsrc.index("def _is_bridge_process"):][:800])
 page = (ROOT / "dreamland" / "yumekku-sub" / "index.html").read_text(encoding="utf-8")
-check("特別ゲートは YumekkuConnect.exe の名前で配る", 'const SUB_FILE_NAME = "YumekkuConnect.exe"' in page and "a.download = SUB_FILE_NAME" in page)
+check("特別ゲートは YumekkuLink.exe を配る（ファイルそのものが別。名前の上書きに左右されない）", 'winFile: "/download/YumekkuLink.exe"' in page and 'const SUB_FILE_NAME = "YumekkuLink.exe"' in page)
 check("特別ゲートの画面に「パスポート」と出さない", "パスポート" not in page)
 
 # ── 9) 中継に届かなくても、合図の取りに行きで落ちない ──
 rc = connect_src[connect_src.index("def relay_claim_with_slot("):]
 rc = rc[: rc.index("\ndef ")]
 check("中継に届かないときも、戻り値は 2 つ（合図・何番目か）", 'return "", 0, 0' not in rc and rc.count('return "", 0') >= 2)
+
+bat = (ROOT / "tools" / "build-windows.bat").read_bytes().decode("cp932")
+check("ビルドはサブスク版の exe（YumekkuLink.exe）も作る", "set \"PYI_NAME=YumekkuLink\"" in bat and "public\\download\\YumekkuLink.exe" in bat)
+check("サブスク版の exe には目印と別の起動画像を入れる", "tools\\brand_subscription.txt;bridge" in bat and "tools\\splash-yumekku.png" in bat)
+check("目印と起動画像のファイルがある", (ROOT / "tools" / "brand_subscription.txt").is_file() and (ROOT / "tools" / "splash-yumekku.png").is_file())
+wf = (ROOT / ".github" / "workflows" / "build-exe.yml").read_text(encoding="utf-8")
+check("自動ビルドはサブスク版の exe も commit する", "public/download/YumekkuLink.exe" in wf)
 
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)

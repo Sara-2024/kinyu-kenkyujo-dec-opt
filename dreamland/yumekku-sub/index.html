@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Yumekku【サブスク版】｜特別ゲート</title>
-<meta name="description" content="Yumekku【サブスク版】のご利用申請と、Yumekku 接続ツールの発行を行う特別ゲートです。">
+<meta name="description" content="Yumekku【サブスク版】のご利用申請と、Yumekku Link の発行を行う特別ゲートです。">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#d1e4ee">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='32' fill='%23789ea7'/%3E%3Cpath d='M32 12l4.4 13.6L50 30l-13.6 4.4L32 48l-4.4-13.6L14 30l13.6-4.4z' fill='%23fff6dc'/%3E%3C/svg%3E">
@@ -112,7 +112,7 @@ a{color:inherit}
   <header class="gate-head">
     <div class="gate-head__en">SPECIAL GATE · SUBSCRIPTION</div>
     <h1 class="gate-head__title">Yumekku【サブスク版】</h1>
-    <p class="gate-head__lead">ご利用の申請と、Yumekku 接続ツールの発行はこちらで承ります。</p>
+    <p class="gate-head__lead">ご利用の申請と、Yumekku Link の発行はこちらで承ります。</p>
     <div class="rule"></div>
   </header>
 
@@ -123,7 +123,7 @@ a{color:inherit}
     <ol class="steps" id="steps">
       <li data-step="apply"><b>ご利用を申請する</b><br><span class="note">ご契約時の合言葉・MT5 の口座番号・お名前を送ります。</span></li>
       <li data-step="review"><b>運営が承認する</b><br><span class="note">承認されると、このページが自動で次へ進みます。</span></li>
-      <li data-step="connect"><b>接続ツールで MT5 とつなぐ</b><br><span class="note">Windows のパソコンで、接続ツールを開くだけで口座に紐づきます。</span></li>
+      <li data-step="connect"><b>Yumekku Link で MT5 とつなぐ</b><br><span class="note">Windows のパソコンで、Yumekku Link を開くだけで口座に紐づきます。</span></li>
     </ol>
     <p class="note">Yumekku【サブスク版】は、運営がご利用を承認しているあいだだけ新しい取引を行います。ご解約などで承認を止めると、新しい取引は止まります（お持ちのポジションは通常どおり決済されます）。</p>
   </section>
@@ -141,7 +141,7 @@ a{color:inherit}
         <ul>
           <li>ご利用は、運営が承認しているあいだに限ります。承認の前と、承認を止めたあとは、新しい取引を行いません。</li>
           <li>ご解約のお申し出があった場合は、運営が承認を止めます。</li>
-          <li>MT5 のパスワードは、このページでも接続ツールでも入力しません。</li>
+          <li>MT5 のパスワードは、このページでも Yumekku Link でも入力しません。</li>
           <li>Yumekku【サブスク版】は将来の利益を約束するものではありません。お取引の判断と結果はご自身に帰属します。</li>
         </ul>
       </div>
@@ -176,10 +176,10 @@ a{color:inherit}
     </form>
   </section>
 
-  <!-- 接続ツールの発行（承認中だけ） -->
+  <!-- Yumekku Link の発行（承認中だけ） -->
   <section class="desk" id="connect" hidden aria-labelledby="connect-title">
     <div class="desk__en">Passport</div>
-    <h2 class="desk__title" id="connect-title">接続ツールで MT5 とつなぐ</h2>
+    <h2 class="desk__title" id="connect-title">Yumekku Link で MT5 とつなぐ</h2>
     <div id="connect-body"></div>
     <ul class="checks" id="checks"></ul>
     <p class="err" id="connect-err" role="alert"></p>
@@ -193,17 +193,17 @@ a{color:inherit}
    リンク・名前はここだけ直せばよい（ロビーと同じ送り先）
    ═══════════════════════════════════════════════ */
 const SITE = "https://kinyu-kenkyujo-dec-opt.vercel.app";   // 合言葉の確認・会員・申請・接続の合図（/api/lobby）
-const RELAY = "wss://kinyu-relay.onrender.com/app";          // 接続ツールの様子はここから届く
+const RELAY = "wss://kinyu-relay.onrender.com/app";          // Yumekku Link の様子はここから届く
 const LINKS = {
   lobby: SITE + "/api/lobby",
-  winFile: "/download/DreamlandPassport.exe",   // dreamland/vercel.json の rewrite で本体サイトから取る（同じドメイン）
+  winFile: "/download/YumekkuLink.exe",   // サブスク版の Yumekku Link。dreamland/vercel.json の rewrite で本体サイトから取る（同じドメイン）
   support: "https://lin.ee/V0ikrqq",
 };
 const EA_NAME = "Yumekku【サブスク版】ver1.1";   // MT5 のナビゲーターに出る名前
-/* 接続ツールの呼び名とファイル名。中身はロビーの接続ツールと同じ exe だが、この名前（Yumekku で始まる）で保存すると、
-   ツールの窓・文言が「Yumekku【サブスク版】接続ツール」になり、最初からサブスク版の EA を置く（connect.py の SUB_BRAND） */
-const TOOL_NAME = "Yumekku 接続ツール";
-const SUB_FILE_NAME = "YumekkuConnect.exe";
+/* Yumekku Link の呼び名とファイル名。中身はロビーの Yumekku Link と同じ exe だが、この名前（Yumekku で始まる）で保存すると、
+   ツールの窓・文言が「Yumekku【サブスク版】Yumekku Link」になり、最初からサブスク版の EA を置く（connect.py の SUB_BRAND） */
+const TOOL_NAME = "Yumekku Link";
+const SUB_FILE_NAME = "YumekkuLink.exe";
 const STATUS_POLL_MS = 30000;      // 審査中に状態を見に行く間隔
 const CLAIM_REFRESH_MS = 4 * 60000; // 合図は 10 分で切れるので、待っているあいだ預け直す
 const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セッション・口座番号・お名前）。合言葉は覚えない
@@ -301,7 +301,7 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
       b.addEventListener("click", fn); actions.appendChild(b);
     };
     if (st === "active") {
-      $("status-text").textContent = "ご利用が承認されています。接続ツールで MT5 とつなぐと、Yumekku【サブスク版】が動きます。";
+      $("status-text").textContent = "ご利用が承認されています。Yumekku Link で MT5 とつなぐと、Yumekku【サブスク版】が動きます。";
       markSteps("connect");
       show("connect", true);
       renderConnect();
@@ -433,7 +433,7 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     close() { this.closed = true; clearTimeout(this.retry); if (this.ws) { const ws = this.ws; this.ws = null; try { ws.close(); } catch (_) {} } this.live = false; this.status = null; this.room = null; },
   };
 
-  /* ── 合図（使い捨て）を発行して、中継に「この口座の接続ツールに渡して」と預ける ── */
+  /* ── 合図（使い捨て）を発行して、中継に「この口座の Yumekku Link に渡して」と預ける ── */
   const relayHttp = RELAY.replace(/^ws/, "http").replace(/\/app(\?.*)?$/, "");
   const issueToken = async () => {
     const { status, data } = await api({ action: "connect_token", session: me.token });
@@ -457,7 +457,7 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
   function renderConnect() {
     const body = $("connect-body");
     if (isPhone) {
-      body.innerHTML = `<p>MT5 と接続ツールはパソコンに入れます。このページを <b>Windows のパソコン</b>で開いてください。</p>
+      body.innerHTML = `<p>MT5 と Yumekku Link はパソコンに入れます。このページを <b>Windows のパソコン</b>で開いてください。</p>
         <div class="row"><button class="btn" type="button" id="share">このページのリンクを送る</button></div>`;
       $("share").addEventListener("click", async () => {
         const url = location.href.split("#")[0];
@@ -473,15 +473,15 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     }
     body.innerHTML = `<ol class="howto">
         <li>MT5 を開いて、口座 ${esc(tail2(me.account))} にログインしておきます。</li>
-        <li>下のボタンで接続ツールをダウンロードし、ダウンロードしたファイルを開きます（パソコン上の名前は YumekkuConnect）。</li>
-        <li>接続ツールの案内どおりに進めると、この口座に自動で紐づきます。</li>
+        <li>下のボタンで Yumekku Link をダウンロードし、ダウンロードしたファイルを開きます（ファイル名は YumekkuLink）。</li>
+        <li>Yumekku Link の案内どおりに進めると、この口座に自動で紐づきます。</li>
         <li>MT5 のナビゲーターで「${esc(EA_NAME)}」を、ゴールド（XAUUSD または GOLD）のチャートに載せ、「アルゴ取引」ボタンを緑にします。</li>
       </ol>
       <div class="row">
-        <a class="btn" href="${LINKS.winFile}" id="dl" download="YumekkuConnect.exe">接続ツールをダウンロード（Windows 用） <span aria-hidden="true">↓</span></a>
+        <a class="btn" href="${LINKS.winFile}" id="dl" download="YumekkuLink.exe">Yumekku Link をダウンロード（Windows 用） <span aria-hidden="true">↓</span></a>
         <button class="btn btn--ghost" type="button" id="recheck">設置が終わった（確かめる）</button>
       </div>
-      <p class="note">すでに接続ツールをお使いの方は、<button type="button" class="linklike" id="launch">接続ツールを呼び出す</button>だけでつながります。MT5 を閉じているあいだはつながりません（MT5 を開くと自動でつながります）。</p>`;
+      <p class="note">すでに Yumekku Link をお使いの方は、<button type="button" class="linklike" id="launch">Yumekku Link を呼び出す</button>だけでつながります。MT5 を閉じているあいだはつながりません（MT5 を開くと自動でつながります）。</p>`;
     $("dl").addEventListener("click", async (e) => {
       e.preventDefault();
       const t = await issueToken();
@@ -504,7 +504,7 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     paintChecks();
   }
 
-  /* MT5 側がどこまで済んだか（接続ツールが返した状態だけを見る） */
+  /* MT5 側がどこまで済んだか（Yumekku Link が返した状態だけを見る） */
   function paintChecks() {
     const s = Bridge.status || {};
     const live = Bridge.live;
@@ -514,7 +514,7 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     const algo = eaOk && s.terminal_trade_allowed !== false && s.ea_state !== "自動売買ボタンがオフ";
     const row = (ok, wait, text) => `<li class="${ok ? "is-ok" : wait ? "is-wait" : "is-ng"}">${esc(text)}</li>`;
     const items = [
-      row(live, !live, live ? "接続ツールがこの口座につながりました" : "接続ツールがつながるのを待っています"),
+      row(live, !live, live ? "Yumekku Link がこの口座につながりました" : "Yumekku Link がつながるのを待っています"),
       row(mt5 && sameAcct, live && !mt5, !live ? "MT5 との接続" : !mt5 ? (s.mt5_error ? `MT5 につながっていません（${s.mt5_error}）` : "MT5 を開いて、口座にログインしてください") : sameAcct ? `MT5 の口座 ${tail2(s.account)} を確認しました` : `つながっている MT5 の口座（${tail2(s.account)}）が、申請した口座（${tail2(me.account)}）と違います。その口座でログインしている MT5 を開いてください`),
       row(eaOk, sameAcct && !eaOk && !s.ea_problem, eaOk ? `${EA_NAME} がチャートで動いています` : s.ea_problem ? String(s.ea_problem) : `MT5 のナビゲーターから「${EA_NAME}」をゴールドのチャートに載せてください`),
       row(algo, eaOk && !algo, algo ? "「アルゴ取引」ボタンが緑になっています" : "MT5 の上にある「アルゴ取引」ボタンを押して緑にしてください"),
@@ -547,7 +547,7 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     try {
       const r = await fetch(`${relayHttp}/health?room=${encodeURIComponent(me.id)}`, { cache: "no-store" });
       const b = await r.json();
-      if (manual) $("connect-err").textContent = b && b.room && b.room.bridge ? "接続ツールが来ています。この画面につないでいます…" : "まだ接続ツールがつながっていません。ダウンロードしたファイルを開いて、最後まで進めてください。MT5 が開いてログインしているかもご確認ください。";
+      if (manual) $("connect-err").textContent = b && b.room && b.room.bridge ? "Yumekku Link が来ています。この画面につないでいます…" : "まだ Yumekku Link がつながっていません。ダウンロードしたファイルを開いて、最後まで進めてください。MT5 が開いてログインしているかもご確認ください。";
     } catch (_) {}
   }
 
