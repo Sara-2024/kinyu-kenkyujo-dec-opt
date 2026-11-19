@@ -226,5 +226,10 @@ page = (ROOT / "dreamland" / "yumekku-sub" / "index.html").read_text(encoding="u
 check("特別ゲートは YumekkuConnect.exe の名前で配る", 'const SUB_FILE_NAME = "YumekkuConnect.exe"' in page and "a.download = SUB_FILE_NAME" in page)
 check("特別ゲートの画面に「パスポート」と出さない", "パスポート" not in page)
 
+# ── 9) 中継に届かなくても、合図の取りに行きで落ちない ──
+rc = connect_src[connect_src.index("def relay_claim_with_slot("):]
+rc = rc[: rc.index("\ndef ")]
+check("中継に届かないときも、戻り値は 2 つ（合図・何番目か）", 'return "", 0, 0' not in rc and rc.count('return "", 0') >= 2)
+
 print(f"\n{PASS} ok / {FAIL} NG")
 sys.exit(1 if FAIL else 0)

@@ -735,7 +735,9 @@ def relay_claim_with_slot(account: str) -> tuple[str, int]:
         if not _CLAIM_ERR_LOGGED:
             _CLAIM_ERR_LOGGED = True
             log(f"中継に合図を取りに行けません: {type(exc).__name__} {getattr(exc, 'reason', exc)}")
-        return "", 0, 0
+        # 返すのは 2 つ（合図・何番目か）。以前は 3 つ返していて、通信に失敗すると呼び出し側が落ち、
+        # 接続ツールが途中で止まっていた
+        return "", 0
     token = str(data.get("token") or "") if isinstance(data, dict) and data.get("ok") else ""
     if TOKEN_RE.match(token) and isinstance(data, dict):
         try:
