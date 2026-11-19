@@ -674,6 +674,11 @@ class MT5Controller:
         self.desired_value: float = cfg.gv_default
         # Yumekku【サブスク版】の利用許可（中継が渡す { until, sig, status }）。サブスクでなければ None のまま
         self.license: dict[str, Any] | None = None
+        # 最後に稼働／停止を指示したのは誰か・いつか（MT5 につながったあと intent.json から読む）。
+        # MT5 につながる前にもサイトへ名乗るので、最初から用意しておく。無いと名乗りのたびに落ちて、
+        # MT5 が閉じている（つながっていない）あいだ、サイトに一度も現れなかった（2026-11-19）
+        self.intent_by: str = ""
+        self.intent_at: str = ""
         # ブローカーのサーバー時刻と UTC の差（秒）。履歴の日付はこれで判断する
         self._server_offset: int = _load_clock_offset()
         self._server_offset_at: float = 0.0
