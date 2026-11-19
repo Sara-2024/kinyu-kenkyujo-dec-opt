@@ -176,6 +176,12 @@ const ngRes = (text, status = 400) => ({ ok: false, status, text: async () => te
   check('サブスクでない会員の申請は 403', ng.status === 403 && ng.body.error === 'NOT_SUBSCRIPTION')
   check('申請はセッションが要る', clean({ action: 'sub_apply' }).ok === false)
   check('会員のプランに subscription を通す', publicMember({ id: MEMBER_ID, plan: 'subscription' })?.plan === 'subscription')
+  const lc = []
+  const li = await handleLobby({ action: 'sub_login', account: '198652312', entry: 'sub-pass' }, env, 'ip-sub2', fakeSupabase(okRes({ token: SESSION, member: { ...MEMBER, plan: 'subscription' } }), lc))
+  check('サブスクの合言葉＋口座番号で入る（subscription_login）', li.status === 200 && li.body.session === SESSION && lc[0]?.url.endsWith('/rpc/subscription_login') && lc[0]?.body.p_account === 198652312 && lc[0]?.body.p_entry === 'sub-pass', JSON.stringify(li.body))
+  check('sub_login は合言葉が要る', clean({ action: 'sub_login', account: 1 }).ok === false)
+  const bad = await handleLobby({ action: 'sub_login', account: 1, entry: 'x' }, env, 'ip-sub3', fakeSupabase(ngRes('BAD_CREDENTIALS')))
+  check('サブスクの会員でなければ 401', bad.status === 401 && bad.body.error === 'BAD_CREDENTIALS')
 }
 
 // ── 小さな道具 ─────────────────────────────────

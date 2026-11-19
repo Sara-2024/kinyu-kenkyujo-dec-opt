@@ -45,15 +45,23 @@ export function subscriptionErrorMessage(error: unknown): string {
   if (raw.includes('NOT_CONFIGURED')) return '研究所への接続設定がまだ完了していません。'
   if (raw.includes('FORBIDDEN')) return 'この操作を行う権限がありません。'
   if (raw.includes('NOT_FOUND')) return '対象の申請が見つかりません。'
+  if (raw.includes('BAD_ACCOUNT')) return '口座番号を数字で入れてください。'
   if (raw.includes('SESSION_EXPIRED')) return 'ログインの有効期限が切れました。もう一度ログインしてください。'
   if (/could not find the function|does not exist|PGRST202/i.test(raw)) {
-    return 'データベースにまだサブスク版の設定が入っていません（supabase/migrations/20261118_subscription.sql を流してください）。'
+    return raw.includes('admin_add_subscription')
+      ? 'データベースにまだ「口座を追加」の設定が入っていません（supabase/migrations/20261119_subscription_admin_add.sql を流してください）。'
+      : 'データベースにまだサブスク版の設定が入っていません（supabase/migrations/20261118_subscription.sql を流してください）。'
   }
   return '処理に失敗しました。時間をおいてもう一度お試しください。'
 }
 
 export function subscriptionList(token: string): Promise<SubscriptionRow[]> {
   return rpc<SubscriptionRow[]>('admin_list_subscriptions', { p_token: token }).then((rows) => rows ?? [])
+}
+
+/** 管理者が口座を手で追加する（申請ページを通らずに、サブスクの会員を作って承認する） */
+export function subscriptionAdd(token: string, account: number, name: string, status: SubscriptionStatus = 'active'): Promise<unknown> {
+  return rpc('admin_add_subscription', { p_token: token, p_account: account, p_name: name, p_status: status })
 }
 
 export function subscriptionSet(token: string, memberId: string, status: SubscriptionStatus, note?: string): Promise<unknown> {

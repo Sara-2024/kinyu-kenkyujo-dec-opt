@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import {
   SUBSCRIPTION_STATUS_NAMES,
   subscriptionErrorMessage,
+  subscriptionAdd,
   subscriptionList,
   subscriptionSet,
   type SubscriptionRow,
@@ -25,6 +26,33 @@ export function SubscriptionApprovals({ token }: { token: string | null }) {
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
+  // 口座を手で追加する欄
+  const [addAccount, setAddAccount] = useState('')
+  const [addName, setAddName] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [addNote, setAddNote] = useState<string | null>(null)
+  const add = async () => {
+    if (!token) return
+    const account = Number(addAccount.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)).replace(/\D/g, ''))
+    if (!Number.isInteger(account) || account <= 0) {
+      setAddNote('口座番号を数字で入れてください。')
+      return
+    }
+    if (!window.confirm(`口座 ${account} を Yumekku【サブスク版】として追加し、そのまま承認します。よろしいですか？`)) return
+    setAdding(true)
+    setAddNote(null)
+    try {
+      await subscriptionAdd(token, account, addName.trim())
+      setAddAccount('')
+      setAddName('')
+      setAddNote(`口座 ${account} を追加して承認しました。`)
+      await reload()
+    } catch (err) {
+      setAddNote(subscriptionErrorMessage(err))
+    } finally {
+      setAdding(false)
+    }
+  }
 
   const reload = async () => {
     if (!token) return
@@ -102,6 +130,49 @@ export function SubscriptionApprovals({ token }: { token: string | null }) {
         >
           一覧を読み直す
         </button>
+      </div>
+      <div className="mt-4 rounded-[4px] border px-4 py-4" style={{ borderColor: 'var(--panel-border)', background: 'rgba(8,14,26,0.5)' }}>
+        <p className="text-[15px] font-bold">口座を追加（承認済みで）</p>
+        <p className="mt-1 text-[14px] text-slate-400">
+          申請ページを通さずに、口座番号だけでサブスク版の口座を作って承認します。お客様は申請ページで「サブスクの合言葉＋この口座番号」を入れると、
+          そのまま Yumekku Link を受け取れます。すでに通常プランで登録している口座は、サブスク版に切り替わります。
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-[14px] text-slate-300">
+            <span className="block">MT5 の口座番号</span>
+            <input
+              value={addAccount}
+              onChange={(e) => setAddAccount(e.target.value)}
+              inputMode="numeric"
+              className="mt-1 h-11 w-52 rounded-[4px] border px-3 font-mono text-[15px]"
+              style={{ background: 'rgba(8,14,26,0.9)', borderColor: 'var(--panel-border)' }}
+            />
+          </label>
+          <label className="text-[14px] text-slate-300">
+            <span className="block">お名前（任意）</span>
+            <input
+              value={addName}
+              onChange={(e) => setAddName(e.target.value)}
+              maxLength={80}
+              className="mt-1 h-11 w-56 rounded-[4px] border px-3 text-[15px]"
+              style={{ background: 'rgba(8,14,26,0.9)', borderColor: 'var(--panel-border)' }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={adding}
+            onClick={() => void add()}
+            className="h-11 rounded-[4px] px-5 text-[15px] font-bold text-[#081018]"
+            style={{ background: 'var(--accent)' }}
+          >
+            {adding ? '追加しています…' : '追加して承認する'}
+          </button>
+        </div>
+        {addNote && (
+          <p className="mt-2 text-[15px]" style={{ color: addNote.includes('承認しました') ? 'var(--accent)' : '#ff8484' }}>
+            {addNote}
+          </p>
+        )}
       </div>
       {error && <p className="mt-3 text-[15px] text-[#ff8484]">{error}</p>}
       {rows.length === 0 && !error ? (

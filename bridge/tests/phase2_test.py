@@ -270,6 +270,17 @@ if sub_mig.is_file():
     check("承認中でなければ期限 0（止まる側）", "case when ok then v_until else 0 end" in lic)
     check("署名は会員の口座番号で作る（ブリッジの名乗りを信じない）", "_subscription_sig(m.account, v_until)" in lic)
 
+# ── 8-3t) サブスク版の「口座を追加」「合言葉で入る」migration も schema.sql とずれていないか ──
+sub2 = ROOT / "supabase" / "migrations" / "20261119_subscription_admin_add.sql"
+check("口座を追加の migration がある", sub2.is_file())
+if sub2.is_file():
+    sub2_sql = sub2.read_text(encoding="utf-8")
+    schema_all = (ROOT / "supabase" / "schema.sql").read_text(encoding="utf-8")
+    check("口座を追加の migration の中身が schema.sql と同じ", sub2_sql.strip() in schema_all)
+    check("口座を追加できるのは管理者だけ", "_require_admin(p_token)" in sub2_sql[sub2_sql.index("function public.admin_add_subscription(") :])
+    lg = sub2_sql[sub2_sql.index("function public.subscription_login(") :]
+    check("合言葉で入れるのはサブスクの合言葉・サブスクの会員だけ", "is distinct from 'subscription'" in lg and "v_member.plan is distinct from 'subscription'" in lg)
+
 # ── 8-3b) 「合図の返事にプラン」「管理者が会員のプランを直す」migration も schema.sql とずれていないか ──
 plan_mig = ROOT / "supabase" / "migrations" / "20261017_connect_plan_and_admin_set_plan.sql"
 check("プランの migration がある", plan_mig.is_file())

@@ -9,6 +9,7 @@
 //   connect_token … 接続ツールを呼び出すための短命の合図（connect_token_issue）
 //   platform      … お使いのパソコン（windows / mac）を記録する
 //   sub_apply     … Yumekku【サブスク版】の利用を申請する（サブスクの合言葉で登録した会員だけ）
+//   sub_login     … サブスクの合言葉＋口座番号で入る（管理者が手で追加した口座はサイトのパスワードが合わないため）
 //   sub_status    … その申請の状態（none / pending＝審査中 / active＝承認中 / stopped＝停止）
 //
 //   ・ロビーは別のドメインに置かれるので CORS を開ける（DREAMLAND_ORIGIN で絞れる）
@@ -22,8 +23,8 @@
 const RATE_LIMIT_GUESS = 20
 const RATE_LIMIT_SESSION = 200
 const RATE_WINDOW_MS = 10 * 60_000
-const GUESS_ACTIONS = new Set(['plan', 'register', 'login'])
-const ACTIONS = ['plan', 'register', 'login', 'me', 'connect_token', 'platform', 'sub_apply', 'sub_status'] as const
+const GUESS_ACTIONS = new Set(['plan', 'register', 'login', 'sub_login'])
+const ACTIONS = ['plan', 'register', 'login', 'me', 'connect_token', 'platform', 'sub_apply', 'sub_status', 'sub_login'] as const
 const PLANS = ['first', 'crystal', 'premium', 'subscription'] as const
 const SUB_STATUSES = ['none', 'pending', 'active', 'stopped'] as const
 const isPlan = (v: unknown): v is (typeof PLANS)[number] => typeof v === 'string' && (PLANS as readonly string[]).includes(v)
@@ -122,6 +123,14 @@ export function clean(req: LobbyRequest | null): Clean {
     if (!entry) return { ok: false, error: 'BAD_ENTRY' }
     return { ok: true, action, rpc: 'plan_check', args: { p_entry: entry } }
   }
+  if (action === 'sub_login') {
+    const accountRaw = typeof req.account === 'number' ? req.account : typeof req.account === 'string' ? req.account.trim() : ''
+    const account = Number(accountRaw)
+    if (!Number.isInteger(account) || account <= 0 || account > 9_999_999_999_999) return { ok: false, error: 'BAD_ACCOUNT' }
+    const entry = str(req.entry, 200).trim()
+    if (!entry) return { ok: false, error: 'BAD_ENTRY' }
+    return { ok: true, action, rpc: 'subscription_login', args: { p_account: account, p_entry: entry } }
+  }
   if (action === 'register' || action === 'login') {
     const accountRaw = typeof req.account === 'number' ? req.account : typeof req.account === 'string' ? req.account.trim() : ''
     const account = Number(accountRaw)
@@ -204,7 +213,7 @@ export async function handleLobby(
     if (!isPlan(plan)) return { status: 401, body: { error: 'BAD_ENTRY' } }
     return { status: 200, body: { ok: true, plan } }
   }
-  if (input.action === 'register' || input.action === 'login') {
+  if (input.action === 'register' || input.action === 'login' || input.action === 'sub_login') {
     const token = typeof data?.token === 'string' ? data.token : ''
     const member = publicMember(data?.member)
     if (!UUID_RE.test(token) || !member) return { status: 502, body: { error: 'UPSTREAM_ERROR' } }

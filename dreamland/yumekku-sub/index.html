@@ -358,6 +358,8 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
     const password = await derivedPassword(account, entry);
     let r = name ? await api({ action: "register", account, name, password, entry }) : { status: 400, data: { error: "ACCOUNT_TAKEN" } };
     if (r.status !== 200 && r.data.error === "ACCOUNT_TAKEN") r = await api({ action: "login", account, password });
+    // 運営が管理サイトで追加した口座は、サイトのパスワードが合わない。サブスクの合言葉＋口座番号で入る
+    if (r.status !== 200 && r.data.error === "BAD_CREDENTIALS") r = await api({ action: "sub_login", account, entry });
     if (r.status !== 200) {
       setBusy(form, false);
       errEl.textContent = r.data.error === "BAD_CREDENTIALS" ? (name ? ERRORS.TAKEN : "合言葉か口座番号が違います。申請のときと同じものを入れてください。") : r.data.error === "SUSPENDED" ? ERRORS.SUSPENDED : errText(r.data.error);
