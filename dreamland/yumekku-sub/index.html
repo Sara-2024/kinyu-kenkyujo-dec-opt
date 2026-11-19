@@ -204,7 +204,7 @@ const EA_NAME = "Yumekku【サブスク版】ver1.1";   // MT5 のナビゲー�
    ツールの窓・文言が「Yumekku【サブスク版】Yumekku Link」になり、最初からサブスク版の EA を置く（connect.py の SUB_BRAND） */
 const TOOL_NAME = "Yumekku Link";
 const SUB_FILE_NAME = "YumekkuLink.exe";
-const STATUS_POLL_MS = 30000;      // 審査中に状態を見に行く間隔
+const STATUS_POLL_MS = 10000;      // 審査中に状態を見に行く間隔
 const CLAIM_REFRESH_MS = 4 * 60000; // 合図は 10 分で切れるので、待っているあいだ預け直す
 const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セッション・口座番号・お名前）。合言葉は覚えない
 
@@ -568,6 +568,11 @@ const STORE = "yumekku-sub.member"; // この端末の申請（会員 ID・セ�
   /* はじめに：この端末の申請があれば状態を見る */
   render();
   if (me) refresh();
+  // 裏のタブはブラウザが処理を間引くので、このページに戻ってきた瞬間に状態を見に行く
+  //（管理サイトのタブで承認して戻ってきても、しばらく「審査中」のままに見えた）
+  const refreshIfShown = () => { if (document.visibilityState === "visible" && me && (!sub || sub.status !== "active")) refresh(); };
+  document.addEventListener("visibilitychange", refreshIfShown);
+  window.addEventListener("focus", refreshIfShown);
 })();
 </script>
 </body>
