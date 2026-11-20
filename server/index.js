@@ -43,6 +43,18 @@ const STOP_COMMANDS = new Set(['stop_trading', 'close_all', 'stop_system'])
  */
 const FLEET_COMMANDS = new Set(['stop_trading', 'close_all', 'stop_system', 'start_trading'])
 
+/**
+ * 管理者画面から 1 口座ぶんだけ読める問い合わせ（読むだけ。売買には触らない）。
+ * 会員の一覧で行を開いたときに、その口座の取引履歴・建玉を取りに行くのに使う。
+ * 返事は頼んだ管理者の画面にだけ返す（お客様の画面や、他の管理者の画面には流さない）。
+ */
+const FLEET_QUERIES = new Set(['get_trades', 'get_history', 'get_positions', 'get_status'])
+/** 返事が来ないまま残った問い合わせを忘れるまで */
+const FLEET_QUERY_KEEP_MS = 60 * 1000
+/** 中継が付けた番号 → { ws, id（画面が付けた番号）, room, at } */
+const fleetQueries = new Map()
+let fleetQuerySeq = 0
+
 /** token → { at, member } */
 const members = new Map()
 
@@ -519,13 +531,26 @@ function handleBridge(ws, roomId) {
       return
     }
 
+    // 管理者画面からの問い合わせ（取引履歴など）の返事は、頼んだ画面にだけ返す。
+    // 部屋の要約（room.status）にも混ぜない（履歴は大きく、要約は 30 秒ごとに全口座ぶん配るため）。
+    if (payload.type === 'ack' && fleetQueries.has(payload.id)) {
+      const asked = fleetQueries.get(payload.id)
+      fleetQueries.delete(payload.id)
+      if (asked.room === roomId) {
+        send(asked.ws, { type: 'fleet_event', room: roomId, message: { ...payload, id: asked.id, bridgeId: roomId } })
+      }
+      return
+    }
+
     if (payload.type === 'ack') {
       // set_variable の応答の value は「書き込んだ変数の読み返し」で、
       // 売買フラグ（status.value）ではない。混ぜると、あとから開いた画面が
       // ロット値を稼働状態として受け取ってしまう（welcome に room.status を載せるため）。
-      const { value, ...rest } = payload
+      // 取引履歴（trades / history）も要約には入れない。お客様が履歴を開くたびに、
+      // 数百件の取引が要約に残って、一斉制御の画面へ配られ続けてしまう。
+      const { value, trades: _trades, history: _history, ...rest } = payload
       const isVariableAck = payload.command === 'set_variable' || typeof payload.name === 'string'
-      room.status = { ...(room.status ?? {}), ...(isVariableAck ? rest : payload) }
+      room.status = { ...(room.status ?? {}), ...rest, ...(isVariableAck || value === undefined ? {} : { value }) }
       log(`ブリッジ ${short(roomId)} 応答: ${payload.command} ok=${payload.ok} value=${value}`)
     }
     broadcastToRoom(roomId, { ...payload, bridgeId: roomId })
@@ -702,11 +727,36 @@ function handleFleet(ws, member, sessionToken = '') {
       return
     }
 
+    if (payload.type === 'fleet_query') {
+      const command = String(payload.command ?? '')
+      if (!FLEET_QUERIES.has(command)) {
+        refuse('この問い合わせはできません')
+        return
+      }
+      const roomId = String(payload.room ?? '')
+      const room = MEMBER_ROOM_RE.test(roomId) ? rooms.get(roomId) : null
+      if (!room?.bridge) {
+        refuse('パスポートがつながっていません')
+        return
+      }
+      const now_ = Date.now()
+      for (const [k, v] of fleetQueries) if (now_ - v.at > FLEET_QUERY_KEEP_MS) fleetQueries.delete(k)
+      const relayId = `fq-${++fleetQuerySeq}`
+      fleetQueries.set(relayId, { ws, id, room: roomId, at: now_ })
+      // 日数と件数は中継で丸める（画面の言い分のまま MT5 に重い問い合わせをさせない）
+      const days = Math.max(1, Math.min(365, Math.floor(Number(payload.days)) || 30))
+      const limit = Math.max(1, Math.min(500, Math.floor(Number(payload.limit)) || 200))
+      log(`管理者画面 → 部屋 ${short(roomId)}: ${command}（読むだけ）`)
+      send(room.bridge, { id: relayId, command, days, limit, bridgeId: roomId })
+      return
+    }
+
     refuse('知らない指令です')
   })
 
   const drop = () => {
     unwatchAll()
+    for (const [k, v] of fleetQueries) if (v.ws === ws) fleetQueries.delete(k)
     log('一斉制御の画面が切断しました')
   }
   ws.on('close', drop)

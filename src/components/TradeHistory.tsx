@@ -31,7 +31,7 @@ function Cell({
   )
 }
 
-function Summary({ history, currency }: { history: TradeHistoryData; currency?: string }) {
+export function Summary({ history, currency }: { history: TradeHistoryData; currency?: string }) {
   const rows = history.trades
   const profit = rows.reduce((a, t) => a + t.profit, 0)
   const wins = rows.filter((t) => t.profit > 0).length
@@ -70,7 +70,7 @@ function Summary({ history, currency }: { history: TradeHistoryData; currency?: 
   )
 }
 
-function Rows({ trades, currency }: { trades: Trade[]; currency?: string }) {
+export function Rows({ trades, currency }: { trades: Trade[]; currency?: string }) {
   return (
     // 横に広い表なので、狭い画面では表だけ横に流す（画面そのものは横に動かさない）
     <div className="overflow-x-auto px-6 pb-4">

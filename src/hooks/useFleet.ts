@@ -27,6 +27,11 @@ export interface SendResult {
   refused?: string[]
 }
 
+/** 管理者画面から 1 口座ぶんだけ読める問い合わせ（中継の FLEET_QUERIES と同じ） */
+export type FleetQuery = 'get_trades' | 'get_history' | 'get_positions' | 'get_status'
+/** 問い合わせの返事。ブリッジの応答（ack）そのまま。届かなかったときは ok: false と理由 */
+export type FleetAnswer = { ok: boolean; error?: string } & Record<string, unknown>
+
 export type FleetPhase = 'connecting' | 'live' | 'denied' | 'error'
 
 function fleetUrl(session: string): string {
@@ -41,6 +46,7 @@ export function useFleet(session: string | null, rooms: string[]) {
   const wsRef = useRef<WebSocket | null>(null)
   const seq = useRef(0)
   const pendingSend = useRef(new Map<string, (r: SendResult) => void>())
+  const pendingQuery = useRef(new Map<string, (r: FleetAnswer) => void>())
   const roomsKey = rooms.slice().sort().join(',')
 
   const patch = useCallback((room: string, fn: (prev: RoomState) => RoomState) => {
@@ -109,9 +115,21 @@ export function useFleet(session: string | null, rooms: string[]) {
           for (const room of r.waiting) patch(room, (p) => ({ ...p, pending: r.command }))
           return
         }
+        if (payload.type === 'fleet_refused') {
+          const id = String(payload.id ?? '')
+          pendingQuery.current.get(id)?.({ ok: false, error: String(payload.error ?? '読み取れませんでした') })
+          pendingQuery.current.delete(id)
+          return
+        }
         if (payload.type === 'fleet_event') {
           const room = String(payload.room ?? '')
           const msg = (payload.message ?? {}) as Record<string, unknown>
+          // 問い合わせ（取引履歴など）の返事。口座の状態には混ぜない
+          if (msg.type === 'ack' && typeof msg.id === 'string' && pendingQuery.current.has(msg.id)) {
+            pendingQuery.current.get(msg.id)?.({ ...msg, ok: Boolean(msg.ok), error: msg.error ? String(msg.error) : undefined })
+            pendingQuery.current.delete(msg.id)
+            return
+          }
           if (msg.type === 'bridge_online') {
             patch(room, (p) => ({ ...p, online: true, since: Date.now(), status: msg.status as BridgeStatus, pending: null }))
           } else if (msg.type === 'bridge_status') {
@@ -135,7 +153,8 @@ export function useFleet(session: string | null, rooms: string[]) {
         }
       }
       ws.onclose = (ev) => {
-        wsRef.current = null
+        // 張り直したあとに届く「前の接続の切断」で、新しい接続を見失わない
+        if (wsRef.current === ws) wsRef.current = null
         if (closed) return
         // 管理者でない／会員の確認が無い中継は 403 で断られ、開く前に閉じる
         setPhase(opened ? 'connecting' : 'denied')
@@ -187,5 +206,26 @@ export function useFleet(session: string | null, rooms: string[]) {
     [],
   )
 
-  return { phase, states, send, refresh: watch }
+  /** 1 口座ぶんの取引履歴などを読む（読むだけ）。必ず返る（失敗は ok: false） */
+  const query = useCallback(
+    (room: string, command: FleetQuery, extra: { days?: number; limit?: number } = {}): Promise<FleetAnswer> => {
+      const ws = wsRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve({ ok: false, error: '中継につながっていません' })
+      const id = `q${Date.now()}-${++seq.current}`
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          pendingQuery.current.delete(id)
+          resolve({ ok: false, error: 'パスポートから返事がありません' })
+        }, 20_000)
+        pendingQuery.current.set(id, (r) => {
+          clearTimeout(timer)
+          resolve(r)
+        })
+        ws.send(JSON.stringify({ type: 'fleet_query', id, room, command, ...extra }))
+      })
+    },
+    [],
+  )
+
+  return { phase, states, send, query, refresh: watch }
 }

@@ -23,7 +23,7 @@ import { DreamlandApplications } from '../components/DreamlandApplications'
 import { MEMBER_PLANS, PLAN_NAMES, isSubscriptionAccount, subscriptionList, type MemberPlan, type PlanView } from '../data/subscription'
 import { AccountsPnL } from '../components/AccountsPnL'
 import { SubscriptionApprovals } from '../components/SubscriptionApprovals'
-import { systemLabel } from '../data/fleet'
+import { MemberAccounts } from '../components/MemberAccounts'
 
 /**
  * 管理者画面のタブ。ページが長く、下のほうの欄（サブスク版の申請など）までスクロールが要ったので、上で切り替える。
@@ -203,7 +203,7 @@ export function Admin() {
           </Link>
         </div>
         <p className="mt-2 text-[15px] text-slate-400">
-          利用中のアカウント一覧です。「パスポート」の列で、その口座の EA を止める・動かす・全決済できます（パスポートが中継につながっている口座だけ）。
+          お客様の一覧です。行を押すと開いて、その口座の稼働状況・資金状況・持っているポジション・取引履歴を見られます。停止・稼働・全決済もそこから送れます（パスポートが中継につながっている口座だけ）。
           {fleet.phase === 'denied' ? ' 中継に入れていません（管理者のログインを確かめてください）。' : fleet.phase === 'connecting' ? ' 中継に接続中…' : ''}
         </p>
 
@@ -270,149 +270,31 @@ export function Admin() {
 
         {tab === 'members' && (
           <>
-        <div
-          className="mt-5 overflow-x-auto rounded-[4px] border"
-          style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
-        >
-          <table className="w-full min-w-[860px] text-left text-[15px]">
-            <thead>
-              <tr className="border-b text-slate-400" style={{ borderColor: 'var(--panel-border)' }}>
-                <th className="px-3 py-3 font-bold">お名前</th>
-                <th className="px-3 py-3 font-bold">口座番号</th>
-                <th className="px-3 py-3 font-bold">プラン</th>
-                <th className="px-3 py-3 font-bold">権限</th>
-                <th className="px-3 py-3 font-bold">状態</th>
-                <th className="px-3 py-3 font-bold">お客様の操作</th>
-                <th className="px-3 py-3 font-bold">MT5連携</th>
-                <th className="px-3 py-3 font-bold">パスポート</th>
-                <th className="px-3 py-3 font-bold">システム</th>
-                <th className="px-3 py-3 font-bold">OS</th>
-                <th className="px-3 py-3 font-bold">最終ログイン</th>
-                <th className="px-3 py-3 font-bold">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {viewRows.map((row) => (
-                <tr key={row.id} className="border-b" style={{ borderColor: 'rgba(94,204,255,0.12)' }}>
-                  <td className="px-3 py-3">
-                    {row.name || <span className="text-slate-500">{row.email ?? '—'}</span>}
-                    {row.id === member?.id ? (
-                      <span className="ml-2 text-[12px] text-slate-500">自分</span>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-3 font-mono">{row.account ?? '—'}</td>
-                  <td className="px-3 py-3">
-                    {/* プランはここで直せる。ロイヤル（crystal）だけが同じ PC に 2 つ目の口座を足せる */}
-                    <select
-                      aria-label="プラン"
-                      value={row.plan ?? ''}
-                      disabled={busyId === row.id}
-                      onChange={(e) => {
-                        const next = e.target.value as MemberPlan | ''
-                        if (!next || next === row.plan) return
-                        if (!window.confirm(`${memberLabel(row)} のプランを「${PLAN_NAMES[next]}」にします。よろしいですか？`)) return
-                        void act(row.id, async () => {
-                          await adminSetMemberPlan(token!, row.id, next)
-                          await reload()
-                        })
-                      }}
-                      className="h-11 rounded-[4px] border px-2 text-[14px]"
-                      style={{
-                        borderColor: 'var(--panel-border)',
-                        background: 'rgba(8,14,26,0.7)',
-                        color: row.plan === 'crystal' ? '#e8d8a8' : row.plan ? '#e2e8f0' : '#94a3b8',
-                      }}
-                    >
-                      <option value="">—（未設定）</option>
-                      {MEMBER_PLANS.map((p) => (
-                        <option key={p} value={p}>{PLAN_NAMES[p]}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-3 py-3">{row.role === 'admin' ? '管理者' : '一般'}</td>
-                  <td className="px-3 py-3">
-                    {row.status === 'active' ? '利用中' : <span style={{ color: '#ff8484' }}>BAN中</span>}
-                  </td>
-                  <td className="px-3 py-3">{row.can_trade ? '許可' : '不可'}</td>
-                  <td className="px-3 py-3 text-slate-300">
-                    {row.connected_account ? `${row.connected_account} / ${row.server ?? ''}` : '—'}
-                  </td>
-                  <td className="px-3 py-3">
-                    {(() => {
-                      const st = fleet.states[row.id]
-                      const online = !!st?.online
-                      const running = typeof st?.status?.value === 'number' ? Number(st.status.value) !== 0 : null
-                      return (
-                        <div className="flex flex-col gap-1">
-                          <span style={{ color: online ? '#35f58a' : '#94a3b8' }}>
-                            {online ? `接続中（${running === null ? '状態不明' : running ? 'EA 稼働中' : 'EA 停止中'}）` : '未接続'}
-                          </span>
-                          <div className="flex flex-wrap gap-1">
-                            <Mini disabled={!online || busyId === row.id} onClick={() => void sendTo(row, 'stop_trading')}>停止</Mini>
-                            <Mini disabled={!online || busyId === row.id} onClick={() => void sendTo(row, 'start_trading')}>稼働</Mini>
-                            <Mini disabled={!online || busyId === row.id} onClick={() => void sendTo(row, 'close_all')}>全決済</Mini>
-                          </div>
-                          {sent[row.id] && <span className="text-[12px] text-slate-400">{sent[row.id]}</span>}
-                          {st?.ack && <span className="text-[12px]" style={{ color: st.ack.ok ? '#35f58a' : '#ff8484' }}>{st.ack.ok ? 'パスポートが実行しました' : `失敗: ${st.ack.error ?? ''}`}</span>}
-                        </div>
-                      )
-                    })()}
-                  </td>
-                  <td className="px-3 py-3 text-slate-300">{systemLabel(fleet.states[row.id]?.status)}</td>
-                  <td className="px-3 py-3">{row.platform === 'mac' ? 'Mac' : row.platform === 'windows' ? 'Windows' : '—'}</td>
-                  <td className="px-3 py-3 text-slate-400">
-                    {row.last_login_at ? new Date(row.last_login_at).toLocaleString('ja-JP') : '—'}
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Mini
-                        disabled={busyId === row.id}
-                        onClick={() => void changeRole(row, row.role === 'admin' ? 'user' : 'admin')}
-                      >
-                        {row.role === 'admin' ? '一般にする' : '管理者にする'}
-                      </Mini>
-                      <Mini
-                        disabled={busyId === row.id}
-                        onClick={() => void changeStatus(row, row.status === 'active' ? 'suspended' : 'active')}
-                      >
-                        {row.status === 'active' ? 'BAN' : 'BAN解除'}
-                      </Mini>
-                      <Mini disabled={busyId === row.id} onClick={() => void removeMember(row)}>
-                        削除
-                      </Mini>
-                      <Mini
-                        disabled={busyId === row.id}
-                        onClick={() => void changeTrade(row, !row.can_trade)}
-                      >
-                        {row.can_trade ? 'お客様の操作を禁止' : 'お客様の操作を許可'}
-                      </Mini>
-                      <Mini
-                        disabled={busyId === row.id}
-                        onClick={() => {
-                          setPwTarget(row)
-                          setPw1('')
-                          setPw2('')
-                          setError(null)
-                        }}
-                      >
-                        パスワード変更
-                      </Mini>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {viewRows.length === 0 && (
-                <tr>
-                  <td colSpan={11} className="px-3 py-8 text-center text-slate-500">
-                    まだアカウントがありません。
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {pwTarget && (
+        <MemberAccounts
+          rows={viewRows}
+          states={fleet.states}
+          selfId={member?.id}
+          busyId={busyId}
+          sent={sent}
+          query={fleet.query}
+          onSend={(row, command) => void sendTo(row, command)}
+          onPlan={(row, plan) =>
+            void act(row.id, async () => {
+              await adminSetMemberPlan(token!, row.id, plan)
+            })
+          }
+          onRole={(row, role) => void changeRole(row, role)}
+          onStatus={(row, status) => void changeStatus(row, status)}
+          onTrade={(row, canTrade) => void changeTrade(row, canTrade)}
+          onRemove={(row) => void removeMember(row)}
+          onPassword={(row) => {
+            setPwTarget(row)
+            setPw1('')
+            setPw2('')
+            setError(null)
+          }}
+          passwordTargetId={pwTarget?.id ?? null}
+          passwordForm={pwTarget && (
           <div
             className="mt-5 rounded-[4px] border px-5 py-5"
             style={{ borderColor: 'var(--panel-border)', background: 'var(--panel-bg)' }}
@@ -453,8 +335,8 @@ export function Admin() {
               </button>
             </div>
           </div>
-        )}
-
+          )}
+        />
           </>
         )}
 
@@ -703,27 +585,5 @@ function NamesSection({ token }: { token: string | null }) {
         {note && <p className="text-[14px] text-slate-300">{note}</p>}
       </div>
     </div>
-  )
-}
-
-function Mini({
-  children,
-  onClick,
-  disabled,
-}: {
-  children: string
-  onClick: () => void
-  disabled?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="h-11 rounded-[4px] border px-3 text-[13px] font-bold text-slate-100 disabled:opacity-40"
-      style={{ borderColor: 'var(--panel-border)', background: 'rgba(8,14,26,0.7)' }}
-    >
-      {children}
-    </button>
   )
 }
